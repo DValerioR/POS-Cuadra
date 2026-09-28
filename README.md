@@ -5,7 +5,11 @@ para el contexto completo de negocio y las decisiones de producto.
 
 ## Decisiones técnicas (etapa 1)
 
-- **Backend**: FastAPI + SQLAlchemy 2.0 + Alembic (migraciones) + PostgreSQL.
+- **Backend**: FastAPI + SQLAlchemy 2.0 + Alembic (migraciones) + PostgreSQL
+  nativo de Windows (servicio `postgresql-x64-17`, arranque automático).
+  Se probó correrlo dentro de WSL2 primero, pero la red virtual de WSL
+  mostró cortes intermitentes de conexión incluso en pruebas simples — no es
+  confiable para un POS, así que se descartó a favor de la instalación nativa.
 - **App de escritorio**: no se empaqueta nada aparte. El servidor corre en una
   computadora dedicada (`uvicorn app.main:app`) y en cada computadora se crea
   un acceso directo con `chrome.exe --app=http://IP-SERVIDOR:PUERTO` (modo app
