@@ -57,9 +57,17 @@ alembic/      migraciones de base de datos
   significa que aún no se ha capturado, para la migración gradual del inventario
   heredado de PVWin). Venta futura descontará por FEFO usando estas filas.
 
+## Endpoints disponibles
+
+- `GET/POST /categorias`, `GET/PUT/DELETE /categorias/{id}`
+- `GET/POST /productos` (con búsqueda `?q=`), `GET/PUT/DELETE /productos/{id}`
+  — "eliminar" un producto lo desactiva (`activo=false`), no lo borra.
+- Todos requieren `negocio_id` (todavía sin auth, así que se manda explícito).
+
 ## Pendiente para completar la etapa 1
 
 - Importador del Excel de PVWin (catálogo, precios, existencias) — falta ver
   la estructura real del archivo para mapear columnas.
 - Autenticación (login) y aplicación de permisos por rol en los endpoints.
-- Endpoints CRUD de catálogo e inventario.
+- CRUD de inventario (lotes/caducidades) — el catálogo (categorías/productos)
+  ya está.
