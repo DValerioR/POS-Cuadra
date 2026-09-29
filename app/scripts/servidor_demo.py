@@ -9,6 +9,7 @@ leen, nunca se modifican) con precios inventados y algunos lotes. Las
 pruebas automáticas vuelven a borrar esa base al correr, así que no importa.
 """
 import random
+import sys
 import tempfile
 from datetime import date
 from decimal import Decimal as D
@@ -37,7 +38,16 @@ from app.core.database import SessionLocal, engine  # noqa: E402
 from app.core.seguridad import hashear_password  # noqa: E402
 from app.models import Caja, Lote, Negocio, Producto, RolUsuario, Usuario  # noqa: E402
 
+# Candado: si app.core.database ya se había importado antes de cambiar la
+# URL (por ejemplo, desde otro script que importa módulos del POS y luego
+# corre este), `engine` apunta a la base REAL y el DROP SCHEMA la borraría.
+# Eso pasó el 29/09/2026. Se revisa el motor y la base conectada de verdad.
+if not (engine.url.database or "").endswith("_test"):
+    sys.exit(f"ALTO: el motor apunta a '{engine.url.database}', no a una base *_test. No se borra nada.")
 with engine.begin() as c:
+    conectada = c.execute(text("SELECT current_database()")).scalar()
+    if not conectada.endswith("_test"):
+        raise SystemExit(f"ALTO: conectado a '{conectada}', no a una base *_test. No se borra nada.")
     c.execute(text("DROP SCHEMA public CASCADE"))
     c.execute(text("CREATE SCHEMA public"))
 RAIZ = Path(__file__).resolve().parents[2]
