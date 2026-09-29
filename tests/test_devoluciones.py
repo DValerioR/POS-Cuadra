@@ -168,3 +168,91 @@ def test_venta_de_otro_negocio(como_admin, caja, shampoo, cliente_de, crear_usua
     v = vender(como_admin, caja, [r(shampoo, 1)], efectivo="116").json()
     ajeno = cliente_de(crear_usuario(otro_negocio))
     assert cancelar(ajeno, v, caja).status_code == 404
+
+
+# --- Cambio de producto ------------------------------------------------------------
+
+def cambiar(cliente, venta, caja, devueltas, nuevos, tarjeta="0", efectivo="0", motivo="se equivocó de medicamento"):
+    return cliente.post(f"/ventas/{venta['id']}/cambio", json={
+        "caja_id": caja.id, "motivo": motivo, "devueltas": devueltas, "nuevos": nuevos,
+        "tarjeta": tarjeta, "efectivo_recibido": efectivo,
+    })
+
+
+def test_cambio_cliente_paga_la_diferencia(como_admin, caja, shampoo, amoxicilina, db):
+    v = vender(como_admin, caja, [r(shampoo, 1)], efectivo="116").json()
+    res = cambiar(como_admin, v, caja, [pieza(v, 0, 1)], [r(amoxicilina, 2)], efectivo="100")  # 171 - 116 = 55
+    assert res.status_code == 201, res.text
+    c = res.json()
+    assert (c["valor_devuelto"], c["total_nuevo"], c["paga_cliente"], c["se_le_regresa"]) == ("116.00", "171.00", "55.00", "0.00")
+    assert [(p["metodo"], p["monto"], p["cambio"]) for p in c["venta"]["pagos"]] == [
+        ("saldo_a_favor", "116.00", None), ("efectivo", "55.00", "45.00"),
+    ]
+    assert existencias(db, shampoo)[(None, None)] == D(20)  # el shampoo regresó
+    assert existencias(db, amoxicilina)[("A", date(2027, 1, 31))] == D(0)  # salió por FEFO
+    k = corte(como_admin, db, caja)
+    # En caja entró 116 (venta) + 55 (diferencia); el saldo no es dinero.
+    assert (k["ventas_efectivo"], k["reembolsos_efectivo"], k["efectivo_esperado"]) == ("171.00", "0.00", "671.00")
+
+
+def test_cambio_se_le_regresa_la_diferencia_en_efectivo(como_admin, caja, shampoo, amoxicilina, db):
+    v = vender(como_admin, caja, [r(amoxicilina, 2)], tarjeta="171").json()  # pagó con tarjeta
+    c = cambiar(como_admin, v, caja, [pieza(v, 0, 2)], [r(shampoo, 1)]).json()  # 171 - 116 = 55 a favor
+    assert (c["paga_cliente"], c["se_le_regresa"]) == ("0.00", "55.00")
+    assert (c["devolucion"]["efectivo"], c["devolucion"]["tarjeta"]) == ("55.00", "0.00")  # siempre efectivo
+    k = corte(como_admin, db, caja)
+    assert (k["tarjeta_esperado"], k["efectivo_esperado"]) == ("171.00", "445.00")  # 500 - 55
+
+
+def test_cambio_por_el_mismo_valor(como_admin, caja, shampoo, db, negocio):
+    from tests.test_ventas import producto
+    otro = producto(db, negocio, "SHAMPOO ANTICASPA", "116.00", [(5, None, None)], iva=16)
+    v = vender(como_admin, caja, [r(shampoo, 1)], efectivo="116").json()
+    c = cambiar(como_admin, v, caja, [pieza(v, 0, 1)], [r(otro, 1)]).json()
+    assert (c["paga_cliente"], c["se_le_regresa"]) == ("0.00", "0.00")
+    assert [p["metodo"] for p in c["venta"]["pagos"]] == ["saldo_a_favor"]
+
+
+def test_cambio_con_pago_insuficiente_no_guarda_nada(como_admin, caja, shampoo, amoxicilina, db):
+    v = vender(como_admin, caja, [r(shampoo, 1)], efectivo="116").json()
+    res = cambiar(como_admin, v, caja, [pieza(v, 0, 1)], [r(amoxicilina, 2)], efectivo="10")
+    assert res.status_code == 409
+    assert "Faltan 45.00" in res.json()["detail"]
+    assert existencias(db, shampoo)[(None, None)] == D(19)  # no regresó
+    assert como_admin.get(f"/ventas/{v['id']}").json()["devoluciones"] == []
+
+
+def test_cambio_por_otro_lote_del_mismo_producto(como_admin, caja, amoxicilina, db):
+    """Regresa una caja del lote A y se lleva una del lote B."""
+    lote_b = db.query(Lote).filter_by(producto_id=amoxicilina.id, numero_lote="B").one()
+    v = vender(como_admin, caja, [r(amoxicilina, 1)], efectivo="85.50").json()  # sale del A
+    c = cambiar(como_admin, v, caja, [pieza(v, 0, 1)], [r(amoxicilina, 1, lote_id=lote_b.id)]).json()
+    assert c["se_le_regresa"] == "0.00"
+    ex = existencias(db, amoxicilina)
+    assert (ex[("A", date(2027, 1, 31))], ex[("B", date(2027, 6, 30))]) == (D(2), D(4))
+
+
+def test_cancelar_despues_de_un_cambio_no_regresa_dos_veces(como_admin, caja, shampoo, amoxicilina):
+    v = vender(como_admin, caja, [r(shampoo, 2)], efectivo="232").json()
+    cambiar(como_admin, v, caja, [pieza(v, 0, 1)], [r(amoxicilina, 1)], efectivo="0")  # 116 cubre 85.50
+    d = cancelar(como_admin, v, caja).json()
+    assert d["total"] == "116.00"  # solo el shampoo que no se cambió
+
+
+def test_cambio_sin_productos_nuevos(como_admin, caja, shampoo):
+    v = vender(como_admin, caja, [r(shampoo, 1)], efectivo="116").json()
+    assert cambiar(como_admin, v, caja, [pieza(v, 0, 1)], []).status_code == 422
+
+
+def test_cambio_solo_admin(como_mostrador, caja, shampoo, amoxicilina):
+    v = vender(como_mostrador, caja, [r(shampoo, 1)], efectivo="116").json()
+    assert cambiar(como_mostrador, v, caja, [pieza(v, 0, 1)], [r(amoxicilina, 1)]).status_code == 403
+
+
+def test_ticket_del_cambio(como_admin, caja, shampoo, amoxicilina):
+    v = vender(como_admin, caja, [r(amoxicilina, 2)], efectivo="171").json()
+    c = cambiar(como_admin, v, caja, [pieza(v, 0, 2)], [r(shampoo, 1)]).json()
+    texto = como_admin.get(f"/ventas/{c['venta']['id']}/ticket").text
+    assert f"CAMBIO DE PRODUCTO (folio {v['folio']})" in texto
+    assert "Saldo por producto devuelto" in texto and "$116.00" in texto
+    assert "Diferencia a su favor" in texto and "$55.00" in texto

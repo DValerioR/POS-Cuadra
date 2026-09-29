@@ -98,7 +98,7 @@ def _pagos(total: Decimal, tarjeta: Decimal, efectivo_recibido: Decimal) -> list
     if efectivo_recibido < efectivo:
         raise OperacionInvalida(f"Faltan {efectivo - efectivo_recibido} por pagar")
     if efectivo == 0 and efectivo_recibido > 0:
-        raise OperacionInvalida("La tarjeta ya cubre el total; no se necesita efectivo")
+        raise OperacionInvalida("El total ya está cubierto; no se necesita efectivo")
 
     pagos = []
     if tarjeta > 0:
@@ -117,8 +117,11 @@ def registrar_venta(
     renglones: list[RenglonSolicitado],
     tarjeta: Decimal = Decimal(0),
     efectivo_recibido: Decimal = Decimal(0),
+    saldo_a_favor: Decimal = Decimal(0),
 ) -> tuple[Venta, list[str]]:
-    """Registra la venta y regresa (venta, avisos). No hace commit."""
+    """Registra la venta y regresa (venta, avisos). `saldo_a_favor` es el valor
+    de piezas devueltas en un cambio de producto: se aplica primero y el resto
+    se cobra. No hace commit."""
     if usuario.rol not in ROLES_VENTA:
         raise SinPermiso(f"El rol {usuario.rol.value} no puede vender")
     if not renglones:
@@ -173,7 +176,10 @@ def registrar_venta(
     venta.ieps = sum((x.ieps for x in venta.renglones), Decimal(0))
     venta.iva = sum((x.iva for x in venta.renglones), Decimal(0))
     venta.total = sum((x.importe for x in venta.renglones), Decimal(0))
-    venta.pagos = _pagos(venta.total, tarjeta, efectivo_recibido)
+    saldo_aplicado = min(saldo_a_favor, venta.total)
+    venta.pagos = ([Pago(metodo=MetodoPago.SALDO_A_FAVOR, monto=saldo_aplicado)] if saldo_aplicado > 0 else []) + _pagos(
+        venta.total - saldo_aplicado, tarjeta, efectivo_recibido
+    )
     db.flush()
     return venta, avisos
 

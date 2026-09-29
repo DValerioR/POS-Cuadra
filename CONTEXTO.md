@@ -86,6 +86,8 @@ No hay crédito a clientes ni ventas a cuenta. Los descuentos quedan preparados 
 
 Devoluciones y cancelaciones solo las hace un administrador, con motivo registrado. La mercancía devuelta regresa siempre al inventario, a su lote original (el vendedor verifica que se pueda revender).
 
+Cambios de producto: cuando un cliente se equivocó de medicamento y quiere cambiarlo por otro, se hace en una sola operación (solo administrador, con motivo). Lo que regresa vuelve a su lote original y su valor queda como saldo a favor en la venta nueva; si lo nuevo cuesta más, el cliente paga la diferencia (efectivo, tarjeta o mixto), y si cuesta menos, la diferencia se le regresa siempre en efectivo. El saldo a favor no es dinero, así que no cuenta en el corte de caja; solo cuentan la diferencia cobrada o regresada. El ticket de la venta nueva indica que es un cambio y de qué folio viene.
+
 ## Turnos y corte de caja
 
 Hay dos turnos, mañana y tarde. Al abrir turno se captura el fondo de caja. Al cerrarlo, el sistema muestra lo esperado en efectivo y en tarjeta, el cajero captura lo contado y queda registrada la diferencia con el nombre de quien cerró.

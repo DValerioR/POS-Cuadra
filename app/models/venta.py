@@ -17,6 +17,9 @@ class MetodoPago(str, enum.Enum):
     EFECTIVO = "efectivo"
     TARJETA = "tarjeta"
     TRANSFERENCIA = "transferencia"  # preparada, desactivada por ahora
+    # Valor de piezas devueltas en un cambio de producto, aplicado a la venta nueva.
+    # No es dinero: no cuenta en el corte de caja.
+    SALDO_A_FAVOR = "saldo_a_favor"
 
 
 class Venta(Base):
@@ -44,7 +47,14 @@ class Venta(Base):
 
     renglones: Mapped[list["VentaRenglon"]] = relationship(back_populates="venta", order_by="VentaRenglon.id")
     pagos: Mapped[list["Pago"]] = relationship(back_populates="venta", order_by="Pago.id")
-    devoluciones: Mapped[list["Devolucion"]] = relationship(order_by="Devolucion.id")  # noqa: F821
+    # Devoluciones de esta venta (cancelación, devolución o cambio).
+    devoluciones: Mapped[list["Devolucion"]] = relationship(  # noqa: F821
+        order_by="Devolucion.id", foreign_keys="Devolucion.venta_id"
+    )
+    # Si esta venta nació de un cambio de producto, la devolución que le dio saldo.
+    cambio_origen: Mapped["Devolucion | None"] = relationship(  # noqa: F821
+        foreign_keys="Devolucion.venta_nueva_id", uselist=False, viewonly=True
+    )
 
 
 class VentaRenglon(Base):

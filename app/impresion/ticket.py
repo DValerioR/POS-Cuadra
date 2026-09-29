@@ -44,6 +44,8 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
     t.linea(f"Atendió: {datos.cajero}")
     if reimpresion:
         t.linea("REIMPRESIÓN", "centro", negrita=True)
+    if venta.cambio_origen is not None:
+        t.linea(f"CAMBIO DE PRODUCTO (folio {venta.cambio_origen.venta.folio})", "centro", negrita=True)
     t.separador()
 
     for r in venta.renglones:
@@ -74,8 +76,13 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
         if pago.metodo == MetodoPago.EFECTIVO:
             t.columnas_izq_der("Efectivo", _dinero(pago.recibido))
             t.columnas_izq_der("Cambio", _dinero(pago.cambio))
+        elif pago.metodo == MetodoPago.SALDO_A_FAVOR:
+            t.columnas_izq_der("Saldo por producto devuelto", _dinero(pago.monto))
         else:
             t.columnas_izq_der(pago.metodo.value.capitalize(), _dinero(pago.monto))
+
+    if venta.cambio_origen is not None and venta.cambio_origen.efectivo > 0:
+        t.columnas_izq_der("Diferencia a su favor", _dinero(venta.cambio_origen.efectivo), negrita=True)
 
     if venta.estado == EstadoVenta.CANCELADA:
         t.separador()

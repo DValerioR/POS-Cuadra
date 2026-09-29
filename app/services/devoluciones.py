@@ -1,6 +1,12 @@
-"""Cancelaciones y devoluciones. Solo admin, con motivo. Las piezas regresan
-siempre al lote del que salieron, y el dinero sale del turno abierto de la
-caja indicada (ver models/devolucion.py).
+"""Cancelaciones, devoluciones y cambios de producto. Solo admin, con motivo.
+Las piezas regresan siempre al lote del que salieron, y el dinero sale del
+turno abierto de la caja indicada (ver models/devolucion.py).
+
+Cada registro de devolución guarda el valor devuelto (`total`) y cuánto de
+eso se regresó en dinero (`efectivo` + `tarjeta`). En devoluciones y
+cancelaciones todo el valor se regresa en dinero; en un cambio de producto
+el valor se usa como saldo a favor en la venta nueva y solo la diferencia,
+si la hay, se regresa en efectivo.
 """
 
 from collections import defaultdict
@@ -11,13 +17,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Devolucion, DevolucionRenglon, EstadoVenta, Lote, MetodoPago, Pago, RolUsuario, TipoDevolucion, Usuario,
-    Venta, VentaRenglon, VentaRenglonLote,
+    Devolucion, DevolucionRenglon, EstadoVenta, Lote, MetodoPago, RolUsuario, TipoDevolucion, Usuario, Venta,
+    VentaRenglon, VentaRenglonLote,
 )
-from app.services import turnos
+from app.services import turnos, ventas
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
+from app.services.ventas import RenglonSolicitado
 
 CENTAVO = Decimal("0.01")
+
+# (asignación de lote vendida, cantidad que regresa, importe)
+Piezas = list[tuple[VentaRenglonLote, Decimal, Decimal]]
 
 
 @dataclass
@@ -29,7 +39,7 @@ class PiezaDevuelta:
 
 def _validar(db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str):
     if usuario.rol != RolUsuario.ADMIN:
-        raise SinPermiso("Solo un administrador puede cancelar o hacer devoluciones")
+        raise SinPermiso("Solo un administrador puede cancelar, hacer devoluciones o cambios")
     motivo = (motivo or "").strip()
     if not motivo:
         raise OperacionInvalida("El motivo es obligatorio")
@@ -47,38 +57,37 @@ def _validar(db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo:
     return venta, turno, motivo
 
 
-def _reembolsado(db: Session, venta: Venta) -> tuple[Decimal, Decimal]:
-    """(efectivo, tarjeta) ya regresados de esta venta."""
-    efectivo, tarjeta = db.execute(
-        select(func.coalesce(func.sum(Devolucion.efectivo), 0), func.coalesce(func.sum(Devolucion.tarjeta), 0))
-        .where(Devolucion.venta_id == venta.id)
-    ).one()
-    return efectivo, tarjeta
+def _tarjeta_reembolsada(db: Session, venta: Venta) -> Decimal:
+    return db.scalar(select(func.coalesce(func.sum(Devolucion.tarjeta), 0)).where(Devolucion.venta_id == venta.id))
+
+
+def _por_regresar(db: Session, venta: Venta) -> Decimal:
+    """Valor de la venta que aún no se ha devuelto (en dinero o como saldo de un cambio)."""
+    devuelto = db.scalar(select(func.coalesce(func.sum(Devolucion.total), 0)).where(Devolucion.venta_id == venta.id))
+    return venta.total - devuelto
 
 
 def _repartir_reembolso(db: Session, venta: Venta, total: Decimal) -> tuple[Decimal, Decimal]:
     """Regresa por el mismo método con que se pagó; si fue mixto, primero a
     tarjeta (hasta lo que se pagó con tarjeta) y el resto en efectivo."""
     pagado_tarjeta = sum((p.monto for p in venta.pagos if p.metodo == MetodoPago.TARJETA), Decimal(0))
-    _, tarjeta_ya = _reembolsado(db, venta)
-    tarjeta = min(total, pagado_tarjeta - tarjeta_ya)
+    tarjeta = min(total, pagado_tarjeta - _tarjeta_reembolsada(db, venta))
     return total - tarjeta, tarjeta
-
-
-def _por_regresar(db: Session, venta: Venta) -> Decimal:
-    efectivo, tarjeta = _reembolsado(db, venta)
-    return venta.total - efectivo - tarjeta
 
 
 def _registrar(
     db: Session, usuario: Usuario, venta: Venta, turno, tipo: TipoDevolucion, motivo: str,
-    piezas: list[tuple[VentaRenglonLote, Decimal, Decimal]], total: Decimal,
+    piezas: Piezas, total: Decimal,
 ) -> Devolucion:
-    """piezas: (asignación de lote, cantidad, importe). Regresa las piezas a su
-    lote y registra la devolución por `total`, que nunca pasa de lo que falta
-    por regresar de la venta."""
+    """Regresa las piezas a su lote y registra la devolución por `total`, que
+    nunca pasa de lo que falta por regresar de la venta. En devoluciones y
+    cancelaciones el dinero se reparte por método de pago; en un cambio el
+    dinero lo fija quien llama (solo la diferencia, en efectivo)."""
     total = min(total, _por_regresar(db, venta))
-    efectivo, tarjeta = _repartir_reembolso(db, venta, total)
+    if tipo == TipoDevolucion.CAMBIO:
+        efectivo, tarjeta = Decimal(0), Decimal(0)
+    else:
+        efectivo, tarjeta = _repartir_reembolso(db, venta, total)
     devolucion = Devolucion(
         negocio_id=venta.negocio_id, venta_id=venta.id, turno_id=turno.id, caja_id=turno.caja_id,
         usuario_id=usuario.id, tipo=tipo, motivo=motivo, total=total, efectivo=efectivo, tarjeta=tarjeta,
@@ -95,35 +104,12 @@ def _registrar(
     return devolucion
 
 
-def cancelar_venta(db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str) -> Devolucion:
-    """Cancela toda la venta: regresa lo que no se haya devuelto antes. No hace commit."""
-    venta, turno, motivo = _validar(db, usuario, venta_id, caja_id, motivo)
-    piezas = []
-    for renglon in venta.renglones:
-        for asignacion in renglon.lotes:
-            pendiente = asignacion.cantidad - asignacion.cantidad_devuelta
-            if pendiente > 0:
-                piezas.append((asignacion, pendiente, (renglon.precio_unitario * pendiente).quantize(CENTAVO)))
-    if not piezas and _por_regresar(db, venta) == 0:
-        raise OperacionInvalida("Todo lo de esta venta ya se devolvió")
-    # El dinero es todo lo que falta por regresar (así no se pierden centavos).
-    devolucion = _registrar(
-        db, usuario, venta, turno, TipoDevolucion.CANCELACION, motivo, piezas, _por_regresar(db, venta),
-    )
-    venta.estado = EstadoVenta.CANCELADA
-    return devolucion
-
-
-def devolver_piezas(
-    db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str, solicitadas: list[PiezaDevuelta],
-) -> Devolucion:
-    """Devuelve algunas piezas. No hace commit."""
-    venta, turno, motivo = _validar(db, usuario, venta_id, caja_id, motivo)
+def _piezas_solicitadas(venta: Venta, solicitadas: list[PiezaDevuelta]) -> Piezas:
+    """Valida qué piezas se devuelven y de qué lote. Nunca más de lo vendido."""
     if not solicitadas:
         raise OperacionInvalida("Indica qué piezas se devuelven")
     renglones = {r.id: r for r in venta.renglones}
-
-    piezas = []
+    piezas: Piezas = []
     ya_pedido: dict[int, Decimal] = defaultdict(Decimal)  # por asignación, en esta solicitud
     for s in solicitadas:
         renglon: VentaRenglon | None = renglones.get(s.renglon_id)
@@ -146,6 +132,68 @@ def devolver_piezas(
                 piezas.append((asignacion, tomar, (renglon.precio_unitario * tomar).quantize(CENTAVO)))
                 ya_pedido[asignacion.id] += tomar
                 pendiente -= tomar
+    return piezas
 
+
+def cancelar_venta(db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str) -> Devolucion:
+    """Cancela toda la venta: regresa lo que no se haya devuelto antes. No hace commit."""
+    venta, turno, motivo = _validar(db, usuario, venta_id, caja_id, motivo)
+    piezas: Piezas = []
+    for renglon in venta.renglones:
+        for asignacion in renglon.lotes:
+            pendiente = asignacion.cantidad - asignacion.cantidad_devuelta
+            if pendiente > 0:
+                piezas.append((asignacion, pendiente, (renglon.precio_unitario * pendiente).quantize(CENTAVO)))
+    if not piezas and _por_regresar(db, venta) == 0:
+        raise OperacionInvalida("Todo lo de esta venta ya se devolvió")
+    # El dinero es todo lo que falta por regresar (así no se pierden centavos).
+    devolucion = _registrar(
+        db, usuario, venta, turno, TipoDevolucion.CANCELACION, motivo, piezas, _por_regresar(db, venta),
+    )
+    venta.estado = EstadoVenta.CANCELADA
+    return devolucion
+
+
+def devolver_piezas(
+    db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str, solicitadas: list[PiezaDevuelta],
+) -> Devolucion:
+    """Devuelve algunas piezas. No hace commit."""
+    venta, turno, motivo = _validar(db, usuario, venta_id, caja_id, motivo)
+    piezas = _piezas_solicitadas(venta, solicitadas)
     total = sum((importe for _, _, importe in piezas), Decimal(0))
     return _registrar(db, usuario, venta, turno, TipoDevolucion.DEVOLUCION, motivo, piezas, total)
+
+
+def cambiar_productos(
+    db: Session,
+    usuario: Usuario,
+    venta_id: int,
+    caja_id: int,
+    motivo: str,
+    devueltas: list[PiezaDevuelta],
+    nuevos: list[RenglonSolicitado],
+    tarjeta: Decimal = Decimal(0),
+    efectivo_recibido: Decimal = Decimal(0),
+) -> tuple[Devolucion, Venta, list[str]]:
+    """Cambio de producto: el cliente regresa piezas de una venta y se lleva
+    otras. El valor de lo devuelto es saldo a favor en la venta nueva:
+    - si lo nuevo cuesta más, el cliente paga la diferencia (efectivo/tarjeta);
+    - si cuesta menos, la diferencia se le regresa en efectivo.
+    Todo en una operación. No hace commit."""
+    venta, turno, motivo = _validar(db, usuario, venta_id, caja_id, motivo)
+    if not nuevos:
+        raise OperacionInvalida("Indica qué se lleva el cliente; si no se lleva nada, es una devolución")
+    piezas = _piezas_solicitadas(venta, devueltas)
+    credito = sum((importe for _, _, importe in piezas), Decimal(0))
+
+    # Primero regresan las piezas, por si se lleva el mismo producto de otro lote.
+    devolucion = _registrar(db, usuario, venta, turno, TipoDevolucion.CAMBIO, motivo, piezas, credito)
+    nueva, avisos = ventas.registrar_venta(
+        db, usuario, caja_id, nuevos, tarjeta, efectivo_recibido, saldo_a_favor=devolucion.total,
+    )
+    diferencia_a_favor = devolucion.total - nueva.total
+    if diferencia_a_favor > 0:
+        devolucion.efectivo = diferencia_a_favor  # siempre en efectivo
+    devolucion.venta_nueva_id = nueva.id
+    db.flush()
+    return devolucion, nueva, avisos

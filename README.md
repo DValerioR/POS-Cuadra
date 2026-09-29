@@ -152,6 +152,11 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     tarjeta) y sale del turno abierto de `caja_id`: si la venta es de un turno
     ya cerrado, ese corte no cambia.
   - Nunca se devuelve más de lo vendido ni más dinero del cobrado.
+- `POST /ventas/{id}/cambio` con `{caja_id, motivo, devueltas: [...], nuevos:
+  [...], tarjeta, efectivo_recibido}` — cambio de producto (solo admin). Lo
+  devuelto regresa a su lote y su valor es saldo a favor (pago
+  `saldo_a_favor`) en una venta nueva; si lo nuevo cuesta más el cliente
+  paga la diferencia, si cuesta menos se le regresa en efectivo. Todo o nada.
 - Corte de turno: fondo + cobrado en el turno − reembolsado en el turno.
 
 ### Tickets e impresión (etapa 2)
@@ -176,7 +181,7 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 pytest
 ```
 
-Corre todas las pruebas (~180, unos 10 segundos). Antes de cada commit
+Corre todas las pruebas (~190, unos 10 segundos). Antes de cada commit
 deben pasar todas.
 
 - Usan una base de datos aparte: la de `.env` con `_test` al final (`pos_test`).

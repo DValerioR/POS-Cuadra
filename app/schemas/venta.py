@@ -108,11 +108,31 @@ class DevolverIn(BaseModel):
     piezas: list[PiezaDevueltaIn] = Field(min_length=1)
 
 
+class CambioIn(BaseModel):
+    caja_id: int
+    motivo: str = Field(min_length=1)
+    devueltas: list[PiezaDevueltaIn] = Field(min_length=1)  # lo que regresa el cliente
+    nuevos: list[RenglonIn] = Field(min_length=1)  # lo que se lleva
+    # Si lo nuevo cuesta más, cómo paga la diferencia (igual que en una venta).
+    tarjeta: Decimal = Field(default=Decimal(0), ge=0)
+    efectivo_recibido: Decimal = Field(default=Decimal(0), ge=0)
+
+
+class CambioOut(BaseModel):
+    valor_devuelto: Decimal  # saldo a favor por lo que regresó
+    total_nuevo: Decimal  # lo que se lleva
+    paga_cliente: Decimal  # diferencia que pagó el cliente (si lo nuevo cuesta más)
+    se_le_regresa: Decimal  # diferencia en efectivo para el cliente (si cuesta menos)
+    devolucion: "DevolucionOut"
+    venta: VentaOut
+
+
 class DevolucionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     venta_id: int
+    venta_nueva_id: int | None
     turno_id: int
     usuario_id: int
     tipo: TipoDevolucion
@@ -125,3 +145,4 @@ class DevolucionOut(BaseModel):
 
 # VentaOut menciona DevolucionOut antes de que exista; se resuelve aquí.
 VentaOut.model_rebuild()
+CambioOut.model_rebuild()

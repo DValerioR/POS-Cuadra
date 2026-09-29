@@ -10,7 +10,7 @@ from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Usuario, Venta
 from app.schemas.venta import (
-    CancelarIn, DevolucionOut, DevolverIn, ImpresionOut, LoteVendidoOut, PagoOut, ReimprimirIn, RenglonOut, VentaIn,
+    CambioIn, CambioOut, CancelarIn, DevolucionOut, DevolverIn, ImpresionOut, LoteVendidoOut, PagoOut, ReimprimirIn, RenglonOut, VentaIn,
     VentaOut, VentaResumenOut,
 )
 from app.services import devoluciones, impresion, turnos, ventas
@@ -155,3 +155,33 @@ def devolver_piezas(venta_id: int, datos: DevolverIn, usuario: Usuario = Depends
     db.commit()
     db.refresh(devolucion)
     return devolucion
+
+
+@router.post("/{venta_id}/cambio", response_model=CambioOut, status_code=201)
+def cambiar_productos(venta_id: int, datos: CambioIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Cambio de producto (solo admin, con motivo): el cliente regresa piezas
+    de esta venta y se lleva otras. Lo devuelto es saldo a favor; si lo nuevo
+    cuesta más paga la diferencia, si cuesta menos se le regresa en efectivo.
+    Imprime el ticket de la venta nueva."""
+    try:
+        devolucion, nueva, avisos = devoluciones.cambiar_productos(
+            db, usuario, venta_id, datos.caja_id, datos.motivo,
+            [PiezaDevuelta(**p.model_dump()) for p in datos.devueltas],
+            [RenglonSolicitado(**r.model_dump()) for r in datos.nuevos],
+            datos.tarjeta, datos.efectivo_recibido,
+        )
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    db.refresh(devolucion)
+    db.refresh(nueva)
+    r = impresion.imprimir_venta(db, nueva)
+    return CambioOut(
+        valor_devuelto=devolucion.total,
+        total_nuevo=nueva.total,
+        paga_cliente=max(nueva.total - devolucion.total, Decimal(0)).quantize(Decimal("0.01")),
+        se_le_regresa=devolucion.efectivo,
+        devolucion=DevolucionOut.model_validate(devolucion),
+        venta=_venta_out(nueva, avisos, ImpresionOut(impreso=r.impreso, error=r.error)),
+    )

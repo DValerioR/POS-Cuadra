@@ -45,9 +45,12 @@ def _mandar(caja: Caja, ticket: Ticket) -> ResultadoImpresion:
 
 
 def imprimir_venta(db: Session, venta: Venta) -> ResultadoImpresion:
-    """Al cobrar: imprime en la caja de la venta y abre el cajón si hubo efectivo."""
+    """Al cobrar: imprime en la caja de la venta y abre el cajón si se movió
+    efectivo (cobro, o diferencia regresada en un cambio de producto)."""
     caja = db.get(Caja, venta.caja_id)
-    hubo_efectivo = any(p.metodo == MetodoPago.EFECTIVO for p in venta.pagos)
+    hubo_efectivo = any(p.metodo == MetodoPago.EFECTIVO for p in venta.pagos) or (
+        venta.cambio_origen is not None and venta.cambio_origen.efectivo > 0
+    )
     return _mandar(caja, ticket_de_venta(db, venta, caja, abrir_cajon=hubo_efectivo))
 
 
