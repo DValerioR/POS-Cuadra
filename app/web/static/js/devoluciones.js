@@ -1,8 +1,13 @@
-// Pantalla de devoluciones y cancelaciones (solo administrador).
+// Pantalla de devoluciones, cancelaciones y cambios de producto (solo
+// administrador).
 //
 // Flujo: buscar la venta por el folio del ticket (o elegirla de las de hoy)
-// -> "Devolver algunos productos" o "Cancelar toda la venta" -> motivo ->
-// confirmar -> se le dice al vendedor cuánto dinero entregar y por qué medio.
+// -> "Devolver algunos productos", "Cambiar por otro producto" o "Cancelar
+// toda la venta" -> motivo -> confirmar -> se le dice al vendedor cuánto
+// dinero entregar o cobrar y por qué medio.
+// En un cambio, lo que regresa el cliente es saldo a favor para lo que se
+// lleva: si lo nuevo cuesta más paga la diferencia; si cuesta menos, se le
+// regresa en efectivo.
 // El dinero sale del turno abierto de la caja de esta computadora.
 
 const MOTIVOS = ["Producto equivocado", "Producto dañado o caducado", "El cliente ya no lo quiere", "Error al cobrar"];
@@ -24,7 +29,7 @@ function pantallaDevoluciones() {
     venta: null,
 
     // Qué se hace
-    modo: null, // "devolver" | "cancelar"
+    modo: null, // "devolver" | "cambiar" | "cancelar"
     piezas: {}, // renglon_id -> cantidad que regresa
     lotes: {}, // renglon_id -> lote_id de la caja devuelta ("" = no se sabe)
     motivo: "",
@@ -32,6 +37,18 @@ function pantallaDevoluciones() {
     confirmando: false,
     procesando: false,
     resultado: null,
+
+    // Cambio: lo que se lleva el cliente y cómo paga la diferencia
+    nuevos: [], // [{ producto, cantidad }]
+    buscar: "",
+    encontrados: [],
+    _buscado: "", // texto al que corresponde `encontrados`
+    elegido: 0,
+    _temporizador: null,
+    _consulta: 0,
+    formaPago: "efectivo", // efectivo | tarjeta | mixto
+    efectivo: "",
+    tarjeta: "",
 
     motivos: MOTIVOS,
 
@@ -105,6 +122,7 @@ function pantallaDevoluciones() {
         this.lotes = {};
         this.motivo = "";
         this.motivoOtro = "";
+        this.limpiarCambio();
         window.scrollTo(0, 0);
       } catch (e) {
         this.error = e.message;
@@ -151,6 +169,9 @@ function pantallaDevoluciones() {
       if (lote.caducidad) partes.push(`Cad ${mesAnio(lote.caducidad)}`);
       return partes.join(" · ") || "Sin caducidad registrada";
     },
+    get eligePiezas() {
+      return this.modo === "devolver" || this.modo === "cambiar";
+    },
     textoTipo(tipo) {
       return { cancelacion: "Cancelación", devolucion: "Devolución", cambio: "Cambio de producto" }[tipo] || tipo;
     },
@@ -160,7 +181,7 @@ function pantallaDevoluciones() {
     elegirModo(modo) {
       this.modo = modo;
       this.error = "";
-      if (modo === "devolver") {
+      if (modo === "devolver" || modo === "cambiar") {
         // Si solo se vendió una pieza de un solo producto, ya va marcada.
         const conPiezas = this.venta.renglones.filter((r) => this.disponible(r) > 0);
         if (conPiezas.length === 1 && this.disponible(conPiezas[0]) === 1) this.piezas[conPiezas[0].id] = 1;
@@ -206,7 +227,135 @@ function pantallaDevoluciones() {
     },
     get listo() {
       if (!this.puedeRegresarDinero || !this.motivoFinal || this.procesando) return false;
-      return this.modo === "cancelar" || this.piezasElegidas.length > 0;
+      if (this.modo === "cancelar") return true;
+      if (!this.piezasElegidas.length) return false;
+      if (this.modo === "cambiar") {
+        return this.nuevos.length > 0 && this.nuevos.every((n) => Number(n.cantidad) > 0) && this.faltaCentavos === 0;
+      }
+      return true;
+    },
+
+    // --- Cambio: lo que se lleva ------------------------------------------
+
+    limpiarCambio() {
+      this.nuevos = [];
+      this.buscar = "";
+      this.encontrados = [];
+      this.formaPago = "efectivo";
+      this.efectivo = "";
+      this.tarjeta = "";
+    },
+
+    alBuscar() {
+      clearTimeout(this._temporizador);
+      const texto = this.buscar.trim();
+      if (texto.length < 2) {
+        this.encontrados = [];
+        return;
+      }
+      this._temporizador = setTimeout(async () => {
+        const numero = ++this._consulta;
+        try {
+          const lista = await API.get(`/productos?solo_activos=true&limite=20&q=${encodeURIComponent(texto)}`);
+          if (numero !== this._consulta) return; // ignorar respuestas viejas
+          this.encontrados = lista;
+          this._buscado = texto;
+          this.elegido = 0;
+        } catch (e) {
+          this.error = e.message;
+        }
+      }, 180);
+    },
+
+    // Enter: si es un código de barras exacto se agrega ese; si no, el de la lista.
+    async alPresionarEnter() {
+      const texto = this.buscar.trim();
+      if (!texto) return;
+      clearTimeout(this._temporizador);
+      this.error = "";
+      try {
+        const porClave = await API.get(`/productos?solo_activos=true&limite=2&clave=${encodeURIComponent(texto)}`);
+        if (!porClave.length && this._buscado !== texto) {
+          // Se presionó Enter antes de que llegara la lista de lo que se
+          // escribió: buscar ya, para no agregar algo de una búsqueda anterior.
+          ++this._consulta;
+          this.encontrados = await API.get(`/productos?solo_activos=true&limite=20&q=${encodeURIComponent(texto)}`);
+          this._buscado = texto;
+          this.elegido = 0;
+        }
+        const producto = porClave[0] || this.encontrados[this.elegido];
+        if (producto) this.agregarNuevo(producto);
+        else this.error = `No se encontró "${texto}".`;
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    moverLista(paso) {
+      if (!this.encontrados.length) return;
+      this.elegido = (this.elegido + paso + this.encontrados.length) % this.encontrados.length;
+    },
+
+    agregarNuevo(producto) {
+      if (producto.precio_venta === null) {
+        this.error = `${producto.nombre} no tiene precio de venta; captúralo primero.`;
+        return;
+      }
+      const existente = this.nuevos.find((n) => n.producto.id === producto.id);
+      if (existente) existente.cantidad = Number(existente.cantidad) + 1;
+      else this.nuevos.push({ producto, cantidad: 1 });
+      this.buscar = "";
+      this.encontrados = [];
+      this._buscado = "";
+      this.error = "";
+      this.$nextTick(() => document.getElementById("buscar-nuevo").focus());
+    },
+
+    cambiarNuevo(nuevo, paso) {
+      nuevo.cantidad = Math.max(1, Number(nuevo.cantidad || 0) + paso);
+    },
+    quitarNuevo(nuevo) {
+      this.nuevos = this.nuevos.filter((n) => n !== nuevo);
+    },
+    importeNuevo(nuevo) {
+      return Math.round(centavos(nuevo.producto.precio_venta) * Number(nuevo.cantidad || 0));
+    },
+
+    // Todo en centavos.
+    get totalNuevo() {
+      return this.nuevos.reduce((s, n) => s + this.importeNuevo(n), 0);
+    },
+    get pagaCliente() {
+      return Math.max(0, this.totalNuevo - this.totalARegresar);
+    },
+    get seLeRegresa() {
+      return Math.max(0, this.totalARegresar - this.totalNuevo);
+    },
+    get tarjetaCentavos() {
+      if (!this.pagaCliente) return 0;
+      if (this.formaPago === "tarjeta") return this.pagaCliente;
+      if (this.formaPago === "mixto") return Math.min(centavos(this.tarjeta), this.pagaCliente);
+      return 0;
+    },
+    get efectivoCentavos() {
+      return !this.pagaCliente || this.formaPago === "tarjeta" ? 0 : centavos(this.efectivo);
+    },
+    get faltaCentavos() {
+      return Math.max(0, this.pagaCliente - this.tarjetaCentavos - this.efectivoCentavos);
+    },
+    get cambioCentavos() {
+      return Math.max(0, this.efectivoCentavos - (this.pagaCliente - this.tarjetaCentavos));
+    },
+
+    elegirFormaPago(forma) {
+      this.formaPago = forma;
+      this.efectivo = "";
+      this.tarjeta = "";
+      const id = { efectivo: "cambio-efectivo", mixto: "cambio-tarjeta" }[forma];
+      if (id) this.$nextTick(() => document.getElementById(id).focus());
+    },
+    efectivoExacto() {
+      this.efectivo = ((this.pagaCliente - this.tarjetaCentavos) / 100).toFixed(2);
     },
 
     pedirConfirmacion() {
@@ -227,15 +376,35 @@ function pantallaDevoluciones() {
             caja_id: this.cajaId,
             motivo: this.motivoFinal,
           });
+        } else if (this.modo === "cambiar") {
+          const cambio = await API.post(`/ventas/${this.venta.id}/cambio`, {
+            caja_id: this.cajaId,
+            motivo: this.motivoFinal,
+            devueltas: this.piezasDevueltas(),
+            nuevos: this.nuevos.map((n) => ({ producto_id: n.producto.id, cantidad: String(n.cantidad) })),
+            tarjeta: (this.tarjetaCentavos / 100).toFixed(2),
+            // Sin diferencia que pagar no se manda efectivo (el servidor lo rechazaría).
+            efectivo_recibido: ((this.tarjetaCentavos < this.pagaCliente ? this.efectivoCentavos : 0) / 100).toFixed(2),
+          });
+          const venta = cambio.venta;
+          this.resultado = {
+            tipo: "cambio",
+            folio: this.venta.folio,
+            folioNuevo: venta.folio,
+            efectivo: (Number(cambio.se_le_regresa) + Number(venta.cambio)).toFixed(2),
+            cobroTarjeta: venta.pagos.filter((p) => p.metodo === "tarjeta").reduce((s, p) => s + Number(p.monto), 0),
+            avisos: venta.avisos || [],
+            impresion: venta.impresion,
+            ventaNuevaId: venta.id,
+          };
+          this.confirmando = false;
+          this.$nextTick(() => document.getElementById("boton-listo").focus());
+          return;
         } else {
           devolucion = await API.post(`/ventas/${this.venta.id}/devoluciones`, {
             caja_id: this.cajaId,
             motivo: this.motivoFinal,
-            piezas: this.piezasElegidas.map((r) => ({
-              renglon_id: r.id,
-              cantidad: String(this.cuantas(r)),
-              lote_id: this.lotes[r.id] ? Number(this.lotes[r.id]) : null,
-            })),
+            piezas: this.piezasDevueltas(),
           });
         }
         this.resultado = { ...devolucion, folio: this.venta.folio, estimado: reparto };
@@ -246,6 +415,22 @@ function pantallaDevoluciones() {
         this.confirmando = false;
       } finally {
         this.procesando = false;
+      }
+    },
+
+    piezasDevueltas() {
+      return this.piezasElegidas.map((r) => ({
+        renglon_id: r.id,
+        cantidad: String(this.cuantas(r)),
+        lote_id: this.lotes[r.id] ? Number(this.lotes[r.id]) : null,
+      }));
+    },
+
+    async reimprimir() {
+      try {
+        this.resultado.impresion = await API.post(`/ventas/${this.resultado.ventaNuevaId}/imprimir`, {});
+      } catch (e) {
+        this.resultado.impresion = { impreso: false, error: e.message };
       }
     },
 

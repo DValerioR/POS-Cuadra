@@ -97,17 +97,17 @@
                   <th>Producto</th>
                   <th class="derecha" style="width: 110px">Precio</th>
                   <th class="centro" style="width: 110px">Se llevó</th>
-                  <th class="centro" style="width: 230px" x-show="modo === 'devolver'">¿Cuántas regresa?</th>
+                  <th class="centro" style="width: 230px" x-show="eligePiezas">¿Cuántas regresa?</th>
                 </tr>
               </thead>
               <tbody>
                 <template x-for="r in venta.renglones" :key="r.id">
-                  <tr :class="{ marcada: cuantas(r) > 0 && modo === 'devolver' }">
+                  <tr :class="{ marcada: cuantas(r) > 0 && eligePiezas }">
                     <td>
                       <div class="nombre" x-text="r.nombre"></div>
                       <div class="suave" style="font-size: 14px" x-show="Number(r.cantidad_devuelta) > 0"
                            x-text="`Ya regresó ${cantidad(r.cantidad_devuelta)}`"></div>
-                      <template x-if="modo === 'devolver' && cuantas(r) > 0 && lotesPendientes(r).length > 1">
+                      <template x-if="eligePiezas && cuantas(r) > 0 && lotesPendientes(r).length > 1">
                         <div class="lote">
                           <span>¿De qué lote es la caja?</span>
                           <select x-model="lotes[r.id]">
@@ -121,7 +121,7 @@
                     </td>
                     <td class="derecha" x-text="dinero(r.precio_unitario)"></td>
                     <td class="centro" x-text="cantidad(r.cantidad)"></td>
-                    <td class="centro" x-show="modo === 'devolver'">
+                    <td class="centro" x-show="eligePiezas">
                       <template x-if="disponible(r) > 0">
                         <div class="fila" style="justify-content: center; gap: 8px">
                           <div class="contador" style="flex: 0 0 auto">
@@ -168,6 +168,11 @@
                     <strong>Devolver algunos productos</strong>
                     <span>El cliente regresa una parte y se le devuelve lo que costó.</span>
                   </button>
+                  <button type="button" class="opcion-grande" @click="elegirModo('cambiar')">
+                    <svg><use href="/static/iconos.svg#intercambio"/></svg>
+                    <strong>Cambiar por otro producto</strong>
+                    <span>Regresa algo y se lleva otra cosa; se paga o se regresa la diferencia.</span>
+                  </button>
                   <button type="button" class="opcion-grande peligrosa" @click="elegirModo('cancelar')">
                     <svg><use href="/static/iconos.svg#cancelar"/></svg>
                     <strong>Cancelar toda la venta</strong>
@@ -184,12 +189,117 @@
                   <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
                   <span>Se cancela la venta completa: todos los productos que falten regresan al inventario y se le devuelve el dinero al cliente.</span>
                 </div>
-                <div class="mensaje info" x-show="modo === 'devolver' && !piezasElegidas.length">
+                <div class="mensaje info" x-show="eligePiezas && !piezasElegidas.length">
                   <svg class="ico"><use href="/static/iconos.svg#regresar"/></svg>
                   <span>Marca con <strong>+</strong> cuántas piezas regresa de cada producto.</span>
                 </div>
 
-                <div class="paso separado">¿Por qué regresa?</div>
+                <template x-if="modo === 'cambiar'">
+                  <div>
+                    <div class="paso separado">¿Qué se lleva a cambio?</div>
+                    <div class="buscador">
+                      <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
+                      <input id="buscar-nuevo" x-model="buscar" @input="alBuscar()" @keydown.enter.prevent="alPresionarEnter()"
+                             @keydown.arrow-down.prevent="moverLista(1)" @keydown.arrow-up.prevent="moverLista(-1)"
+                             @keydown.escape.stop="buscar = ''; encontrados = []"
+                             placeholder="Escanea el código o escribe el nombre" autocomplete="off">
+                      <div class="resultados" x-show="encontrados.length" @click.outside="encontrados = []">
+                        <template x-for="(p, i) in encontrados" :key="p.id">
+                          <div class="resultado" :class="{ elegido: i === elegido }" @click="agregarNuevo(p)" @mouseenter="elegido = i">
+                            <div>
+                              <div class="nombre" x-text="p.nombre"></div>
+                              <div class="suave" style="font-size: 14px" x-text="p.clave || 'sin clave'"></div>
+                            </div>
+                            <div class="precio" x-show="p.precio_venta !== null" x-text="dinero(p.precio_venta)"></div>
+                            <div class="sin-precio" x-show="p.precio_venta === null">Sin precio</div>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+
+                    <table class="tabla" x-show="nuevos.length" style="margin-top: 10px">
+                      <tbody>
+                        <template x-for="n in nuevos" :key="n.producto.id">
+                          <tr>
+                            <td><div class="nombre" x-text="n.producto.nombre"></div></td>
+                            <td class="centro" style="width: 150px">
+                              <div class="contador">
+                                <button type="button" @click="cambiarNuevo(n, -1)" title="Una menos">−</button>
+                                <input type="number" min="1" step="1" x-model="n.cantidad" aria-label="Cantidad">
+                                <button type="button" @click="cambiarNuevo(n, 1)" title="Una más">+</button>
+                              </div>
+                            </td>
+                            <td class="derecha" style="width: 110px"><strong x-text="dinero(importeNuevo(n) / 100)"></strong></td>
+                            <td class="derecha" style="width: 60px">
+                              <button type="button" class="texto-peligro" @click="quitarNuevo(n)" title="Quitar">
+                                <svg class="ico"><use href="/static/iconos.svg#basura"/></svg>
+                              </button>
+                            </td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+
+                    <!-- Cuentas del cambio -->
+                    <div class="cuentas-cambio separado" x-show="piezasElegidas.length || nuevos.length">
+                      <div class="fila"><span>Lo que regresa (saldo a favor)</span><strong class="derecha" x-text="'− ' + dinero(totalARegresar / 100)"></strong></div>
+                      <div class="fila"><span>Lo que se lleva</span><strong class="derecha" x-text="dinero(totalNuevo / 100)"></strong></div>
+                    </div>
+
+                    <template x-if="nuevos.length && piezasElegidas.length">
+                      <div class="separado">
+                        <div class="resultado-cobro falta" x-show="pagaCliente > 0">
+                          <span>El cliente paga</span><strong x-text="dinero(pagaCliente / 100)"></strong>
+                        </div>
+                        <div class="resultado-cobro cambio" x-show="seLeRegresa > 0">
+                          <span>Se le regresa en efectivo</span><strong x-text="dinero(seLeRegresa / 100)"></strong>
+                        </div>
+                        <div class="resultado-cobro cambio" x-show="!pagaCliente && !seLeRegresa">
+                          <span>Queda parejo</span><strong>$0.00</strong>
+                        </div>
+
+                        <!-- Cómo paga la diferencia -->
+                        <div x-show="pagaCliente > 0" class="pila separado">
+                          <div class="paso" style="margin: 0">¿Cómo paga la diferencia?</div>
+                          <div class="opciones">
+                            <button type="button" class="opcion" :class="{ activa: formaPago === 'efectivo' }" @click="elegirFormaPago('efectivo')">
+                              <svg><use href="/static/iconos.svg#billete"/></svg>Efectivo
+                            </button>
+                            <button type="button" class="opcion" :class="{ activa: formaPago === 'tarjeta' }" @click="elegirFormaPago('tarjeta')">
+                              <svg><use href="/static/iconos.svg#tarjeta"/></svg>Tarjeta
+                            </button>
+                            <button type="button" class="opcion" :class="{ activa: formaPago === 'mixto' }" @click="elegirFormaPago('mixto')">
+                              <svg><use href="/static/iconos.svg#mixto"/></svg>Las dos
+                            </button>
+                          </div>
+                          <div class="mensaje info" x-show="formaPago === 'tarjeta'" style="margin: 0">
+                            <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
+                            <span>Cobra <strong x-text="dinero(pagaCliente / 100)"></strong> en la terminal antes de confirmar.</span>
+                          </div>
+                          <div class="fila" style="align-items: flex-end">
+                            <div x-show="formaPago === 'mixto'">
+                              <label style="margin-top: 0">Parte con tarjeta</label>
+                              <div class="campo-dinero"><input id="cambio-tarjeta" type="number" min="0" step="0.01" x-model="tarjeta" placeholder="0.00"></div>
+                            </div>
+                            <div x-show="formaPago !== 'tarjeta'">
+                              <label style="margin-top: 0">¿Con cuánto paga?</label>
+                              <div class="campo-dinero"><input id="cambio-efectivo" type="number" min="0" step="0.50" x-model="efectivo" placeholder="0.00"></div>
+                            </div>
+                            <button type="button" style="flex: 0 0 auto; height: 52px" x-show="formaPago !== 'tarjeta'" @click="efectivoExacto()">Exacto</button>
+                          </div>
+                          <div class="renglon-dinero falta" x-show="faltaCentavos > 0 && (efectivo || tarjeta)">
+                            Falta <strong x-text="dinero(faltaCentavos / 100)"></strong>
+                          </div>
+                          <div class="renglon-dinero cambio" x-show="cambioCentavos > 0">
+                            Su cambio: <strong x-text="dinero(cambioCentavos / 100)"></strong>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
+                <div class="paso separado" x-text="modo === 'cambiar' ? '¿Por qué lo cambia?' : '¿Por qué regresa?'"></div>
                 <div class="chips">
                   <template x-for="m in motivos" :key="m">
                     <button type="button" class="opcion" :class="{ activa: motivo === m }" @click="motivo = m" x-text="m"></button>
@@ -199,7 +309,7 @@
                 </div>
                 <input id="motivo-otro" x-show="motivo === 'otro'" x-model="motivoOtro" placeholder="Escribe el motivo" style="margin-top: 10px">
 
-                <div class="resumen-dinero separado" x-show="totalARegresar > 0">
+                <div class="resumen-dinero separado" x-show="modo !== 'cambiar' && totalARegresar > 0">
                   <div class="fila">
                     <span>Se le regresa al cliente</span>
                     <strong class="derecha" x-text="dinero(totalARegresar / 100)"></strong>
@@ -216,11 +326,13 @@
                   <button type="button" style="flex: 0 0 auto" @click="modo = null">Volver</button>
                   <button type="button" class="grande" :class="modo === 'cancelar' ? 'peligro' : 'primario'"
                           :disabled="!listo" @click="pedirConfirmacion()">
-                    <span x-text="modo === 'cancelar' ? 'Cancelar la venta' : 'Hacer la devolución'"></span>
+                    <span x-text="{ cancelar: 'Cancelar la venta', cambiar: 'Hacer el cambio', devolver: 'Hacer la devolución' }[modo]"></span>
                   </button>
                 </div>
                 <p class="suave derecha" style="font-size: 14px; margin-top: 8px" x-show="!listo && puedeRegresarDinero">
-                  <span x-show="modo === 'devolver' && !piezasElegidas.length">Falta marcar qué productos regresa. </span>
+                  <span x-show="eligePiezas && !piezasElegidas.length">Falta marcar qué productos regresa. </span>
+                  <span x-show="modo === 'cambiar' && !nuevos.length">Falta agregar lo que se lleva. </span>
+                  <span x-show="modo === 'cambiar' && nuevos.length && piezasElegidas.length && faltaCentavos > 0">Falta cobrar la diferencia. </span>
                   <span x-show="!motivoFinal">Falta elegir el motivo.</span>
                 </p>
               </div>
@@ -240,10 +352,24 @@
     <div class="panel ventana" x-show="confirmando">
       <template x-if="confirmando">
         <div>
-          <h2 x-text="modo === 'cancelar' ? '¿Cancelar la venta completa?' : '¿Hacer la devolución?'"></h2>
+          <h2 x-text="{ cancelar: '¿Cancelar la venta completa?', cambiar: '¿Hacer el cambio?', devolver: '¿Hacer la devolución?' }[modo]"></h2>
           <p class="suave">Folio <strong x-text="venta.folio"></strong> · Motivo: <span x-text="motivoFinal"></span></p>
-          <div class="paso" style="margin: 16px 0 0">Se le regresa al cliente</div>
-          <div class="cambio-grande" style="color: var(--texto)" x-text="dinero(totalARegresar / 100)"></div>
+          <template x-if="modo !== 'cambiar'">
+            <div>
+              <div class="paso" style="margin: 16px 0 0">Se le regresa al cliente</div>
+              <div class="cambio-grande" style="color: var(--texto)" x-text="dinero(totalARegresar / 100)"></div>
+            </div>
+          </template>
+          <template x-if="modo === 'cambiar'">
+            <div>
+              <p>
+                Regresa <strong x-text="piezasElegidas.reduce((s, r) => s + cuantas(r), 0)"></strong> pieza(s) y se lleva
+                <strong x-text="nuevos.reduce((s, n) => s + Number(n.cantidad), 0)"></strong> pieza(s).
+              </p>
+              <div class="paso" style="margin: 16px 0 0" x-text="pagaCliente ? 'El cliente paga' : (seLeRegresa ? 'Se le regresa en efectivo' : 'Queda parejo')"></div>
+              <div class="cambio-grande" style="color: var(--texto)" x-text="dinero((pagaCliente || seLeRegresa) / 100)"></div>
+            </div>
+          </template>
           <div class="fila separado">
             <button type="button" class="grande" @click="confirmando = false">No, regresar</button>
             <button type="button" id="boton-confirmar" class="grande" :class="modo === 'cancelar' ? 'peligro' : 'primario'"
@@ -262,8 +388,11 @@
       <template x-if="resultado">
         <div>
           <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
-          <h2 x-text="resultado.tipo === 'cancelacion' ? 'Venta cancelada' : 'Devolución hecha'"></h2>
-          <p class="suave">Folio <strong x-text="resultado.folio"></strong> · los productos ya regresaron al inventario.</p>
+          <h2 x-text="{ cancelacion: 'Venta cancelada', cambio: 'Cambio hecho', devolucion: 'Devolución hecha' }[resultado.tipo]"></h2>
+          <p class="suave" x-show="resultado.tipo !== 'cambio'">Folio <strong x-text="resultado.folio"></strong> · los productos ya regresaron al inventario.</p>
+          <p class="suave" x-show="resultado.tipo === 'cambio'">
+            Lo que regresó volvió al inventario. Lo que se lleva quedó en la venta nueva, folio <strong x-text="resultado.folioNuevo"></strong>.
+          </p>
           <template x-if="Number(resultado.efectivo) > 0">
             <div>
               <div class="paso" style="margin: 16px 0 0">Entrega en efectivo</div>
@@ -274,6 +403,20 @@
             <div class="mensaje info" style="text-align: left">
               <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
               <span>Regresa <strong x-text="dinero(resultado.tarjeta)"></strong> a su tarjeta desde la terminal.</span>
+            </div>
+          </template>
+          <template x-if="resultado.tipo === 'cambio' && Number(resultado.efectivo) === 0">
+            <p class="suave">No hay dinero que entregar.</p>
+          </template>
+          <template x-for="aviso in resultado.avisos || []">
+            <div class="mensaje aviso" style="text-align: left">
+              <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="aviso"></span>
+            </div>
+          </template>
+          <template x-if="resultado.impresion && !resultado.impresion.impreso">
+            <div class="mensaje error" style="flex-direction: column; text-align: left">
+              <span>El cambio se guardó, pero el ticket no se imprimió: <span x-text="resultado.impresion.error"></span></span>
+              <button type="button" @click="reimprimir()"><svg class="ico"><use href="/static/iconos.svg#impresora"/></svg>Intentar imprimir otra vez</button>
             </div>
           </template>
           <button type="button" id="boton-listo" class="primario grande separado" @click="otraVenta()">Listo</button>
