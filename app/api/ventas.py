@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,9 +10,10 @@ from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Usuario, Venta
 from app.schemas.venta import (
-    CancelarIn, DevolucionOut, DevolverIn, LoteVendidoOut, PagoOut, RenglonOut, VentaIn, VentaOut, VentaResumenOut,
+    CancelarIn, DevolucionOut, DevolverIn, ImpresionOut, LoteVendidoOut, PagoOut, ReimprimirIn, RenglonOut, VentaIn,
+    VentaOut, VentaResumenOut,
 )
-from app.services import devoluciones, ventas
+from app.services import devoluciones, impresion, turnos, ventas
 from app.services.devoluciones import PiezaDevuelta
 from app.services.errores import ERRORES_NEGOCIO, a_http
 from app.services.ventas import RenglonSolicitado
@@ -19,7 +21,7 @@ from app.services.ventas import RenglonSolicitado
 router = APIRouter(prefix="/ventas", tags=["ventas"])
 
 
-def _venta_out(venta: Venta, avisos: list[str] | None = None) -> VentaOut:
+def _venta_out(venta: Venta, avisos: list[str] | None = None, impreso: ImpresionOut | None = None) -> VentaOut:
     return VentaOut(
         id=venta.id, folio=venta.folio, turno_id=venta.turno_id, caja_id=venta.caja_id,
         usuario_id=venta.usuario_id, estado=venta.estado,
@@ -45,6 +47,7 @@ def _venta_out(venta: Venta, avisos: list[str] | None = None) -> VentaOut:
         pagos=[PagoOut(metodo=p.metodo, monto=p.monto, recibido=p.recibido, cambio=p.cambio) for p in venta.pagos],
         devoluciones=[DevolucionOut.model_validate(d) for d in venta.devoluciones],
         avisos=avisos or [],
+        impresion=impreso,
     )
 
 
@@ -52,7 +55,11 @@ def _venta_out(venta: Venta, avisos: list[str] | None = None) -> VentaOut:
 def registrar_venta(datos: VentaIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     """Cobra una venta. Todo o nada: si falta existencia o el pago no alcanza,
     no se guarda nada. `tarjeta` + `efectivo_recibido`: lo que no cubre la
-    tarjeta se paga en efectivo y se calcula el cambio."""
+    tarjeta se paga en efectivo y se calcula el cambio.
+
+    Después de guardarla imprime el ticket (y abre el cajón si hubo
+    efectivo). Si la impresión falla, la venta queda guardada igual y
+    `impresion.error` dice por qué, para reimprimir."""
     try:
         venta, avisos = ventas.registrar_venta(
             db, usuario, datos.caja_id,
@@ -64,7 +71,8 @@ def registrar_venta(datos: VentaIn, usuario: Usuario = Depends(usuario_actual), 
         raise a_http(e)
     db.commit()
     db.refresh(venta)
-    return _venta_out(venta, avisos)
+    r = impresion.imprimir_venta(db, venta)
+    return _venta_out(venta, avisos, ImpresionOut(impreso=r.impreso, error=r.error))
 
 
 @router.get("/{venta_id}", response_model=VentaOut)
@@ -73,6 +81,31 @@ def obtener_venta(venta_id: int, usuario: Usuario = Depends(usuario_actual), db:
         return _venta_out(ventas.obtener_venta(db, usuario.negocio_id, venta_id))
     except ERRORES_NEGOCIO as e:
         raise a_http(e)
+
+
+@router.get("/{venta_id}/ticket", response_class=PlainTextResponse)
+def ver_ticket(venta_id: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """El ticket como texto, para verlo en pantalla sin impresora."""
+    try:
+        venta = ventas.obtener_venta(db, usuario.negocio_id, venta_id)
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+    caja = turnos.obtener_caja(db, usuario.negocio_id, venta.caja_id)
+    return impresion.ticket_de_venta(db, venta, caja).texto()
+
+
+@router.post("/{venta_id}/imprimir", response_model=ImpresionOut)
+def reimprimir(
+    venta_id: int, datos: ReimprimirIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)
+):
+    """Reimprime el ticket (marcado como reimpresión; no abre el cajón)."""
+    try:
+        venta = ventas.obtener_venta(db, usuario.negocio_id, venta_id)
+        caja = turnos.obtener_caja(db, usuario.negocio_id, datos.caja_id or venta.caja_id)
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+    r = impresion.reimprimir_venta(db, venta, caja)
+    return ImpresionOut(impreso=r.impreso, error=r.error)
 
 
 @router.get("", response_model=list[VentaResumenOut])

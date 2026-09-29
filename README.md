@@ -154,13 +154,29 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   - Nunca se devuelve más de lo vendido ni más dinero del cobrado.
 - Corte de turno: fondo + cobrado en el turno − reembolsado en el turno.
 
+### Tickets e impresión (etapa 2)
+
+- Al cobrar se imprime el ticket y, si hubo efectivo, se abre el cajón. Si
+  la impresora falla, la venta **se guarda igual** y la respuesta trae
+  `impresion.error`.
+- `GET /ventas/{id}/ticket` — el ticket en texto (para verlo sin impresora).
+- `POST /ventas/{id}/imprimir` — reimpresión (marcada como tal, sin cajón).
+- `POST /cajas/{id}/prueba-impresion` — ticket de prueba (admin).
+- Cada caja configura su impresora (`PUT /cajas/{id}`): `impresora_modo`
+  `red` (Ethernet, `IP:9100`) o `agente` (USB, `http://IP-PC:9110` + token);
+  `impresora_columnas` (48 = papel de 80 mm). El token nunca se regresa.
+- Encabezado y pie del ticket: `ticket_encabezado` / `ticket_pie` en `PUT /negocio`.
+- ESC/POS propio en `app/impresion/escpos.py` (sin python-escpos: solo se
+  necesita texto, corte y cajón). Acentos con la tabla PC850.
+- Agente para impresoras USB: `agente_impresion/` (ver su `LEEME.md`).
+
 ## Pruebas automáticas
 
 ```
 pytest
 ```
 
-Corre todas las pruebas (~160, unos 5 segundos). Antes de cada commit
+Corre todas las pruebas (~180, unos 10 segundos). Antes de cada commit
 deben pasar todas.
 
 - Usan una base de datos aparte: la de `.env` con `_test` al final (`pos_test`).

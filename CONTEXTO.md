@@ -76,7 +76,7 @@ Alertas de caducidad: avisar con suficiente anticipación para mover el producto
 
 Métodos de pago: efectivo con cálculo de cambio, tarjeta y pagos mixtos. Transferencia queda preparada pero desactivada. En la primera versión el pago con tarjeta se registra manualmente; la integración con una terminal Mercado Pago Point es una etapa posterior.
 
-Hardware existente que se reutiliza: lector de código de barras, impresoras de tickets y cajón de dinero. Las impresoras son una Bixolon SRP-330II y una Epson TM-T20II, ambas térmicas de 80 mm compatibles con ESC/POS, así que se manejan con la misma librería (python-escpos). El cajón se abre solo al cobrar en efectivo, conectado a la impresora, con el comando ESC/POS de pulso de cajón.
+Hardware existente que se reutiliza: lector de código de barras, impresoras de tickets y cajón de dinero. Las impresoras son una Bixolon SRP-330II y una Epson TM-T20II, ambas térmicas de 80 mm compatibles con ESC/POS, así que se manejan con el mismo código: un generador ESC/POS propio y mínimo (texto, corte y cajón), en lugar de la librería python-escpos, para no cargar dependencias que no hacen falta. El cajón se abre solo al cobrar en efectivo, conectado a la impresora, con el comando ESC/POS de pulso de cajón.
 
 Como la app corre en el navegador y el servidor está en otra computadora, el navegador no puede mandar comandos directos a una impresora USB. Si las impresoras están conectadas por Ethernet, el servidor les imprime directo por IP (puerto 9100). Si están por USB, se instala un pequeño agente de impresión en cada computadora de mostrador que recibe el ticket y lo manda a su impresora. Hoy las impresoras están conectadas por USB (así que se necesita el agente de impresión en las computadoras de mostrador), pero el código de impresión debe quedar detrás de una interfaz que permita ambos modos, configurable por caja, para poder pasar a Ethernet sin reprogramar.
 
@@ -132,4 +132,4 @@ Decisiones del importador ya tomadas: cada departamento de PVWin se vuelve una c
 
 ## Datos pendientes
 
-Falta el reporte "Catálogo de artículos" completo de la A a la Z y, sobre todo, un reporte de PVWin que traiga el precio de venta: hoy ningún producto importado tiene precio, y sin eso no se puede vender. Se decidió tomar los precios reales de PVWin en lugar de calcularlos con márgenes. Falta confirmar si cada impresora está conectada por USB o por Ethernet, y con qué PAC está contratada la facturación actual.
+Falta el reporte "Catálogo de artículos" completo de la A a la Z y, sobre todo, un reporte de PVWin que traiga el precio de venta: hoy ningún producto importado tiene precio, y sin eso no se puede vender. Se decidió tomar los precios reales de PVWin en lugar de calcularlos con márgenes. Falta el RFC del negocio para agregarlo al encabezado del ticket (hoy lleva dirección y teléfono), y con qué PAC está contratada la facturación actual.

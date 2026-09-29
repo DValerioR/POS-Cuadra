@@ -68,6 +68,7 @@ class VentaOut(BaseModel):
     pagos: list[PagoOut]
     devoluciones: list["DevolucionOut"] = []
     avisos: list[str] = []  # ej. "requiere receta"; solo al registrar
+    impresion: "ImpresionOut | None" = None  # solo al registrar
 
 
 class VentaResumenOut(BaseModel):
@@ -79,6 +80,15 @@ class VentaResumenOut(BaseModel):
     estado: EstadoVenta
     total: Decimal
     created_at: datetime
+
+
+class ImpresionOut(BaseModel):
+    impreso: bool
+    error: str | None = None  # la venta sí se guardó; reimprimir cuando se corrija
+
+
+class ReimprimirIn(BaseModel):
+    caja_id: int | None = None  # dónde reimprimir; por defecto, la caja de la venta
 
 
 class CancelarIn(BaseModel):

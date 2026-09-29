@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Caja, Turno, Usuario
-from app.schemas.turno import AbrirTurnoIn, CajaIn, CajaOut, CajaUpdate, CerrarTurnoIn, CorteOut, TurnoOut
-from app.services import turnos
+from app.schemas.turno import (
+    AbrirTurnoIn, CajaIn, CajaOut, CajaUpdate, CerrarTurnoIn, CorteOut, PruebaImpresionIn, TurnoOut,
+)
+from app.schemas.venta import ImpresionOut
+from app.services import impresion, turnos
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
 router = APIRouter(tags=["turnos"])
@@ -17,19 +20,20 @@ router = APIRouter(tags=["turnos"])
 
 # --- Cajas -----------------------------------------------------------------
 
-def _guardar_caja(db: Session, caja: Caja) -> Caja:
+def _guardar_caja(db: Session, caja: Caja) -> CajaOut:
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=409, detail="Ya existe una caja con ese nombre")
     db.refresh(caja)
-    return caja
+    return CajaOut.de(caja)
 
 
 @router.get("/cajas", response_model=list[CajaOut])
 def listar_cajas(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
-    return db.scalars(select(Caja).where(Caja.negocio_id == usuario.negocio_id).order_by(Caja.nombre)).all()
+    cajas = db.scalars(select(Caja).where(Caja.negocio_id == usuario.negocio_id).order_by(Caja.nombre))
+    return [CajaOut.de(c) for c in cajas]
 
 
 @router.post("/cajas", response_model=CajaOut, status_code=201)
@@ -48,6 +52,20 @@ def actualizar_caja(caja_id: int, datos: CajaUpdate, usuario: Usuario = Depends(
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(caja, campo, valor)
     return _guardar_caja(db, caja)
+
+
+@router.post("/cajas/{caja_id}/prueba-impresion", response_model=ImpresionOut)
+def prueba_impresion(
+    caja_id: int, datos: PruebaImpresionIn, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)
+):
+    """Imprime un ticket de prueba (y abre el cajón si se pide) para
+    verificar la configuración de la impresora de la caja."""
+    try:
+        caja = turnos.obtener_caja(db, usuario.negocio_id, caja_id)
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+    r = impresion.imprimir_prueba(caja, datos.abrir_cajon)
+    return ImpresionOut(impreso=r.impreso, error=r.error)
 
 
 # --- Turnos ----------------------------------------------------------------

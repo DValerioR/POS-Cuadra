@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.caja import ModoImpresora
 from app.models.turno import TipoTurno
 
 
@@ -13,6 +14,10 @@ class CajaIn(BaseModel):
 class CajaUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=1)
     activa: bool | None = None
+    impresora_modo: ModoImpresora | None = None
+    impresora_direccion: str | None = None
+    impresora_token: str | None = None
+    impresora_columnas: int | None = Field(default=None, ge=24, le=64)
 
 
 class CajaOut(BaseModel):
@@ -21,6 +26,19 @@ class CajaOut(BaseModel):
     id: int
     nombre: str
     activa: bool
+    impresora_modo: ModoImpresora
+    impresora_direccion: str | None
+    impresora_columnas: int
+    # El token no se regresa nunca; solo si ya hay uno.
+    impresora_tiene_token: bool = False
+
+    @classmethod
+    def de(cls, caja) -> "CajaOut":
+        return cls.model_validate(caja).model_copy(update={"impresora_tiene_token": bool(caja.impresora_token)})
+
+
+class PruebaImpresionIn(BaseModel):
+    abrir_cajon: bool = False
 
 
 class AbrirTurnoIn(BaseModel):

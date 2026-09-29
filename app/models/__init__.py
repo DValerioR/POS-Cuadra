@@ -5,7 +5,7 @@ from app.models.producto import Producto
 from app.models.lote import Lote
 from app.models.ajuste_inventario import AjusteInventario, TipoAjuste
 from app.models.sesion import Sesion
-from app.models.caja import Caja
+from app.models.caja import Caja, ModoImpresora
 from app.models.turno import TipoTurno, Turno
 from app.models.venta import EstadoVenta, MetodoPago, Pago, Venta, VentaRenglon, VentaRenglonLote
 from app.models.devolucion import Devolucion, DevolucionRenglon, TipoDevolucion
@@ -21,6 +21,7 @@ __all__ = [
     "TipoAjuste",
     "Sesion",
     "Caja",
+    "ModoImpresora",
     "TipoTurno",
     "Turno",
     "EstadoVenta",
