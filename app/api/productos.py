@@ -15,6 +15,7 @@ router = APIRouter(prefix="/productos", tags=["productos"])
 @router.get("", response_model=list[ProductoOut])
 def listar_productos(
     q: str | None = None,
+    clave: str | None = None,
     solo_revision: bool = False,
     solo_activos: bool = False,
     limite: int = Query(50, le=500),
@@ -34,6 +35,13 @@ def listar_productos(
         condiciones = [por_nombre, Producto.clave == q]
         if q.lstrip("0"):
             condiciones.append(func.ltrim(Producto.clave, "0") == q.lstrip("0"))
+        stmt = stmt.where(or_(*condiciones))
+    if clave := (clave or "").strip():
+        # Solo por clave exacta (el lector de código de barras), sin mezclar
+        # coincidencias por nombre.
+        condiciones = [Producto.clave == clave]
+        if clave.lstrip("0"):
+            condiciones.append(func.ltrim(Producto.clave, "0") == clave.lstrip("0"))
         stmt = stmt.where(or_(*condiciones))
     if solo_activos:
         stmt = stmt.where(Producto.activo.is_(True))

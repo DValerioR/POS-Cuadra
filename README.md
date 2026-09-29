@@ -90,7 +90,8 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - `GET/PUT /negocio` — configuración del negocio de la sesión.
 - `GET/POST /categorias`, `GET/PUT/DELETE /categorias/{id}`
 - `GET/POST /productos` (con búsqueda `?q=` por nombre parcial o clave; la
-  clave se compara sin ceros a la izquierda; `?solo_revision=true` para los
+  clave se compara sin ceros a la izquierda; `?clave=` solo por clave exacta,
+  para el lector de código de barras; `?solo_revision=true` para los
   marcados por el importador; paginado con `limite`/`desplazamiento`, 50 por
   defecto), `GET/PUT/DELETE /productos/{id}`
   — "eliminar" un producto lo desactiva (`activo=false`), no lo borra. Al

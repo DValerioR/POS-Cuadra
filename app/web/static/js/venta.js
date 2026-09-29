@@ -1,8 +1,17 @@
 // Pantalla de venta en mostrador.
 //
-// Flujo: buscar (o escanear) -> agregar al carrito -> indicar el lote real si
-// se entregó otro -> cobrar (efectivo, tarjeta o mixto) -> ticket.
-// Atajos: F2 buscar, F12 cobrar, Esc cerrar/limpiar, flechas + Enter en la lista.
+// Flujo: escanear (o buscar por nombre con F2) -> agregar al carrito ->
+// indicar el lote real si se entregó otro -> Esc para pasar al cobro ->
+// Enter cobra -> ticket.
+//
+// Modos del teclado, pensados para no tener que usar el ratón:
+//  - Escaneo (normal): todo lo que se teclea cae en el campo de código de
+//    barras aunque no tenga el cursor; Enter agrega el producto.
+//  - Búsqueda por nombre (F2): ventana con la lista; flechas + Enter agregan,
+//    Esc la cierra.
+//  - Cobro (Esc con productos): el cursor va a "¿Con cuánto paga?"; Enter
+//    cobra, Esc regresa a escanear.
+// F12 cobra desde cualquier modo.
 
 function pantallaVenta() {
   return {
@@ -16,7 +25,10 @@ function pantallaVenta() {
     // Abrir turno
     nuevoTurno: { tipo: new Date().getHours() < 14 ? "manana" : "tarde", fondo: "" },
 
-    // Búsqueda
+    // Escaneo y búsqueda por nombre
+    codigo: "",
+    buscandoNombre: false,
+    modoCobro: false,
     busqueda: "",
     resultados: [],
     elegido: 0,
@@ -43,7 +55,7 @@ function pantallaVenta() {
         this.cargando = false;
       }
       window.addEventListener("keydown", (ev) => this.atajo(ev));
-      this.$nextTick(() => this.enfocarBusqueda());
+      this.$nextTick(() => this.enfocarCodigo());
     },
 
     get puedeVender() {
@@ -74,23 +86,52 @@ function pantallaVenta() {
           tipo: this.nuevoTurno.tipo,
           fondo_inicial: this.nuevoTurno.fondo || "0",
         });
-        this.$nextTick(() => this.enfocarBusqueda());
+        this.$nextTick(() => this.enfocarCodigo());
       } catch (e) {
         this.error = e.message;
       }
     },
 
-    // --- Búsqueda -------------------------------------------------------
+    // --- Escaneo por código de barras -----------------------------------
 
-    enfocarBusqueda() {
-      const campo = document.getElementById("busqueda");
+    enfocarCodigo() {
+      this.modoCobro = false;
+      const campo = document.getElementById("codigo");
       if (campo) campo.focus();
     },
 
-    async consultar(texto) {
-      const numero = ++this._consulta;
-      const lista = await API.get(`/productos?solo_activos=true&limite=30&q=${encodeURIComponent(texto)}`);
-      return numero === this._consulta ? lista : null; // ignorar respuestas viejas
+    async escanear() {
+      const texto = this.codigo.trim();
+      if (!texto) return;
+      this.error = "";
+      try {
+        const lista = await API.get(`/productos?solo_activos=true&limite=2&clave=${encodeURIComponent(texto)}`);
+        if (lista.length) {
+          await this.agregar(lista[0]);
+        } else {
+          this.error = `No hay ningún producto con el código ${texto}. Para buscarlo por nombre presiona F2.`;
+        }
+      } catch (e) {
+        this.error = e.message;
+      }
+      this.codigo = "";
+    },
+
+    // --- Búsqueda por nombre (F2) ----------------------------------------
+
+    abrirBusqueda() {
+      this.modoCobro = false;
+      this.buscandoNombre = true;
+      this.busqueda = "";
+      this.resultados = [];
+      this.$nextTick(() => document.getElementById("busqueda").focus());
+    },
+
+    cerrarBusqueda() {
+      this.buscandoNombre = false;
+      this.busqueda = "";
+      this.resultados = [];
+      this.$nextTick(() => this.enfocarCodigo());
     },
 
     alEscribir() {
@@ -101,51 +142,34 @@ function pantallaVenta() {
         return;
       }
       this._temporizador = setTimeout(async () => {
+        const numero = ++this._consulta;
         try {
-          const lista = await this.consultar(texto);
-          if (lista) {
-            this.resultados = lista;
-            this.elegido = 0;
-          }
+          const lista = await API.get(`/productos?solo_activos=true&limite=30&q=${encodeURIComponent(texto)}`);
+          if (numero !== this._consulta) return; // ignorar respuestas viejas
+          this.resultados = lista;
+          this.elegido = 0;
         } catch (e) {
           this.error = e.message;
         }
       }, 180);
     },
 
-    // Enter: el escáner escribe el código y manda Enter muy rápido, así que se
-    // busca en ese momento sin esperar a la búsqueda mientras se escribe.
-    async alPresionarEnter() {
-      const texto = this.busqueda.trim();
-      if (!texto) return;
-      clearTimeout(this._temporizador);
-      let lista = this.resultados;
-      try {
-        const nueva = await this.consultar(texto);
-        if (nueva) lista = nueva;
-      } catch (e) {
-        this.error = e.message;
-        return;
-      }
-      const porClave = lista.find((p) => p.clave && p.clave.replace(/^0+/, "") === texto.replace(/^0+/, ""));
-      const producto = porClave || (lista.length === 1 ? lista[0] : lista[this.elegido]);
-      if (producto) {
-        await this.agregar(producto);
-      } else {
-        this.error = `No se encontró "${texto}"`;
-        this.resultados = [];
-      }
+    async elegirResultado() {
+      const producto = this.resultados[this.elegido];
+      if (producto) await this.agregarDesdeBusqueda(producto);
+    },
+
+    async agregarDesdeBusqueda(producto) {
+      if (await this.agregar(producto)) this.cerrarBusqueda();
     },
 
     mover(paso) {
       if (!this.resultados.length) return;
       this.elegido = (this.elegido + paso + this.resultados.length) % this.resultados.length;
-    },
-
-    limpiarBusqueda() {
-      this.busqueda = "";
-      this.resultados = [];
-      this.enfocarBusqueda();
+      this.$nextTick(() => {
+        const fila = document.querySelector(".busqueda-nombre .resultado.elegido");
+        if (fila) fila.scrollIntoView({ block: "nearest" });
+      });
     },
 
     // --- Carrito --------------------------------------------------------
@@ -154,7 +178,7 @@ function pantallaVenta() {
       this.error = "";
       if (producto.precio_venta === null) {
         this.error = `${producto.nombre} no tiene precio de venta; pide al administrador que lo capture.`;
-        return;
+        return false;
       }
       const existente = this.carrito.find((r) => r.producto.id === producto.id && !r.loteId);
       if (existente) {
@@ -173,10 +197,10 @@ function pantallaVenta() {
           });
         } catch (e) {
           this.error = e.message;
-          return;
+          return false;
         }
       }
-      this.limpiarBusqueda();
+      return true;
     },
 
     cambiarCantidad(renglon, paso) {
@@ -185,7 +209,7 @@ function pantallaVenta() {
 
     quitar(renglon) {
       this.carrito = this.carrito.filter((r) => r !== renglon);
-      this.enfocarBusqueda();
+      if (!this.carrito.length) this.enfocarCodigo();
     },
 
     importe(renglon) {
@@ -249,6 +273,7 @@ function pantallaVenta() {
     get listoParaCobrar() {
       return (
         this.carrito.length > 0 &&
+        !this.ultimaVenta && // ya cobrada: el Enter de "Siguiente venta" no debe cobrarla otra vez
         !this.cobrando &&
         this.faltaCentavos === 0 &&
         this.tarjetaCentavos <= this.totalCentavos &&
@@ -263,8 +288,25 @@ function pantallaVenta() {
       this.formaPago = forma;
       this.efectivo = "";
       this.tarjeta = "";
-      const campo = { efectivo: "campo-efectivo", mixto: "campo-tarjeta" }[forma];
-      if (campo) this.$nextTick(() => document.getElementById(campo).focus());
+      this.$nextTick(() => this.enfocarCobro());
+    },
+
+    // --- Modo cobro (Esc) -----------------------------------------------
+
+    entrarCobro() {
+      if (!this.carrito.length) return;
+      this.modoCobro = true;
+      // Sin esperar: el campo ya está a la vista y lo que se teclee enseguida
+      // debe caer ahí, no en el código de barras.
+      this.enfocarCobro();
+    },
+
+    // El cursor va a lo primero que hay que capturar según la forma de pago;
+    // con tarjeta no hay nada que escribir y se enfoca el botón Cobrar.
+    enfocarCobro() {
+      const id = { efectivo: "campo-efectivo", mixto: "campo-tarjeta", tarjeta: "boton-cobrar" }[this.formaPago];
+      const campo = document.getElementById(id);
+      if (campo) campo.focus();
     },
 
     // "2027-03" -> "2027-03-31": las cajas traen mes/año; se toma el último día.
@@ -292,6 +334,8 @@ function pantallaVenta() {
           efectivo_recibido: (this.efectivoCentavos / 100).toFixed(2),
         });
         this.ultimaVenta = venta;
+        // Que el cursor no se quede en "¿Con cuánto paga?": su Enter cobraría de nuevo.
+        if (document.activeElement) document.activeElement.blur();
       } catch (e) {
         this.error = e.message;
       } finally {
@@ -315,7 +359,8 @@ function pantallaVenta() {
       this.efectivo = "";
       this.tarjeta = "";
       this.error = "";
-      this.limpiarBusqueda();
+      this.codigo = "";
+      this.$nextTick(() => this.enfocarCodigo());
     },
 
     cancelarVenta() {
@@ -333,16 +378,41 @@ function pantallaVenta() {
         }
         return;
       }
+      if (!this.turno) return;
+
       if (ev.key === "F2") {
         ev.preventDefault();
-        this.enfocarBusqueda();
+        this.abrirBusqueda();
       } else if (ev.key === "F12") {
         ev.preventDefault();
         this.cobrar();
       } else if (ev.key === "Escape") {
-        if (this.resultados.length) this.resultados = [];
-        else this.limpiarBusqueda();
+        ev.preventDefault();
+        if (this.buscandoNombre) this.cerrarBusqueda();
+        else if (this.modoCobro) this.enfocarCodigo();
+        else if (this.codigo) this.codigo = "";
+        else this.entrarCobro();
+      } else if (this.esLetra(ev) && this.buscandoNombre && ev.target.id !== "busqueda") {
+        // Se empezó a escribir antes de que la ventana de búsqueda tomara el cursor.
+        ev.preventDefault();
+        this.busqueda += ev.key;
+        this.alEscribir();
+        document.getElementById("busqueda").focus();
+      } else if (this.esLetra(ev) && !this.buscandoNombre && !this.modoCobro && !this.enCampo(ev)) {
+        // Se tecleó (o escaneó) sin tener el cursor en ningún campo: va al código.
+        ev.preventDefault();
+        this.codigo += ev.key;
+        this.enfocarCodigo();
       }
+    },
+
+    esLetra(ev) {
+      return ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && !ev.metaKey;
+    },
+
+    enCampo(ev) {
+      const destino = ev.target;
+      return destino instanceof HTMLInputElement || destino instanceof HTMLTextAreaElement || destino instanceof HTMLSelectElement;
     },
 
     dinero,

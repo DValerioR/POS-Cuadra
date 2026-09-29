@@ -74,27 +74,15 @@
   <!-- Venta -->
   <main class="venta" x-show="!cargando && puedeVender && cajaId && turno" x-cloak>
     <section class="izquierda">
-      <div class="buscador">
-        <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
-        <input id="busqueda" x-model="busqueda" @input="alEscribir"
-               @keydown.enter.prevent="alPresionarEnter" @keydown.arrow-down.prevent="mover(1)"
-               @keydown.arrow-up.prevent="mover(-1)"
-               placeholder="Escanea el código o escribe el nombre del producto" autocomplete="off">
-        <div class="resultados" x-show="resultados.length" @click.outside="resultados = []">
-          <template x-for="(p, i) in resultados" :key="p.id">
-            <div class="resultado" :class="{ elegido: i === elegido }" @click="agregar(p)" @mouseenter="elegido = i">
-              <div>
-                <div class="nombre" x-text="p.nombre"></div>
-                <div class="suave" style="font-size: 14px">
-                  <span x-text="p.clave || 'sin clave'"></span>
-                  <template x-if="p.requiere_receta"><span class="etiqueta">Receta</span></template>
-                </div>
-              </div>
-              <div class="precio" x-show="p.precio_venta !== null" x-text="dinero(p.precio_venta)"></div>
-              <div class="sin-precio" x-show="p.precio_venta === null">Sin precio</div>
-            </div>
-          </template>
+      <div class="fila escaneo">
+        <div class="buscador" :class="{ apagado: modoCobro }">
+          <span class="lupa"><svg><use href="/static/iconos.svg#codigo"/></svg></span>
+          <input id="codigo" x-model="codigo" @keydown.enter.prevent="escanear()" @focus="modoCobro = false"
+                 placeholder="Escanea el código de barras" autocomplete="off" inputmode="numeric">
         </div>
+        <button type="button" class="buscar-nombre" @click="abrirBusqueda()">
+          <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg>Buscar por nombre <kbd>F2</kbd>
+        </button>
       </div>
 
       <div class="mensaje error" x-show="error">
@@ -169,7 +157,10 @@
       </div>
     </section>
 
-    <aside class="panel cobro">
+    <aside class="panel cobro" :class="{ activo: modoCobro }" @focusin="modoCobro = true">
+      <div class="aviso-cobro" x-show="modoCobro">
+        <svg class="ico"><use href="/static/iconos.svg#billete"/></svg>Cobrando · <kbd>Esc</kbd> para seguir escaneando
+      </div>
       <div class="caja-total">
         <div class="rotulo">
           <span>Total a cobrar</span>
@@ -202,7 +193,8 @@
         <div x-show="formaPago === 'mixto'">
           <div class="paso">Parte con tarjeta</div>
           <div class="campo-dinero">
-            <input id="campo-tarjeta" type="number" min="0" step="0.01" x-model="tarjeta" placeholder="0.00">
+            <input id="campo-tarjeta" type="number" min="0" step="0.01" x-model="tarjeta" placeholder="0.00"
+                   @keydown.enter.prevent="document.getElementById('campo-efectivo').focus()">
           </div>
         </div>
 
@@ -227,18 +219,53 @@
         </div>
 
         <div style="margin-top: auto" class="pila">
-          <button class="primario enorme" :disabled="!listoParaCobrar" @click="cobrar()">
+          <button id="boton-cobrar" class="primario enorme" :disabled="!listoParaCobrar" @click="cobrar()">
             <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
             <span x-text="cobrando ? 'Cobrando…' : 'Cobrar'"></span>
           </button>
           <button type="button" class="texto-peligro" x-show="carrito.length" @click="cancelarVenta()">
             Borrar todo y empezar de nuevo
           </button>
-          <div class="atajos"><kbd>F2</kbd> buscar · <kbd>F12</kbd> cobrar · <kbd>Esc</kbd> limpiar búsqueda</div>
+          <div class="atajos" x-show="!modoCobro"><kbd>Esc</kbd> pasar a cobrar · <kbd>F2</kbd> buscar por nombre</div>
+          <div class="atajos" x-show="modoCobro"><kbd>Enter</kbd> cobrar · <kbd>Esc</kbd> seguir escaneando</div>
         </div>
       </div>
     </aside>
   </main>
+
+  <!-- Búsqueda por nombre (F2) -->
+  <div class="velo arriba" x-show="buscandoNombre" x-cloak @click.self="cerrarBusqueda()">
+    <div class="panel busqueda-nombre">
+      <div class="buscador">
+        <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
+        <input id="busqueda" x-model="busqueda" @input="alEscribir"
+               @keydown.enter.prevent="elegirResultado()" @keydown.arrow-down.prevent="mover(1)"
+               @keydown.arrow-up.prevent="mover(-1)"
+               placeholder="Escribe el nombre del producto" autocomplete="off">
+      </div>
+      <div class="lista-resultados">
+        <template x-for="(p, i) in resultados" :key="p.id">
+          <div class="resultado" :class="{ elegido: i === elegido }" @click="agregarDesdeBusqueda(p)" @mouseenter="elegido = i">
+            <div>
+              <div class="nombre" x-text="p.nombre"></div>
+              <div class="suave" style="font-size: 14px">
+                <span x-text="p.clave || 'sin clave'"></span>
+                <template x-if="p.requiere_receta"><span class="etiqueta">Receta</span></template>
+              </div>
+            </div>
+            <div class="precio" x-show="p.precio_venta !== null" x-text="dinero(p.precio_venta)"></div>
+            <div class="sin-precio" x-show="p.precio_venta === null">Sin precio</div>
+          </div>
+        </template>
+        <div class="suave vacio-busqueda" x-show="busqueda.trim().length < 2">Escribe al menos 2 letras. Ej. <em>amox 500</em></div>
+        <div class="suave vacio-busqueda" x-show="busqueda.trim().length >= 2 && !resultados.length">No se encontró ningún producto con ese nombre.</div>
+      </div>
+      <div class="mensaje error" x-show="error && buscandoNombre" style="margin: 0 16px 12px">
+        <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+      </div>
+      <div class="atajos pie-busqueda"><kbd>↑</kbd> <kbd>↓</kbd> elegir · <kbd>Enter</kbd> agregar · <kbd>Esc</kbd> cerrar</div>
+    </div>
+  </div>
 
   <!-- Resultado de la venta -->
   <div class="velo" x-show="ultimaVenta" x-cloak>

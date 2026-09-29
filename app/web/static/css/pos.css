@@ -266,18 +266,20 @@ p { margin: 0 0 12px; }
   border-radius: var(--radio);
   box-shadow: var(--sombra);
 }
-.resultados {
-  position: absolute;
-  z-index: 10;
-  left: 0; right: 0; top: 100%;
-  margin-top: 6px;
-  background: #fff;
-  border: 1px solid var(--borde);
-  border-radius: var(--radio);
-  box-shadow: var(--sombra-alta);
-  max-height: 60vh;
-  overflow-y: auto;
-}
+.escaneo { align-items: stretch; }
+.escaneo .buscador { flex: 1; transition: opacity 0.15s; }
+.escaneo .buscador.apagado { opacity: 0.55; }
+.escaneo .buscar-nombre { flex: 0 0 auto; border-radius: var(--radio); padding: 0 20px; box-shadow: var(--sombra); }
+
+/* Ventana de búsqueda por nombre (F2) */
+.velo.arriba { align-items: flex-start; padding-top: 8vh; }
+.busqueda-nombre { width: min(760px, 100%); padding: 0; overflow: hidden; box-shadow: var(--sombra-alta); }
+.busqueda-nombre .buscador input { border: 0; border-bottom: 1px solid var(--borde); border-radius: 0; box-shadow: none; }
+.busqueda-nombre .buscador input:focus { outline: none; }
+.lista-resultados { max-height: 55vh; overflow-y: auto; }
+.vacio-busqueda { padding: 28px 20px; text-align: center; }
+.pie-busqueda { padding: 10px; border-top: 1px solid var(--linea); background: #f7f9f9; }
+
 .resultado {
   display: flex;
   justify-content: space-between;
@@ -329,7 +331,9 @@ p { margin: 0 0 12px; }
 .vacio svg { width: 72px; height: 72px; color: #b7c6c2; }
 .vacio strong { color: var(--texto); font-size: 20px; }
 
-.cobro { display: flex; flex-direction: column; gap: 16px; padding: 0; overflow: hidden; }
+.cobro { display: flex; flex-direction: column; gap: 16px; padding: 0; overflow: hidden; transition: box-shadow 0.15s, border-color 0.15s; }
+.cobro.activo { border-color: var(--primario); box-shadow: 0 0 0 3px rgba(15, 122, 99, 0.35), var(--sombra); }
+.aviso-cobro { display: flex; align-items: center; justify-content: center; gap: 8px; background: #7ee0c3; color: var(--primario-oscuro); font-weight: 700; font-size: 15px; padding: 8px; margin-bottom: -16px; }
 .cobro .cuerpo { display: flex; flex-direction: column; gap: 16px; padding: 0 20px 20px; flex: 1; overflow-y: auto; }
 .caja-total { background: var(--primario-oscuro); color: #fff; padding: 18px 20px; }
 .caja-total .rotulo { opacity: 0.8; font-weight: 600; display: flex; justify-content: space-between; }

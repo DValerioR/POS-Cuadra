@@ -24,6 +24,8 @@ Stack decidido e implementado (ver README.md): FastAPI, SQLAlchemy 2.0, Alembic 
 
 Criterio de diseño de las pantallas: atractivas pero muy sencillas, que cualquier persona las entienda sin explicación. Letra y botones grandes, una acción principal clara por pantalla, opciones como botones grandes en lugar de listas desplegables, textos en español llano y la misma barra superior, colores e íconos en todas (estilos en `app/web/static/css/pos.css`, íconos en `app/web/static/iconos.svg`, barra común en `api.js`). Las pantallas nuevas siguen este mismo estilo.
 
+Venta con teclado, para no usar el ratón: el campo visible es solo para código de barras y todo lo que se teclea o escanea cae ahí aunque no tenga el cursor; la búsqueda por nombre está oculta y se abre con F2 (flechas + Enter agregan, Esc cierra); con productos en el carrito, Esc pasa al modo cobro (el cursor va a "¿Con cuánto paga?", Enter cobra y otro Esc regresa a escanear); después de cobrar, Enter empieza la siguiente venta.
+
 Importante para producción: `uvicorn --reload` es solo para desarrollo. En la farmacia, el servidor FastAPI debe quedar instalado como servicio de Windows que arranque solo con el equipo y se reinicie si falla, sin depender de que alguien tenga una ventana abierta, porque ese es justo el problema que tienen hoy con PVWin.
 
 ## Catálogo

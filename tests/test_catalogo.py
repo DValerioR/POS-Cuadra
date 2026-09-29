@@ -131,6 +131,18 @@ def test_buscar_por_clave_ignora_ceros_a_la_izquierda(como_admin, db, negocio):
         assert [x["id"] for x in como_admin.get("/productos", params={"q": escaneado}).json()] == [p.id]
 
 
+
+def test_buscar_solo_por_codigo_no_mezcla_nombres(como_admin, db, negocio):
+    # El lector de código de barras no debe traer productos cuyo nombre
+    # contenga el número (ej. "CLAVE 750 ML").
+    p = Producto(negocio_id=negocio.id, nombre="PAÑAL AFECTIVE", clave="13117000894")
+    otro = Producto(negocio_id=negocio.id, nombre="JABON 13117000894", clave="999")
+    db.add_all([p, otro])
+    db.commit()
+    for escaneado in ("013117000894", "13117000894"):
+        assert [x["id"] for x in como_admin.get("/productos", params={"clave": escaneado}).json()] == [p.id]
+    assert como_admin.get("/productos", params={"clave": "PAÑAL"}).json() == []
+
 def test_listado_paginado_y_filtro_de_revision(como_admin, db, negocio):
     for i in range(5):
         db.add(Producto(negocio_id=negocio.id, nombre=f"P{i}", requiere_revision=(i == 3)))

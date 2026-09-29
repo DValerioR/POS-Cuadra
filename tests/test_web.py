@@ -22,7 +22,7 @@ def test_pagina_desconocida_redirige(cliente):
     assert cliente.get("/no-existe", follow_redirects=False).headers["location"] == "/venta"
 
 
-@pytest.mark.parametrize("archivo", ["js/api.js", "js/venta.js", "css/pos.css", "vendor/alpine-3.17.4.min.js"])
+@pytest.mark.parametrize("archivo", ["js/api.js", "js/venta.js", "css/pos.css", "iconos.svg", "vendor/alpine-3.17.4.min.js"])
 def test_estaticos(cliente, archivo):
     assert cliente.get(f"/static/{archivo}").status_code == 200
 
