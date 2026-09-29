@@ -5,7 +5,7 @@ import pytest
 from tests.conftest import PASSWORD
 
 
-@pytest.mark.parametrize("pagina", ["login", "venta", "turno", "devoluciones"])
+@pytest.mark.parametrize("pagina", ["login", "inicio", "venta", "turno", "devoluciones"])
 def test_paginas(cliente, pagina):
     r = cliente.get(f"/{pagina}")
     assert r.status_code == 200
@@ -13,16 +13,16 @@ def test_paginas(cliente, pagina):
     assert r.headers["cache-control"] == "no-cache"
 
 
-def test_inicio_redirige_a_venta(cliente):
+def test_raiz_lleva_al_inicio(cliente):
     r = cliente.get("/", follow_redirects=False)
-    assert r.headers["location"] == "/venta"
+    assert r.headers["location"] == "/inicio"
 
 
 def test_pagina_desconocida_redirige(cliente):
-    assert cliente.get("/no-existe", follow_redirects=False).headers["location"] == "/venta"
+    assert cliente.get("/no-existe", follow_redirects=False).headers["location"] == "/inicio"
 
 
-@pytest.mark.parametrize("archivo", ["js/api.js", "js/venta.js", "js/devoluciones.js", "css/pos.css", "iconos.svg", "vendor/alpine-3.17.4.min.js"])
+@pytest.mark.parametrize("archivo", ["js/api.js", "js/inicio.js", "js/venta.js", "js/devoluciones.js", "css/pos.css", "iconos.svg", "vendor/alpine-3.17.4.min.js"])
 def test_estaticos(cliente, archivo):
     assert cliente.get(f"/static/{archivo}").status_code == 200
 

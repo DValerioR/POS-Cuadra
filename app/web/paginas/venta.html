@@ -81,7 +81,7 @@
                  placeholder="Escanea el código de barras" autocomplete="off" inputmode="numeric">
         </div>
         <button type="button" class="buscar-nombre" @click="abrirBusqueda()">
-          <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg>Buscar por nombre <kbd>F2</kbd>
+          <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg><span class="texto">Buscar por nombre</span> <kbd>F2</kbd>
         </button>
       </div>
 
@@ -95,7 +95,7 @@
             <tr>
               <th>Producto</th>
               <th style="width: 150px">Cantidad</th>
-              <th class="derecha" style="width: 110px">Precio</th>
+              <th class="derecha col-precio" style="width: 110px">Precio</th>
               <th class="derecha" style="width: 120px">Importe</th>
               <th style="width: 60px"></th>
             </tr>
@@ -138,7 +138,7 @@
                     <button type="button" @click="cambiarCantidad(r, 1)" title="Una más">+</button>
                   </div>
                 </td>
-                <td class="derecha suave" x-text="dinero(r.producto.precio_venta)"></td>
+                <td class="derecha suave col-precio" x-text="dinero(r.producto.precio_venta)"></td>
                 <td class="derecha importe" x-text="dinero(importe(r))"></td>
                 <td class="derecha">
                   <button class="texto-peligro" @click="quitar(r)" title="Quitar de la venta">

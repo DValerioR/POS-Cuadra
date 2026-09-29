@@ -28,9 +28,9 @@ Venta con teclado, para no usar el ratón: el campo visible es solo para código
 
 ## Arranque del programa y pantalla de inicio ("núcleo")
 
-Cómo funciona hoy: al abrir la dirección del servidor (`/`) o al iniciar sesión, el sistema lleva directo a la pantalla de venta (`/venta`); las páginas desconocidas también redirigen ahí (`app/api/web.py`). La barra superior común (`pintarBarra()` en `app/web/static/js/api.js`) muestra el nombre del negocio, enlaces a las secciones que existen (Vender, Turno y corte, y Devoluciones solo para admin), el usuario con su rol y el botón Salir. Las pantallas existentes son `/login`, `/venta`, `/turno` y `/devoluciones`.
+Ya está hecho (29/09/2026). Al abrir la dirección del servidor (`/`), al iniciar sesión o en páginas desconocidas, el sistema lleva a la pantalla de inicio o "núcleo" (`/inicio`), salvo que esa computadora tenga activado "Entrar directo a Vender". Las pantallas existentes son `/login`, `/inicio`, `/venta`, `/turno` y `/devoluciones`. Lo de abajo es el diseño que se siguió; un cambio respecto a él: la imagen del centro no es solo el logo, sino cualquier imagen que el administrador sube desde el núcleo (Configuración → Imagen de inicio), guardada en la base por negocio. Falta subir la imagen real de Farmacia La Fe.
 
-Lo que se quiere (decidido, falta hacerlo): que el programa NO empiece en la caja, sino en una pantalla de inicio o "núcleo" desde donde se entra a todas las funciones del sistema. El flujo es: acceso directo de Chrome en modo aplicación → inicio de sesión → núcleo → la función elegida, y desde cualquier pantalla se regresa al núcleo.
+Lo que se quería: que el programa NO empiece en la caja, sino en una pantalla de inicio o "núcleo" desde donde se entra a todas las funciones del sistema. El flujo es: acceso directo de Chrome en modo aplicación → inicio de sesión → núcleo → la función elegida, y desde cualquier pantalla se regresa al núcleo.
 
 Referencia visual: en `docs/referencia/` hay dos fotos de la pantalla principal de PVWin, el sistema que usa hoy la farmacia (una a pantalla completa y otra en ventana sin maximizar, que es como se usa normalmente). Revísalas antes de diseñar. El núcleo nuevo sigue la misma estructura, que el personal ya conoce, pero con el estilo visual actual del proyecto (`pos.css`, `iconos.svg`, barra común de `api.js`).
 
@@ -49,20 +49,18 @@ Reglas del núcleo:
 - `/`, las páginas desconocidas y el inicio de sesión llevan al núcleo en lugar de a `/venta`; hay que ajustar `app/api/web.py`, `login.html` y las pruebas de `tests/test_web.py` que hoy esperan `/venta`.
 - Ajuste por computadora (guardado en esa computadora, como la caja) para entrar directo a Vender al iniciar sesión, pensado para mostrador. Por defecto se entra al núcleo.
 
-## Pantallas responsivas (hacer junto con el núcleo)
+## Pantallas responsivas
 
 En la farmacia normalmente usan el programa en una ventana sin maximizar, casi del tamaño de la pantalla (ver la segunda foto en `docs/referencia/`), así que ese caso tiene prioridad, aunque todas las pantallas (el núcleo y las existentes) deben verse y usarse bien a distintos tamaños. Hasta ahora solo se probaron a 1366×768 en pantalla completa.
 
-Qué hay hoy (`app/web/static/css/pos.css`): un solo punto de corte a 900 px de ancho. Por debajo, la venta pasa de dos columnas (carrito y cobro) a una, la barra oculta el nombre del usuario, y el corte y las opciones de devoluciones pasan a una columna.
+Ya está hecho (29/09/2026), en `app/web/static/css/pos.css`:
+- Núcleo: cabe siempre en la ventana; los menús se acomodan en dos renglones si no caben, los accesos pasan a dos columnas a media pantalla y la imagen se ajusta al espacio que queda.
+- Barra superior de las demás pantallas: solo íconos por debajo de 1200 px (salvo Inicio y la pantalla actual) y botón "Menú" por debajo de 760 px.
+- Venta: el panel de cobro mide de 320 a 380 px según el ancho; por debajo de 1100 px se oculta la columna Precio (queda el importe); en ventanas bajas el cobro se compacta; a media pantalla pasa a una columna con el cobro abajo. Si el cobro no cabe, se desplaza por dentro y Cobrar se queda pegado abajo.
+- Corte: el botón Cerrar turno se queda pegado abajo al desplazarse.
+- Devoluciones: las columnas se ajustan a su contenido (ya no hay anchos fijos) y el renglón de Volver / Hacer la devolución se queda pegado abajo cuando está a la vista.
 
-Problemas probables, detectados leyendo el CSS; hay que confirmarlos probando:
-- Venta a menos de 900 px: el panel de cobro queda debajo del carrito y el total y el botón Cobrar quedan fuera de la vista. En mostrador el total y Cobrar deben verse siempre, por ejemplo con el cobro fijo abajo o un panel de cobro más compacto.
-- Venta en ventana baja: el panel de cobro tiene su propio desplazamiento (`.cobro .cuerpo`), y el botón Cobrar puede quedar escondido abajo sin que se note.
-- Entre 900 y ~1200 px: el panel de cobro mide siempre 380 px y el carrito se aprieta (el nombre del producto queda muy angosto).
-- Barra superior: altura fija de 60 px sin salto de línea. Con más secciones (las del núcleo) puede no caber; debe acomodarse, por ejemplo con solo íconos o con un menú.
-- Tablas de devoluciones: columnas de ancho fijo (el contador de 230 px) que pueden salirse por la derecha en ventanas angostas.
-
-Cómo verificarlo: con el servidor de demostración, probar cada pantalla a varios tamaños (al menos 1920×1080, 1366×768, ventana restaurada de unos 1200×700, media pantalla de unos 683 px de ancho, y una ventana baja de unos 600 px de alto) y revisar que no haya desplazamiento horizontal, que la acción principal de cada pantalla (Cobrar, Cerrar turno, Hacer la devolución) siempre esté a la vista y que el texto no se encime.
+Cómo se verificó (y cómo volver a hacerlo tras cambios de diseño): con el servidor de demostración, probar cada pantalla a varios tamaños (al menos 1920×1080, 1366×768, ventana restaurada de unos 1200×700, media pantalla de unos 683 px de ancho, y una ventana baja de unos 600 px de alto) y revisar que no haya desplazamiento horizontal, que la acción principal de cada pantalla (Cobrar, Cerrar turno, Hacer la devolución) siempre esté a la vista y que el texto no se encime.
 
 Importante para producción: `uvicorn --reload` es solo para desarrollo. En la farmacia, el servidor FastAPI debe quedar instalado como servicio de Windows que arranque solo con el equipo y se reinicie si falla, sin depender de que alguien tenga una ventana abierta, porque ese es justo el problema que tienen hoy con PVWin.
 
@@ -173,7 +171,7 @@ De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la co
 De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja (un solo turno abierto por caja; ya existen "Mostrador 1" y "Mostrador 2" en la base real); ventas con cobro en efectivo, tarjeta y mixto, descuento de lotes por FEFO o por el lote que indica el vendedor, captura de caducidad al vender, desglose de IVA e IEPS y folios consecutivos; cancelaciones, devoluciones y cambios de producto (solo admin); tickets en ESC/POS con impresión por red o por agente USB y apertura del cajón solo con efectivo (encabezado y pie de Farmacia La Fe ya configurados); y las pantallas en HTML + Alpine.js: inicio de sesión, venta en mostrador (con escaneo, búsqueda por nombre con F2 y modo cobro con Esc), turno y corte, y devoluciones, cancelaciones y cambios de producto (solo admin). Hay más de 200 pruebas automáticas (`pytest`) que corren contra una base aparte.
 
 Para retomar, lo pendiente es:
-- Lo siguiente a construir: la pantalla de inicio o "núcleo" con el diseño decidido en "Arranque del programa y pantalla de inicio" (referencia en `docs/referencia/`), y en el mismo trabajo hacer responsivas todas las pantallas (ver "Pantallas responsivas"). Antes de programar, mostrar al usuario un plan corto (agrupación de menús, teclas y cómo se resuelve lo responsivo) para que lo apruebe; al terminar, correr todas las pruebas, agregar las del núcleo y actualizar este archivo y README.md.
+- Ya está la pantalla de inicio o "núcleo" con pantallas responsivas (ver arriba). En la base real hay que correr `alembic upgrade head` (migración `b7e4a1c9d2f3`, imagen de inicio) y subir la imagen de Farmacia La Fe desde el núcleo.
 - Conseguir de PVWin el reporte con precios de venta (hoy ningún producto real tiene precio, así que no se puede vender con datos reales) y el catálogo completo de la A a la Z, y reimportar.
 - Probar la impresión en la farmacia: instalar el agente en una computadora de mostrador (`agente_impresion/LEEME.md`), configurar la caja y usar la prueba de impresión para revisar acentos, corte y cajón.
 - Pantallas que faltan: inventario (captura de caducidades, ajustes, mermas, avance), catálogo y precios para el administrador, y la vista sencilla para la tableta. La de devoluciones y cancelaciones ya está (`/devoluciones`, solo admin): se busca la venta por folio o de la lista de hoy, se elige devolver piezas o cancelar todo, se pide motivo y se confirma diciendo cuánto entregar en efectivo y cuánto regresar a tarjeta. Ahí mismo está el cambio de producto: se marca lo que regresa, se escanea o busca lo que se lleva, y la pantalla dice si el cliente paga la diferencia (efectivo, tarjeta o las dos) o si se le regresa en efectivo; imprime el ticket de la venta nueva.

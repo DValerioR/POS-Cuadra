@@ -280,7 +280,7 @@ p { margin: 0 0 12px; }
 
 .venta {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 30vw, 380px);
   gap: 18px;
   height: calc(100vh - 60px);
   padding: 18px 20px;
@@ -417,6 +417,9 @@ kbd { font: inherit; font-size: 12px; font-weight: 700; padding: 1px 6px; border
 .corte td { padding: 6px 0; color: var(--texto-suave); }
 .corte td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .corte tr.total-fila td { border-top: 1px solid var(--borde); font-weight: 700; color: var(--texto); padding-top: 8px; }
+/* La acción principal se queda a la vista aunque el formulario no quepa */
+.pegado-abajo { position: sticky; bottom: 12px; box-shadow: 0 6px 20px rgba(15, 122, 99, 0.35); }
+.acciones-pegadas { position: sticky; bottom: 0; z-index: 2; padding: 12px 0; background: var(--panel); border-top: 1px solid var(--linea); }
 details.desglose summary { cursor: pointer; font-size: 15px; font-weight: 600; color: var(--primario); margin-top: 12px; }
 details.desglose table { margin-top: 8px; }
 
@@ -472,6 +475,7 @@ details.desglose table { margin-top: 8px; }
 }
 .tabla th.derecha { text-align: right; }
 .tabla th.centro { text-align: center; }
+.tabla th.ajustado { width: 1%; white-space: nowrap; } /* tan ancha como su contenido */
 .tabla td { padding: 12px; border-bottom: 1px solid var(--linea); vertical-align: middle; }
 .tabla .nombre { font-weight: 600; }
 .tabla tr.marcada td { background: var(--primario-suave); }
@@ -521,12 +525,258 @@ details.desglose table { margin-top: 8px; }
 .resumen-dinero strong { font-size: 30px; font-weight: 800; }
 .resumen-dinero .detalle { opacity: 0.85; font-size: 15px; }
 
-/* PENDIENTE (núcleo en curso): faltan los estilos de la pantalla de inicio
-   (.nucleo, .barra-menus, .accesos, .escenario, .barra-estado) y el ajuste
-   responsivo de venta y devoluciones. Esto es lo que había antes: */
+/* --- Pantalla de inicio ("núcleo") ------------------------------------- */
+/* Como la pantalla principal de PVWin: menús arriba, accesos rápidos, la
+   imagen del negocio al centro ocupando lo que sobra y la barra de estado
+   abajo. Todo cabe en la ventana, sin desplazarse. */
+
+body.nucleo { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.barra-menus {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  padding: 0 20px;
+  min-height: 60px;
+  background: var(--primario-oscuro);
+  color: #fff;
+  z-index: 30;
+  flex: 0 0 auto;
+}
+.menus { display: flex; flex-wrap: wrap; min-width: 0; }
+.menu { position: relative; }
+.menu-titulo {
+  height: 60px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 18px;
+}
+.menu-titulo:hover, .menu-titulo.abierto { background: rgba(255, 255, 255, 0.14); }
+.menu-titulo.abierto { box-shadow: inset 0 -4px 0 #7ee0c3; }
+.menu-titulo .flecha { width: 0.9em; height: 0.9em; opacity: 0.8; transition: transform 0.15s; }
+.menu-titulo.abierto .flecha { transform: rotate(180deg); }
+.menu-lista {
+  position: absolute; top: 100%; left: 0;
+  display: flex; flex-direction: column;
+  min-width: 360px;
+  max-width: calc(100vw - 24px);
+  padding: 6px;
+  color: var(--texto);
+  box-shadow: var(--sombra-alta);
+  z-index: 40;
+}
+.menu:last-child .menu-lista { left: auto; right: 0; }
+.menu-opcion {
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 17px;
+}
+.menu-opcion .ico { color: var(--primario); }
+.menu-opcion .texto { flex: 1; }
+.menu-opcion:hover, .menu-opcion.elegida { background: var(--primario-suave); }
+.menu-opcion.proximamente { color: var(--texto-suave); font-weight: 500; }
+.menu-opcion.proximamente .ico { color: #9fb3ae; }
+.barra-menus .salir {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #fff;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+.barra-menus .salir:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* Accesos rápidos: botones grandes con ícono, nombre y su tecla */
+.accesos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+  flex: 0 0 auto;
+}
+.acceso {
+  position: relative;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 2px solid var(--borde);
+  border-radius: var(--radio);
+  text-align: left;
+}
+.acceso > svg { width: 38px; height: 38px; color: var(--primario); flex: 0 0 auto; }
+.acceso .texto { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding-right: 26px; }
+.acceso strong { font-size: 19px; line-height: 1.2; }
+.acceso kbd { position: absolute; top: 8px; right: 10px; }
+.acceso:hover { border-color: var(--primario); background: var(--primario-suave); }
+.acceso.proximamente { color: var(--texto-suave); }
+.acceso.proximamente > svg { color: #9fb3ae; }
+.acceso.proximamente:hover { border-color: var(--borde); background: #f6f9f8; }
+
+/* Imagen del negocio: completa, centrada y sin deformarse */
+.escenario { position: relative; flex: 1; min-height: 0; }
+.logo-negocio {
+  position: absolute; inset: 24px;
+  width: calc(100% - 48px); height: calc(100% - 48px);
+  object-fit: contain;
+}
+.nombre-negocio {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 20px;
+  text-align: center;
+  font-size: clamp(30px, 6vw, 72px);
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--primario-oscuro);
+}
+.nombre-negocio .logo {
+  display: grid; place-items: center;
+  width: 1.6em; height: 1.6em;
+  border-radius: 0.35em;
+  background: var(--primario);
+  color: #fff;
+}
+.nombre-negocio .logo svg { width: 60%; height: 60%; }
+
+/* Barra de estado */
+.barra-estado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 24px;
+  padding: 8px 20px;
+  background: var(--panel);
+  border-top: 1px solid var(--borde);
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+.barra-estado > span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.barra-estado .ico { color: var(--texto-suave); }
+.barra-estado .empuja { margin-left: auto; }
+.conexion { font-weight: 600; color: var(--primario-oscuro); }
+.conexion .punto { width: 10px; height: 10px; border-radius: 50%; background: #2fb47f; box-shadow: 0 0 0 3px rgba(47, 180, 127, 0.2); }
+.conexion.caida { color: var(--peligro); }
+.conexion.caida .punto { background: var(--peligro); box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.2); }
+
+/* Aviso corto que se quita solo */
+.aviso-flotante {
+  position: fixed; left: 50%; bottom: 64px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  width: max-content; max-width: calc(100vw - 32px);
+  padding: 14px 20px;
+  border-radius: var(--radio);
+  background: var(--texto);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: var(--sombra-alta);
+  z-index: 60;
+}
+
+/* Ventanas del núcleo */
+.ventana-imagen, .ventana-texto {
+  display: flex; flex-direction: column; gap: 12px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-shadow: var(--sombra-alta);
+}
+.ventana-imagen { width: min(540px, 100%); }
+.ventana-texto { width: min(580px, 100%); }
+.ventana-imagen .encabezado, .ventana-texto .encabezado { margin-bottom: 6px; }
+.ventana-imagen .ayuda, .ventana-imagen .mensaje { margin: 0; }
+.ventana-texto .separado { margin-top: 8px; }
+.vista-previa {
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+  height: 220px;
+  padding: 12px;
+  border: 2px dashed var(--borde);
+  border-radius: var(--radio-chico);
+  background: #f6f9f8;
+  text-align: center;
+}
+.vista-previa img { max-width: 100%; max-height: 196px; object-fit: contain; }
+.tabla.teclas td:first-child { white-space: nowrap; }
+
 @media (max-width: 900px) {
-  .venta { grid-template-columns: 1fr; height: auto; }
+  .barra-menus { gap: 0 12px; padding: 0 12px; }
+  .barra-menus .marca > span:last-child { display: none; }
+  .menu-titulo { padding: 0 12px; }
+}
+@media (max-width: 760px) {
+  .barra-menus .salir span { display: none; }
+  .menu-titulo { height: 52px; padding: 0 10px; font-size: 17px; }
+  .menu-titulo .flecha { display: none; }
+  .accesos { grid-template-columns: 1fr 1fr; padding: 10px 12px; gap: 8px; }
+  .acceso { padding: 10px 12px; gap: 10px; }
+  .acceso > svg { width: 30px; height: 30px; }
+  .acceso strong { font-size: 17px; }
+  .barra-estado { padding: 6px 12px; font-size: 14px; gap: 2px 16px; }
+  .barra-estado .empuja { margin-left: 0; }
+}
+@media (max-height: 650px) {
+  .accesos { padding-top: 8px; padding-bottom: 8px; }
+  .acceso { padding-top: 8px; padding-bottom: 8px; }
+  .acceso > svg { width: 30px; height: 30px; }
+  .logo-negocio { inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); }
+  .vista-previa { height: 150px; }
+  .vista-previa img { max-height: 126px; }
+}
+
+/* --- Tamaños de ventana (demás pantallas) ------------------------------- */
+/* La prioridad es la ventana sin maximizar de mostrador (~1200×700). En la
+   venta, el total y Cobrar siempre se ven: si el panel de cobro no cabe, se
+   desplaza por dentro y Cobrar se queda pegado abajo. */
+
+.cobro .cuerpo > .pila:last-child { position: sticky; bottom: -20px; padding: 10px 0 20px; margin-bottom: -20px; background: var(--panel); }
+
+@media (max-width: 1100px) {
+  .venta .col-precio { display: none; }
+}
+@media (max-height: 700px) {
+  .venta { padding-top: 12px; padding-bottom: 12px; }
+  .caja-total { padding: 12px 20px; }
+  .total { font-size: 40px; }
+  .cobro .cuerpo { gap: 12px; }
+  .cobro .opcion { flex-direction: row; gap: 6px; padding: 10px 6px; white-space: nowrap; }
+  .cobro .opcion svg { width: 22px; height: 22px; }
+  .cobro .enorme { padding: 14px 20px; }
+  .cobro .pila:last-child { gap: 4px; }
+  .cobro .atajos { display: none; }
+}
+@media (max-width: 900px) {
   .cifras { grid-template-columns: 1fr; }
   .opciones-grandes { grid-template-columns: 1fr; }
   .fila-venta { grid-template-columns: 1fr auto; }
+}
+@media (max-width: 760px) {
+  /* Media pantalla: la venta pasa a una columna; el carrito se encoge y el
+     cobro queda abajo, siempre a la vista. */
+  .venta { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; padding: 12px; }
+  .cobro { max-height: 52vh; }
+  .caja-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; }
+  .caja-total .rotulo { flex-direction: column; }
+  .total { font-size: 34px; }
+  .cobro .cuerpo { padding: 0 16px 20px; gap: 12px; }
+  .cobro .opcion { flex-direction: row; gap: 6px; padding: 10px 6px; white-space: nowrap; }
+  .cobro .opcion svg { width: 22px; height: 22px; }
+  .cobro .enorme { padding: 12px 20px; }
+  .tabla .piezas { flex-wrap: wrap; }
+  .cobro .pila:last-child { gap: 2px; }
+  .cobro .atajos { display: none; }
+  .escaneo .buscar-nombre { padding: 0 14px; }
+  .escaneo .buscar-nombre kbd, .escaneo .buscar-nombre .texto { display: none; }
+  .carrito td { padding: 10px 8px; }
+  .contenido { padding: 16px 12px; }
 }

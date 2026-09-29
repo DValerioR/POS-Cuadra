@@ -131,7 +131,7 @@
 
           <label>Notas <span class="ayuda">(opcional)</span></label>
           <textarea rows="2" x-model="contado.notas" placeholder="Ej. faltó un billete de $20"></textarea>
-          <button class="primario grande separado" :disabled="cerrando">
+          <button class="primario grande separado pegado-abajo" :disabled="cerrando">
             <span x-text="cerrando ? 'Cerrando…' : 'Cerrar turno'"></span>
           </button>
         </form>

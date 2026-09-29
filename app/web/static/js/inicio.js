@@ -201,12 +201,12 @@ function pantallaInicio() {
     get textoTurno() {
       if (!this.turno) return "Sin turno abierto";
       const hora = new Date(this.turno.abierto_en).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
-      return `Turno de la ${this.turno.tipo === "manana" ? "mañana" : "tarde"} abierto desde las ${hora}`;
+      return `Turno de la ${this.turno.tipo === "manana" ? "mañana" : "tarde"}, desde las ${hora}`;
     },
 
     actualizarReloj() {
       const ahora = new Date();
-      const fecha = ahora.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      const fecha = ahora.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
       const hora = ahora.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
       this.fechaHora = `${fecha.charAt(0).toUpperCase()}${fecha.slice(1)} · ${hora}`;
     },
