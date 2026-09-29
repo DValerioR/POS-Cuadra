@@ -13,6 +13,7 @@ from app.models.venta_en_espera import VentaEnEspera
 from app.models.solicitud import EstadoSolicitud, SolicitudDevolucion
 from app.models.aviso_inventario import AvisoInventario, EstadoAviso
 from app.models.precio_historial import PrecioHistorial
+from app.models.entrada import ArchivoFactura, Entrada, EntradaRenglon, Proveedor, ProveedorEquivalencia
 
 __all__ = [
     "Negocio",
@@ -43,4 +44,9 @@ __all__ = [
     "AvisoInventario",
     "EstadoAviso",
     "PrecioHistorial",
+    "ArchivoFactura",
+    "Entrada",
+    "EntradaRenglon",
+    "Proveedor",
+    "ProveedorEquivalencia",
 ]

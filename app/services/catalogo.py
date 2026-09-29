@@ -91,3 +91,20 @@ def cambiar_en_grupo(
             p.motivo_revision = None
     db.flush()
     return len(productos)
+
+
+def precio_sugerido(db: Session, producto: Producto, costo_pieza: Decimal | None) -> Decimal | None:
+    """Costo + margen de su categoría + impuestos, con el redondeo del negocio
+    y sin pasar el precio máximo. None si falta el costo o la categoría no
+    tiene margen."""
+    if costo_pieza is None or producto.categoria_id is None:
+        return None
+    categoria = db.get(Categoria, producto.categoria_id)
+    if categoria is None or categoria.margen_porcentaje is None:
+        return None
+    base = Decimal(costo_pieza) * (1 + categoria.margen_porcentaje / 100)
+    con_impuestos = (
+        base * (1 + Decimal(producto.ieps_porcentaje) / 100) * (1 + Decimal(producto.iva_porcentaje) / 100)
+    ).quantize(CENTAVO, ROUND_HALF_UP)
+    paso = db.get(Negocio, producto.negocio_id).redondeo_precio_venta
+    return redondear_precio_venta(con_impuestos, paso, producto.precio_maximo_publico)
