@@ -74,7 +74,22 @@ alembic/      migraciones de base de datos
   clave se compara sin ceros a la izquierda), `GET/PUT/DELETE /productos/{id}`
   — "eliminar" un producto lo desactiva (`activo=false`), no lo borra. Al
   guardar, el precio de venta se redondea según la configuración del negocio.
-- Todos requieren `negocio_id` (todavía sin auth, así que se manda explícito).
+- Inventario por lote:
+  - `GET /inventario/productos/{id}` — existencia total y lotes en orden FEFO
+    (primero el que caduca antes; los "sin caducidad" al final).
+  - `POST /inventario/captura-caducidad` — pasa piezas del lote sin caducidad
+    a un lote real (si ya existe uno con esa caducidad y número, se suman).
+    Cualquier rol, porque mostrador captura al vender.
+  - `POST /inventario/ajustes` — ajuste (+/-) o merma (-) con motivo; solo
+    admin y bodega. Sin `lote_id` usa el lote sin caducidad (sirve para el
+    conteo físico de productos importados en cero).
+  - `GET /inventario/ajustes` — bitácora, filtrable por producto, tipo y fecha.
+  - `GET /inventario/avance-caducidades` — % de piezas con caducidad capturada
+    y productos pendientes (los de más piezas primero). Solo cuenta productos
+    cuya categoría controla lote.
+  - La lógica vive en `app/services/inventario.py` (las ventas usarán `lotes_fefo`).
+- Todos requieren `negocio_id`, y las operaciones que cambian inventario
+  también `usuario_id` (todavía sin auth, así que se mandan explícitos).
 
 ## Scripts
 
@@ -98,6 +113,6 @@ Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
 ## Pendiente para completar la etapa 1
 
 - Reimportar cuando llegue el catálogo completo A-Z (el actual se cortó en la D).
-- Autenticación (login) y aplicación de permisos por rol en los endpoints.
-- CRUD de inventario (lotes/caducidades) — el catálogo (categorías/productos)
-  ya está.
+- Autenticación (login): hoy `usuario_id` se manda en cada petición; con login
+  saldrá de la sesión y los permisos por rol ya validados en inventario se
+  extenderán a los demás endpoints.
