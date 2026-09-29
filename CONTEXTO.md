@@ -96,6 +96,8 @@ Cuando entra una factura con un costo distinto, el sistema recalcula el precio d
 
 Los medicamentos de patente tienen precio máximo al público impreso en la caja. Si el margen da un precio mayor, se usa el máximo y el sistema avisa que ese producto se vende con menos margen del deseado.
 
+Redondeo de precios de venta: como en el día a día casi no se usan centavos, cada negocio puede activar un redondeo del precio de venta (por ejemplo a pesos enteros o a medios pesos). Se redondea siempre hacia arriba para no perder margen, salvo que eso pase el precio máximo al público, en cuyo caso se redondea hacia abajo. Solo aplica al precio de venta; el costo de compra conserva sus decimales.
+
 ## Proveedores, pedidos y entradas
 
 Compran a unos nueve o diez proveedores. El sistema maneja pedidos: sugiere qué pedir según existencias y ventas, se genera el pedido, y al llegar la mercancía se compara la factura contra lo pedido para detectar faltantes o cambios de precio.

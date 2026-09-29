@@ -3,6 +3,7 @@ from app.models.usuario import RolUsuario, Usuario
 from app.models.categoria import Categoria
 from app.models.producto import Producto
 from app.models.lote import Lote
+from app.models.ajuste_inventario import AjusteInventario, TipoAjuste
 
 __all__ = [
     "Negocio",
@@ -11,4 +12,6 @@ __all__ = [
     "Categoria",
     "Producto",
     "Lote",
+    "AjusteInventario",
+    "TipoAjuste",
 ]

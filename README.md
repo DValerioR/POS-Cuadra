@@ -49,25 +49,36 @@ alembic/      migraciones de base de datos
 
 ## Modelo de datos (etapa 1)
 
-- `negocios` — un renglón por negocio cliente (separación multi-negocio).
+- `negocios` — un renglón por negocio cliente (separación multi-negocio), con
+  su configuración (ej. `redondeo_precio_venta`: 1.00 = pesos enteros, vacío = sin redondeo).
 - `usuarios` — login propio por persona, con rol (`admin`, `bodega`, `mostrador`).
-- `categorias` — con margen % configurable (patente, similares, leches, ...).
-- `productos` — catálogo, con precio máximo al público para medicamentos de patente.
+- `categorias` — con margen % configurable (patente, similares, leches, ...) y
+  `controla_lote` para decidir si sus productos piden lote/caducidad.
+- `productos` — catálogo. `clave` (código de barras o clave interna, única por
+  negocio), precio máximo al público, `factor_conversion` (unidades de venta
+  por unidad de compra, para productos a granel), IVA/IEPS, mínimo/máximo, y
+  `requiere_revision` + `motivo_revision` para lo que necesita ojo humano.
+  `precio_venta` puede quedar vacío (el catálogo de PVWin no lo trae).
 - `lotes` — existencia por lote y caducidad de cada producto (`caducidad = NULL`
   significa que aún no se ha capturado, para la migración gradual del inventario
   heredado de PVWin). Venta futura descontará por FEFO usando estas filas.
+- `ajustes_inventario` — bitácora de cambios de existencia que no son venta ni
+  entrada (importación, ajuste, merma, captura de caducidad), con cantidad
+  con signo, motivo y usuario. Nunca se edita ni se borra.
 
 ## Endpoints disponibles
 
+- `GET/PUT /negocios/{id}` — configuración del negocio.
 - `GET/POST /categorias`, `GET/PUT/DELETE /categorias/{id}`
-- `GET/POST /productos` (con búsqueda `?q=`), `GET/PUT/DELETE /productos/{id}`
-  — "eliminar" un producto lo desactiva (`activo=false`), no lo borra.
+- `GET/POST /productos` (con búsqueda `?q=` por nombre parcial o clave exacta), `GET/PUT/DELETE /productos/{id}`
+  — "eliminar" un producto lo desactiva (`activo=false`), no lo borra. Al
+  guardar, el precio de venta se redondea según la configuración del negocio.
 - Todos requieren `negocio_id` (todavía sin auth, así que se manda explícito).
 
 ## Pendiente para completar la etapa 1
 
-- Importador del Excel de PVWin (catálogo, precios, existencias) — falta ver
-  la estructura real del archivo para mapear columnas.
+- Importador del Excel de PVWin — las reglas ya están en `CONTEXTO.md`
+  ("Importación desde PVWin"); faltan los archivos para probarlo.
 - Autenticación (login) y aplicación de permisos por rol en los endpoints.
 - CRUD de inventario (lotes/caducidades) — el catálogo (categorías/productos)
   ya está.

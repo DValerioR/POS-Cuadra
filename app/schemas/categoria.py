@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 class CategoriaBase(BaseModel):
     nombre: str
     margen_porcentaje: Decimal | None = None
+    controla_lote: bool = True
 
 
 class CategoriaCreate(CategoriaBase):
@@ -16,6 +17,7 @@ class CategoriaCreate(CategoriaBase):
 class CategoriaUpdate(BaseModel):
     nombre: str | None = None
     margen_porcentaje: Decimal | None = None
+    controla_lote: bool | None = None
 
 
 class CategoriaOut(CategoriaBase):

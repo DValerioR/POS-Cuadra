@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Numeric, UniqueConstraint, func, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -18,4 +18,7 @@ class Categoria(Base):
     negocio_id: Mapped[int] = mapped_column(ForeignKey("negocios.id"), index=True)
     nombre: Mapped[str]
     margen_porcentaje: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), default=None)
+    # Si es False (dulces, perfumería, "VARIOS"), los productos de esta categoría
+    # no piden lote ni caducidad y manejan una sola existencia.
+    controla_lote: Mapped[bool] = mapped_column(default=True, server_default=true())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
