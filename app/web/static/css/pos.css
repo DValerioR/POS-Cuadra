@@ -653,7 +653,22 @@ body.nucleo { display: flex; flex-direction: column; height: 100vh; overflow: hi
 }
 .menu-titulo:hover, .menu-titulo.abierto { background: rgba(255, 255, 255, 0.14); }
 .menu-titulo.abierto { box-shadow: inset 0 -4px 0 #7ee0c3; }
+.menu-titulo { position: relative; }
 .menu-titulo .flecha { width: 0.9em; height: 0.9em; opacity: 0.8; transition: transform 0.15s; }
+/* Número rojo de pendientes (mismo estilo que el de la campana) */
+.numero-aviso {
+  min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 999px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 12px; font-weight: 800; line-height: 22px; text-align: center;
+}
+.numero-aviso.en-titulo {
+  position: absolute; top: 6px; right: 0;
+  min-width: 20px; height: 20px; line-height: 20px; padding: 0 5px;
+  background: #ff5a4f;
+  box-shadow: 0 0 0 2px var(--primario-oscuro);
+}
 .menu-titulo.abierto .flecha { transform: rotate(180deg); }
 .menu-lista {
   position: absolute; top: 100%; left: 0;
@@ -814,6 +829,7 @@ body.nucleo { display: flex; flex-direction: column; height: 100vh; overflow: hi
   .barra-menus .salir span { display: none; }
   .menu-titulo { height: 52px; padding: 0 10px; font-size: 17px; }
   .menu-titulo .flecha { display: none; }
+  .numero-aviso.en-titulo { top: 3px; right: -9px; }
   .accesos { grid-template-columns: 1fr 1fr; padding: 10px 12px; gap: 8px; }
   .acceso { padding: 10px 12px; gap: 10px; }
   .acceso > svg { width: 30px; height: 30px; }

@@ -25,6 +25,8 @@
           <button type="button" class="menu-titulo" role="menuitem" :class="{ abierto: menuAbierto === i }"
                   :aria-expanded="menuAbierto === i" @click="alternarMenu(i)" @mouseenter="if (menuAbierto !== null) abrirMenu(i)">
             <span x-text="g.nombre"></span><svg class="ico flecha"><use href="/static/iconos.svg#flecha-abajo"/></svg>
+            <span class="numero-aviso en-titulo" x-show="avisosGrupo(g)" x-text="avisosGrupo(g)"
+                  :title="`${avisosGrupo(g)} por autorizar`"></span>
           </button>
           <div class="menu-lista panel" role="menu" x-show="menuAbierto === i">
             <template x-for="(s, j) in g.secciones" :key="s.id">
@@ -34,6 +36,7 @@
                 <span class="texto" x-text="s.texto"></span>
                 <span class="etiqueta" x-show="!s.existe">Próximamente</span>
                 <span class="etiqueta verde" x-show="s.accion === 'entradaDirecta' && entradaDirecta">Activado</span>
+                <span class="numero-aviso" x-show="avisosDe(s)" x-text="avisosDe(s)"></span>
                 <kbd x-show="s.tecla && s.existe" x-text="s.tecla"></kbd>
               </button>
             </template>

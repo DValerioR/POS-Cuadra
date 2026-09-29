@@ -20,6 +20,7 @@ function pantallaInicio() {
     conectado: true,
     fechaHora: "",
     entradaDirecta: EntradaDirecta.activa(),
+    pendientes: 0, // solicitudes por autorizar (lo cuenta la campana, solo admin)
 
     menuAbierto: null, // índice del grupo abierto
     opcionElegida: 0,
@@ -36,6 +37,7 @@ function pantallaInicio() {
     ROLES,
 
     async init() {
+      document.addEventListener("solicitudes-pendientes", (ev) => (this.pendientes = ev.detail));
       this.actualizarReloj();
       setInterval(() => this.actualizarReloj(), 15000);
       setInterval(() => this.revisarConexion(), 15000);
@@ -75,6 +77,14 @@ function pantallaInicio() {
     get rapidos() {
       if (!this.usuario) return [];
       return seccionesDe(this.usuario.rol).filter((s) => s.tecla);
+    },
+
+    // Número rojo en la opción y en el título de su menú (ej. "Ventas").
+    avisosDe(s) {
+      return s.id === "notificaciones" ? this.pendientes : 0;
+    },
+    avisosGrupo(g) {
+      return g.secciones.reduce((suma, s) => suma + this.avisosDe(s), 0);
     },
 
     usar(s) {

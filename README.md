@@ -241,7 +241,8 @@ funcione sin internet.
 - `/notificaciones` — centro de notificaciones (solo admin): solicitudes por
   autorizar, con autorizar o rechazar (con motivo) y las respondidas hoy. Una
   campana con el número de pendientes aparece en la barra de todas las
-  pantallas y en el inicio; se revisa cada 20 segundos.
+  pantallas y en el inicio (ahí también en el menú "Ventas" y en su opción
+  "Solicitudes por autorizar"); se revisa cada 20 segundos.
 
 Todas las pantallas llevan la barra superior con "Inicio" y se probaron a
 1920×1080, 1366×768, 1200×700, 683 de ancho y 600 de alto: sin
