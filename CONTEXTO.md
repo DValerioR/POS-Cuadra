@@ -4,7 +4,7 @@ Este documento resume todas las decisiones tomadas antes de empezar a programar.
 
 ## Qué es
 
-Un punto de venta (POS) para negocios, desarrollado en Python, que empieza funcionando en una farmacia familiar real y que después se venderá a otros negocios. La primera versión es solo para farmacia, pero el diseño debe permitir crecer a otros giros (restaurantes, abarrotes) mediante un núcleo común y módulos por giro. Los módulos de otros giros NO se construyen todavía.
+Un punto de venta (POS) para negocios, desarrollado en Python, que empieza funcionando en una farmacia familiar real (Farmacia La Fe) y que después se venderá a otros negocios. La primera versión es solo para farmacia, pero el diseño debe permitir crecer a otros giros (restaurantes, abarrotes) mediante un núcleo común y módulos por giro. Los módulos de otros giros NO se construyen todavía.
 
 Desde el inicio, todos los datos deben estar separados por negocio (por ejemplo, un `negocio_id` en las tablas principales), y el nombre, logo, márgenes y categorías deben ser configurables, no fijos en el código.
 
@@ -20,7 +20,9 @@ El sistema actual (PVWin) tiene el problema de que el servidor vive dentro del p
 
 La arquitectura acordada es una aplicación web en red local que en las computadoras se ve como aplicación de escritorio (con su ícono, sin navegador visible), y que en la tableta se abre desde el navegador. La tableta tendrá una vista sencilla para consultar existencias y precios y para capturar lotes y caducidades.
 
-Stack: Python y PostgreSQL. El framework web y la forma de empaquetar la app de escritorio están por definir; propón opciones justificadas. MongoDB queda descartado.
+Stack decidido e implementado (ver README.md): FastAPI, SQLAlchemy 2.0, Alembic para migraciones y PostgreSQL 17 instalado de forma nativa en Windows (servicio `postgresql-x64-17` con arranque automático). Se probó PostgreSQL dentro de WSL2 y se descartó por cortes intermitentes de red. La "app de escritorio" es un acceso directo con `chrome.exe --app=http://IP-SERVIDOR:PUERTO` en cada computadora, sin empaquetado aparte. MongoDB queda descartado.
+
+Importante para producción: `uvicorn --reload` es solo para desarrollo. En la farmacia, el servidor FastAPI debe quedar instalado como servicio de Windows que arranque solo con el equipo y se reinicie si falla, sin depender de que alguien tenga una ventana abierta, porque ese es justo el problema que tienen hoy con PVWin.
 
 ## Catálogo
 
@@ -28,7 +30,29 @@ El catálogo es grande, del orden de varios miles de productos: medicamentos de 
 
 El catálogo inicial se importa desde un Excel exportado de PVWin, que incluye productos, precios y existencias. El sistema también debe poder exportar inventario y reportes de ventas a Excel.
 
+Productos fraccionados o a granel: hay productos que se compran por caja y se venden por pieza o sobre (por ejemplo "AGRANEL ADVIL 200 MG C/2", sueros en polvo). El modelo debe permitir un factor de conversión entre la unidad de compra y la unidad de venta, para que una entrada de una caja sume las piezas correctas. La falta de esto en PVWin es probablemente la causa de muchas existencias negativas.
+
+El control por lote y caducidad debe ser configurable por categoría: obligatorio en medicamentos, opcional o desactivado en dulces, bebidas, perfumería y productos genéricos tipo "AGUJAS VARIAS" o "BUBBALOO VARIOS SABORES", donde capturar lote estorba más de lo que ayuda. Los productos sin control de lote manejan una sola existencia.
+
 Se puede marcar un producto como "requiere receta" (por ejemplo antibióticos), lo cual solo muestra un aviso al vender. La farmacia no maneja medicamentos controlados.
+
+## Importación desde PVWin
+
+El importador lee los reportes tal como los exporta PVWin, sin limpieza manual previa, para poder repetir la importación el día del cambio. Se usan dos reportes que se unen por la columna Clave.
+
+El reporte "Catálogo de artículos" (hoja `Hoja1`) tiene título en las filas 1 y 2, encabezados en la fila 4 y datos desde la fila 6; la primera columna va vacía. Sus columnas son Clave (código de barras o clave interna), Alterna (vacía), ProdServ (clave de producto SAT), Descripción, SAT (clave de unidad, siempre H87), UMV (siempre PZA), Factor (siempre 1), Localiza, Gpo, Dpto, USD, $Pcio Compra (sin impuestos), Mínimo, Máximo, Exto, %IEPS y %IVA. No trae precio de venta; está pendiente volver a exportarlo completo y con precio de venta si PVWin lo permite (la versión recibida se cortó en la letra D, con 3,440 productos).
+
+El reporte "Reporte de inventarios - Detallado - Sin mostrar ceros" tiene la misma estructura de encabezado y columnas Clave, Descripción, Localización, Grupo, Depto, Existencia y UMV. Al terminar cada letra trae un renglón de subtotal con "Letra: X" en la primera columna, y al final un total general; esos renglones se ignoran. Contiene 6,629 productos con 39,175 piezas en total. Como omite existencias en cero, no sirve como catálogo: los productos que solo están en el catálogo se importan con existencia cero.
+
+Reglas de mapeo y limpieza: Grupo 1 corresponde casi siempre a medicamentos (IVA 0%) y Grupo 2 a perfumería y otros (IVA 16%), y 274 productos vienen como "_GND" (sin grupo) y quedan para asignar a mano. El campo Localización no es una ubicación: tiene nombres de laboratorio (MAVER, LIOMONT, BAYER) y algunas fechas sueltas viejas, así que se guarda como laboratorio solo cuando es texto y se descarta cuando es fecha. Mínimo y Máximo se importan para las sugerencias de pedido. Los productos con precio de compra en cero se marcan para revisión. El IVA de 20% del "A GRANEL BRONCORUB LATA" es un error de captura y se corrige a 16%.
+
+Casos conocidos: la clave "1" la comparten "ARTICULO DE PRUEBA" (que no se importa) y "TONICO PV CANNABIS + ARNICA,ALCANFOR 150 ML" (necesita clave nueva); "CRA EUCERIN ANTI-PIGMENT CORPORAL 200 ML" (4006000014395) y "ZIVATA CAPSULAS 0.5 MG C/30" (7501300421814) aparecen duplicados y se fusionan sumando existencias; hay un producto sin clave en el catálogo ("CEP DENTAL CLINIC ALL ROUNDER 59"); "OFERTA ESTERILIZADOR EVENFLO PLUS" con 1,250 piezas es casi seguro un error.
+
+Hay 322 productos con existencia negativa, sobre todo a granel, dulces y aceites. Se importan en cero y se genera una lista exportable a Excel para conteo físico.
+
+Cada existencia importada entra en un lote especial por producto sin lote ni caducidad (caducidad NULL), para poder vender desde el primer día. Cuando se captura la caducidad de una caja, esas piezas pasan de ese lote a uno real, y el avance de la migración es cuántas piezas quedan sin caducidad. Como las existencias de PVWin pueden arrastrar diferencias, el sistema permite ajustes de inventario con motivo y usuario.
+
+El importador debe generar un reporte de lo que hizo: productos creados, fusionados, omitidos, negativos puestos en cero y productos pendientes de revisar.
 
 ## Usuarios y permisos
 
@@ -52,7 +76,9 @@ Alertas de caducidad: avisar con suficiente anticipación para mover el producto
 
 Métodos de pago: efectivo con cálculo de cambio, tarjeta y pagos mixtos. Transferencia queda preparada pero desactivada. En la primera versión el pago con tarjeta se registra manualmente; la integración con una terminal Mercado Pago Point es una etapa posterior.
 
-Hardware existente que se reutiliza: lector de código de barras, impresora de tickets y cajón de dinero. El cajón se abre solo al cobrar en efectivo, conectado a la impresora. Modelo de impresora pendiente de confirmar.
+Hardware existente que se reutiliza: lector de código de barras, impresoras de tickets y cajón de dinero. Las impresoras son una Bixolon SRP-330II y una Epson TM-T20II, ambas térmicas de 80 mm compatibles con ESC/POS, así que se manejan con la misma librería (python-escpos). El cajón se abre solo al cobrar en efectivo, conectado a la impresora, con el comando ESC/POS de pulso de cajón.
+
+Como la app corre en el navegador y el servidor está en otra computadora, el navegador no puede mandar comandos directos a una impresora USB. Si las impresoras están conectadas por Ethernet, el servidor les imprime directo por IP (puerto 9100). Si están por USB, se instala un pequeño agente de impresión en cada computadora de mostrador que recibe el ticket y lo manda a su impresora. El tipo de conexión está pendiente de confirmar, así que el código de impresión debe quedar detrás de una interfaz que permita ambos modos.
 
 No hay crédito a clientes ni ventas a cuenta. Los descuentos quedan preparados pero desactivados; cuando se activen, el vendedor tendrá un tope y por encima de él se requiere autorización de administrador, con registro de quién lo aplicó.
 
@@ -92,6 +118,10 @@ La farmacia factura de forma ocasional, hoy desde PVWin, que ya está conectado 
 
 La primera etapa es la estructura del proyecto, el modelo de datos, usuarios y permisos, catálogo con importación desde Excel, e inventario con lotes y caducidades. La segunda es ventas, cobro, tickets, cajón, turnos y corte de caja. La tercera es entradas de mercancía, proveedores, pedidos, márgenes y lectura de facturas XML. La cuarta es la lectura de facturas con IA, alertas y el asistente en lenguaje natural. Después vienen la integración con Mercado Pago Point, la facturación CFDI, los descuentos y la preparación para vender el sistema a otros negocios.
 
+## Estado actual
+
+De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la conexión a PostgreSQL con Alembic, el endpoint `/health`, las tablas `negocios`, `usuarios`, `categorias`, `productos` y `lotes` con `negocio_id` en todas, y el CRUD de categorías y productos con búsqueda y borrado lógico. Falta para cerrar la etapa 1 el importador de PVWin descrito arriba, la autenticación con permisos por rol, el CRUD de inventario por lotes, y ajustar el modelo para el factor de conversión de productos fraccionados y el control de lote configurable por categoría.
+
 ## Datos pendientes
 
-Falta confirmar cuántos productos trae el Excel exportado de PVWin, la marca y modelo de la impresora de tickets, y con qué PAC está contratada la facturación actual.
+Falta el reporte "Catálogo de artículos" completo de la A a la Z, idealmente con precio de venta. Falta confirmar si cada impresora está conectada por USB o por Ethernet, y con qué PAC está contratada la facturación actual.
