@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
-from app.models import Categoria, Usuario
+from app.models import Categoria, Producto, Usuario
 from app.schemas.categoria import CategoriaCreate, CategoriaOut, CategoriaUpdate
 
 router = APIRouter(prefix="/categorias", tags=["categorias"])
@@ -30,9 +30,15 @@ def _guardar(db: Session, categoria: Categoria) -> Categoria:
 
 @router.get("", response_model=list[CategoriaOut])
 def listar_categorias(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
-    return db.scalars(
+    conteo = dict(db.execute(
+        select(Producto.categoria_id, func.count())
+        .where(Producto.negocio_id == usuario.negocio_id, Producto.categoria_id.is_not(None))
+        .group_by(Producto.categoria_id)
+    ).all())
+    categorias = db.scalars(
         select(Categoria).where(Categoria.negocio_id == usuario.negocio_id).order_by(Categoria.nombre)
     ).all()
+    return [CategoriaOut.model_validate(c).model_copy(update={"productos": conteo.get(c.id, 0)}) for c in categorias]
 
 
 @router.post("", response_model=CategoriaOut, status_code=201)

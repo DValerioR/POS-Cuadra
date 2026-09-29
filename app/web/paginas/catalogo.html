@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Productos y precios · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/catalogo.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaCatalogo()">
+
+  <header class="barra" data-pagina="productos"></header>
+
+  <main class="contenido catalogo" x-cloak x-show="!cargando">
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+          <div><h2>Solo administradores</h2><p class="suave">Los productos y precios los cambia un administrador.</p></div>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="esAdmin">
+      <div class="pila" style="gap: 16px">
+        <div class="pestanas">
+          <button type="button" :class="{ activa: pestana === 'productos' }" @click="pestana = 'productos'">
+            <svg class="ico"><use href="/static/iconos.svg#precio"/></svg>Productos
+          </button>
+          <button type="button" :class="{ activa: pestana === 'categorias' }" @click="pestana = 'categorias'">
+            <svg class="ico"><use href="/static/iconos.svg#paquete"/></svg>Categorías
+          </button>
+        </div>
+
+        <div class="mensaje error" x-show="error" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+        </div>
+
+        <!-- ============ Productos ============ -->
+        <template x-if="pestana === 'productos'">
+          <div class="pila" style="gap: 14px">
+            <div class="fila" style="align-items: stretch; flex-wrap: wrap">
+              <div class="buscador" style="flex: 1 1 360px">
+                <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
+                <input x-model="buscar" @input="alBuscar" placeholder="Buscar por nombre o código" autocomplete="off">
+              </div>
+              <button type="button" class="primario" style="flex: 0 0 auto; padding: 0 22px; border-radius: var(--radio)" @click="abrirEditor(null)">
+                + Nuevo producto
+              </button>
+            </div>
+
+            <div class="filtros-catalogo">
+              <template x-for="f in filtros" :key="f.id">
+                <button type="button" class="filtro" :class="{ activo: filtro === f.id }" @click="elegirFiltro(f.id)">
+                  <span x-text="f.texto"></span>
+                  <span class="cuenta" x-text="conteos[f.id] !== undefined ? conteos[f.id].toLocaleString('es-MX') : ''"></span>
+                </button>
+              </template>
+              <select x-model="categoriaFiltro" @change="elegirCategoriaFiltro()" aria-label="Categoría">
+                <option value="">Todas las categorías</option>
+                <template x-for="c in categorias" :key="c.id">
+                  <option :value="c.id" x-text="`${c.nombre} (${c.productos})`"></option>
+                </template>
+              </select>
+            </div>
+
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <table class="tabla lista-productos">
+                <thead>
+                  <tr>
+                    <th class="ajustado"><input type="checkbox" :checked="todaLaPagina" @change="alternarPagina()" aria-label="Elegir toda la página"></th>
+                    <th>Producto</th>
+                    <th class="col-categoria">Categoría</th>
+                    <th class="centro ajustado">IVA</th>
+                    <th class="derecha ajustado">Precio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="p in productos" :key="p.id">
+                    <tr :class="{ marcada: seleccionado(p), inactivo: !p.activo }">
+                      <td><input type="checkbox" :checked="seleccionado(p)" @change="alternar(p)" :aria-label="`Elegir ${p.nombre}`"></td>
+                      <td class="clicable" @click="abrirEditor(p)">
+                        <div class="nombre" x-text="p.nombre"></div>
+                        <div class="suave" style="font-size: 14px">
+                          <span x-text="p.clave || 'sin clave'"></span>
+                          <span class="etiqueta" x-show="p.requiere_revision" :title="p.motivo_revision">Revisar</span>
+                          <span class="etiqueta peligro" x-show="!p.activo">Desactivado</span>
+                        </div>
+                        <div class="motivo-revision" x-show="p.requiere_revision && p.motivo_revision" x-text="p.motivo_revision"></div>
+                      </td>
+                      <td class="clicable col-categoria" @click="abrirEditor(p)">
+                        <span x-text="nombreCategoria(p.categoria_id)"></span>
+                        <span class="suave" x-show="!p.categoria_id">—</span>
+                      </td>
+                      <td class="centro clicable" @click="abrirEditor(p)"><span class="iva" :class="{ con: Number(p.iva_porcentaje) > 0 }" x-text="`${Number(p.iva_porcentaje)}%`"></span></td>
+                      <td class="derecha clicable" @click="abrirEditor(p)">
+                        <strong x-show="p.precio_venta !== null" x-text="dinero(p.precio_venta)"></strong>
+                        <span class="sin-precio" x-show="p.precio_venta === null">Sin precio</span>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <p class="suave centro" style="padding: 24px; margin: 0" x-show="!productos.length && !cargandoLista">No hay productos con ese filtro.</p>
+              <div class="paginas">
+                <button type="button" :disabled="pagina === 0 || cargandoLista" @click="irPagina(-1)">← Anteriores</button>
+                <span class="suave" x-text="rango"></span>
+                <button type="button" :disabled="pagina + 1 >= paginas || cargandoLista" @click="irPagina(1)">Siguientes →</button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- ============ Categorías ============ -->
+        <template x-if="pestana === 'categorias'">
+          <div class="pila" style="gap: 14px">
+            <p class="suave" style="margin: 0">
+              Las categorías "Depto N" vienen de los departamentos de PVWin: ponles un nombre claro. El margen se usa para el precio sugerido.
+              En las de productos que no llevan lote ni caducidad (dulces, perfumería...) pon "Maneja caducidad: No".
+            </p>
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <table class="tabla categorias">
+                <thead><tr><th>Nombre</th><th class="ajustado">Margen</th><th class="centro ajustado">Maneja caducidad</th><th class="derecha ajustado">Productos</th><th class="ajustado"></th></tr></thead>
+                <tbody>
+                  <template x-for="c in categorias" :key="c.id">
+                    <tr>
+                      <td><input x-model="edicionCategorias[c.id].nombre" :aria-label="`Nombre de ${c.nombre}`"></td>
+                      <td><div class="campo-porcentaje"><input type="number" min="0" step="0.5" x-model="edicionCategorias[c.id].margen" placeholder="—"></div></td>
+                      <td class="centro">
+                        <div class="interruptor">
+                          <button type="button" :class="{ activo: edicionCategorias[c.id].controla_lote }" @click="edicionCategorias[c.id].controla_lote = true">Sí</button>
+                          <button type="button" :class="{ activo: !edicionCategorias[c.id].controla_lote }" @click="edicionCategorias[c.id].controla_lote = false">No</button>
+                        </div>
+                      </td>
+                      <td class="derecha"><a href="#" @click.prevent="verProductosDe(c)" x-text="c.productos.toLocaleString('es-MX')"></a></td>
+                      <td><button type="button" class="primario" x-show="cambioCategoria(c)" @click="guardarCategoria(c)">Guardar</button></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <form class="fila nueva-categoria" @submit.prevent="crearCategoria()">
+                <input x-model="nuevaCategoria" placeholder="Nombre de una categoría nueva">
+                <button style="flex: 0 0 auto" :disabled="!nuevaCategoria.trim()">+ Agregar</button>
+              </form>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <!-- Barra de cambios en grupo -->
+  <div class="barra-grupo" x-show="seleccion.length && pestana === 'productos' && !editor" x-cloak x-transition.opacity>
+    <strong x-text="seleccion.length === 1 ? '1 producto elegido' : `${seleccion.length} productos elegidos`"></strong>
+    <button type="button" @click="abrirGrupo('categoria')">Cambiar categoría</button>
+    <button type="button" @click="abrirGrupo('iva', 0)">IVA 0%</button>
+    <button type="button" @click="abrirGrupo('iva', 16)">IVA 16%</button>
+    <button type="button" :disabled="aplicando" @click="aplicarGrupo({ revisado: true })">
+      <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>Ya revisados
+    </button>
+    <button type="button" class="texto-suave" @click="seleccion = []">Quitar selección</button>
+  </div>
+
+  <!-- Ventana: categoría en grupo -->
+  <div class="velo arriba" x-show="grupo === 'categoria'" x-cloak @click.self="grupo = null">
+    <div class="panel ventana-inventario">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#paquete"/></svg></span>
+        <div><h2>Cambiar categoría</h2><p class="suave" x-text="`A ${seleccion.length} productos`"></p></div>
+      </div>
+      <div class="lista-categorias">
+        <template x-for="c in categorias" :key="c.id">
+          <button type="button" class="opcion lote-opcion" :disabled="aplicando" @click="aplicarGrupo({ categoria_id: c.id })">
+            <span x-text="c.nombre"></span><span class="suave" x-text="c.margen_porcentaje !== null ? `margen ${Number(c.margen_porcentaje)}%` : ''"></span>
+          </button>
+        </template>
+        <button type="button" class="opcion lote-opcion" :disabled="aplicando" @click="aplicarGrupo({ quitar_categoria: true })">
+          <span class="suave">Sin categoría</span>
+        </button>
+      </div>
+      <button type="button" class="separado" @click="grupo = null">Cancelar <kbd>Esc</kbd></button>
+    </div>
+  </div>
+
+  <!-- Ventana: IVA en grupo -->
+  <div class="velo arriba" x-show="grupo === 'iva'" x-cloak @click.self="grupo = null">
+    <div class="panel ventana-inventario">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#precio"/></svg></span>
+        <div><h2 x-text="`Poner IVA de ${ivaGrupo}%`"></h2><p class="suave" x-text="`A ${seleccion.length} productos`"></p></div>
+      </div>
+      <p style="margin: 0 0 8px"><strong>¿Qué pasa con el precio al público?</strong></p>
+      <div class="pila" style="gap: 10px">
+        <button type="button" class="opcion-grande" :disabled="aplicando" @click="aplicarGrupo({ iva_porcentaje: String(ivaGrupo), ajustar_precio: false })">
+          <strong>Se queda igual</strong>
+          <span x-text="ejemploIva ? `Ej. ${ejemploIva.nombre}: sigue en ${dinero(ejemploIva.antes)}; cambia cuánto es IVA y cuánto producto.` : 'El cliente paga lo mismo; solo cambia el desglose del IVA.'"></span>
+        </button>
+        <button type="button" class="opcion-grande" :disabled="aplicando" @click="aplicarGrupo({ iva_porcentaje: String(ivaGrupo), ajustar_precio: true })">
+          <strong x-text="ivaGrupo > 0 ? 'Sube, agregando el IVA' : 'Baja, quitando el IVA'"></strong>
+          <span x-text="ejemploIva ? `Ej. ${ejemploIva.nombre}: de ${dinero(ejemploIva.antes)} a ${dinero(ejemploIva.ajustado)}.` : 'El precio sin impuestos se queda igual.'"></span>
+        </button>
+      </div>
+      <button type="button" class="separado" @click="grupo = null">Cancelar <kbd>Esc</kbd></button>
+    </div>
+  </div>
+
+  <!-- Editor de producto -->
+  <div class="velo arriba" x-show="editor" x-cloak @click.self="cerrarEditor()">
+    <template x-if="editor">
+      <form class="panel editor-producto" @submit.prevent="guardarProducto()">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#precio"/></svg></span>
+          <div>
+            <h2 x-text="editor.id ? 'Editar producto' : 'Nuevo producto'"></h2>
+            <p class="suave" x-show="editor.id && !editor.activo">Desactivado: no se puede vender.</p>
+          </div>
+        </div>
+
+        <div class="mensaje aviso" x-show="editor.requiere_revision" style="margin-top: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+          <span><strong>Por revisar:</strong> <span x-text="editor.motivo_revision || 'sin motivo'"></span>
+            <label class="casilla"><input type="checkbox" x-model="editor.revisado"> Ya lo revisé (quitar la marca al guardar)</label></span>
+        </div>
+
+        <div class="paso">Datos</div>
+        <label for="editor-nombre" style="margin-top: 0">Nombre</label>
+        <input id="editor-nombre" x-model="editor.nombre">
+        <div class="rejilla-2">
+          <div><label>Código de barras o clave</label><input x-model="editor.clave" placeholder="Escanéalo aquí"></div>
+          <div><label>Laboratorio</label><input x-model="editor.laboratorio"></div>
+          <div>
+            <label>Categoría</label>
+            <select x-model.number="editor.categoria_id">
+              <option :value="null">Sin categoría</option>
+              <template x-for="c in categorias" :key="c.id"><option :value="c.id" x-text="c.nombre" :selected="c.id === editor.categoria_id"></option></template>
+            </select>
+          </div>
+          <div><label>¿Pide receta?</label>
+            <div class="interruptor">
+              <button type="button" :class="{ activo: editor.requiere_receta }" @click="editor.requiere_receta = true">Sí</button>
+              <button type="button" :class="{ activo: !editor.requiere_receta }" @click="editor.requiere_receta = false">No</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="paso separado">Precio e impuestos</div>
+        <div class="rejilla-2">
+          <div><label>IVA</label>
+            <div class="interruptor">
+              <button type="button" :class="{ activo: editor.iva_porcentaje === 0 }" @click="editor.iva_porcentaje = 0">0%</button>
+              <button type="button" :class="{ activo: editor.iva_porcentaje === 16 }" @click="editor.iva_porcentaje = 16">16%</button>
+            </div>
+          </div>
+          <div><label>IEPS</label>
+            <div class="interruptor">
+              <template x-for="t in [0, 8, 25, 26.5]" :key="t">
+                <button type="button" :class="{ activo: editor.ieps_porcentaje === t }" @click="editor.ieps_porcentaje = t" x-text="`${t}%`"></button>
+              </template>
+            </div>
+          </div>
+          <div><label>Costo <span class="ayuda">(sin impuestos)</span></label><div class="campo-dinero"><input type="number" min="0" step="0.01" x-model="editor.costo"></div></div>
+          <div><label>Precio máximo al público <span class="ayuda">(el de la caja)</span></label><div class="campo-dinero"><input type="number" min="0" step="0.01" x-model="editor.precio_maximo_publico"></div></div>
+        </div>
+        <label>Precio de venta <span class="ayuda">(con impuestos; se redondea al guardar<span x-show="paso" x-text="` a ${dinero(paso)}`"></span>)</span></label>
+        <div class="campo-dinero"><input class="numero-grande" type="number" min="0" step="0.01" x-model="editor.precio_venta" placeholder="Sin precio"></div>
+
+        <div class="sugerencias">
+          <div class="mensaje info" x-show="sugerido !== null && sugerido !== Number(editor.precio_venta)">
+            <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+            <span>Precio sugerido con el margen de la categoría (<span x-text="`${margenCategoria}%`"></span>): <strong x-text="dinero(sugerido)"></strong></span>
+            <button type="button" @click="editor.precio_venta = String(sugerido)">Usar</button>
+          </div>
+          <div class="mensaje info" x-show="precioMismoSinImpuestos !== null">
+            <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+            <span>Cambiaste el impuesto. Para que el precio sin impuestos no cambie sería <strong x-text="dinero(precioMismoSinImpuestos)"></strong>.</span>
+            <button type="button" @click="editor.precio_venta = String(precioMismoSinImpuestos)">Usar</button>
+          </div>
+          <div class="mensaje aviso" x-show="pasaDelMaximo">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+            <span>El precio pasa del máximo al público; al guardar se deja en el máximo.</span>
+          </div>
+          <p class="ayuda" x-show="margenReal !== null" x-text="`Con este precio el margen sobre el costo es de ${margenReal}%.`"></p>
+        </div>
+
+        <div class="paso separado">Existencias para pedidos</div>
+        <div class="rejilla-2">
+          <div><label style="margin-top: 0">Mínimo</label><input type="number" min="0" step="1" x-model="editor.minimo"></div>
+          <div><label style="margin-top: 0">Máximo</label><input type="number" min="0" step="1" x-model="editor.maximo"></div>
+        </div>
+
+        <template x-if="historial.length">
+          <div>
+            <div class="paso separado">Historial de precios</div>
+            <table class="tabla historial-precios">
+              <tbody>
+                <template x-for="h in historial" :key="h.id">
+                  <tr>
+                    <td>
+                      <span x-text="h.precio_anterior !== null ? dinero(h.precio_anterior) : 'sin precio'"></span> →
+                      <strong x-text="h.precio_nuevo !== null ? dinero(h.precio_nuevo) : 'sin precio'"></strong>
+                    </td>
+                    <td class="suave" x-text="`${h.origen}${h.usuario ? ' · ' + h.usuario : ''}`"></td>
+                    <td class="suave derecha ajustado" x-text="fechaHora(h.created_at)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <div class="mensaje error" x-show="errorEditor"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorEditor"></span></div>
+        <div class="fila separado acciones-pegadas" style="flex-wrap: wrap-reverse">
+          <button type="button" class="texto-peligro" style="flex: 0 0 auto" x-show="editor.id" :disabled="guardando" @click="alternarActivo()"
+                  x-text="editor.activo ? 'Desactivar' : 'Activar'"></button>
+          <button type="button" style="flex: 0 0 auto" @click="cerrarEditor()">Cancelar <kbd>Esc</kbd></button>
+          <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar'"></button>
+        </div>
+      </form>
+    </template>
+  </div>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

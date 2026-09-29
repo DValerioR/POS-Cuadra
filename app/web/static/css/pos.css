@@ -609,6 +609,66 @@ details.desglose table { margin-top: 8px; }
   .avance .porcentaje { font-size: 44px; }
 }
 
+/* --- Catálogo y precios -------------------------------------------------- */
+
+.catalogo { max-width: 1100px; margin: 0 auto; padding-bottom: 90px; }
+.filtros-catalogo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filtro { gap: 8px; padding: 8px 14px; border-radius: 999px; }
+.filtro .cuenta { font-size: 13px; color: var(--texto-suave); font-weight: 700; }
+.filtro.activo { background: var(--primario); border-color: var(--primario); color: #fff; }
+.filtro.activo .cuenta { color: rgba(255, 255, 255, 0.85); }
+.filtros-catalogo select { width: auto; min-width: 220px; padding: 8px 12px; border-radius: 999px; }
+.lista-productos td { padding: 10px 12px; }
+.lista-productos input[type="checkbox"], .casilla input { width: 20px; height: 20px; accent-color: var(--primario); }
+.lista-productos tr.inactivo .nombre { color: var(--texto-suave); text-decoration: line-through; }
+.motivo-revision { font-size: 13px; color: var(--aviso); margin-top: 2px; }
+.iva { display: inline-block; min-width: 44px; padding: 2px 8px; border-radius: 999px; background: var(--linea); font-size: 14px; font-weight: 700; color: var(--texto-suave); }
+.iva.con { background: var(--info-suave); color: var(--info); }
+.sin-precio { color: var(--peligro); font-size: 14px; font-weight: 600; }
+.paginas { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--linea); }
+
+.categorias td { padding: 8px 12px; }
+.categorias input { padding: 8px 10px; }
+.campo-porcentaje { position: relative; width: 110px; }
+.campo-porcentaje::after { content: "%"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--texto-suave); font-weight: 600; }
+.campo-porcentaje input { padding-right: 28px; text-align: right; }
+.nueva-categoria { padding: 12px 14px; border-top: 1px solid var(--linea); }
+.categorias a { color: var(--primario); font-weight: 700; }
+
+.interruptor { display: inline-flex; border: 1.5px solid var(--borde); border-radius: var(--radio-chico); overflow: hidden; }
+.interruptor button { border: 0; border-radius: 0; padding: 8px 14px; background: #fff; color: var(--texto-suave); }
+.interruptor button + button { border-left: 1.5px solid var(--borde); }
+.interruptor button.activo { background: var(--primario); color: #fff; }
+
+.barra-grupo {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  width: max-content; max-width: calc(100vw - 24px);
+  padding: 10px 14px;
+  background: var(--primario-oscuro); color: #fff;
+  border-radius: var(--radio); box-shadow: var(--sombra-alta);
+  z-index: 40;
+}
+.barra-grupo strong { margin-right: 6px; }
+.barra-grupo button { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.35); color: #fff; padding: 8px 12px; }
+.barra-grupo button:hover { background: rgba(255, 255, 255, 0.22); }
+.barra-grupo .texto-suave { background: transparent; border-color: transparent; color: rgba(255, 255, 255, 0.8); }
+.lista-categorias { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; }
+
+.editor-producto { width: min(720px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: var(--sombra-alta); padding-bottom: 0; }
+.editor-producto .acciones-pegadas { margin-left: -22px; margin-right: -22px; padding: 12px 22px; }
+.rejilla-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.casilla { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-weight: 600; color: inherit; cursor: pointer; }
+.sugerencias .mensaje { align-items: center; }
+.sugerencias .mensaje span { flex: 1; }
+.sugerencias .mensaje button { flex: 0 0 auto; padding: 6px 14px; }
+.historial-precios td { padding: 8px 10px; font-size: 15px; }
+
+@media (max-width: 760px) {
+  .rejilla-2 { grid-template-columns: 1fr; }
+  .col-categoria { display: none; }
+}
+
 /* --- Centro de notificaciones ------------------------------------------ */
 
 .notificaciones { max-width: 860px; margin: 0 auto; }

@@ -26,3 +26,4 @@ class CategoriaOut(CategoriaBase):
     id: int
     negocio_id: int
     created_at: datetime
+    productos: int = 0  # cuántos productos tiene (solo en la lista)

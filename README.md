@@ -97,6 +97,18 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   defecto), `GET/PUT/DELETE /productos/{id}`
   — "eliminar" un producto lo desactiva (`activo=false`), no lo borra. Al
   guardar, el precio de venta se redondea según la configuración del negocio.
+- Catálogo (pantalla `/catalogo`):
+  - `GET /productos` acepta además `solo_inactivos`, `sin_precio`,
+    `sin_categoria` y `categoria_id`; `GET /productos/contar` da el total con
+    los mismos filtros (para paginar).
+  - `POST /productos/en-grupo` con `{ids, categoria_id? | quitar_categoria,
+    iva_porcentaje?, ajustar_precio, revisado}` — solo admin. Con IVA,
+    `ajustar_precio=true` deja igual el precio sin impuestos (el precio al
+    público sube o baja); `false` deja igual el precio al público.
+  - `GET /productos/{id}/precios` — historial de precios (solo admin). Todo
+    cambio de precio (catálogo, cambio en grupo, importador de precios) queda
+    en `precios_historial` con quién y desde dónde.
+  - `GET /categorias` incluye cuántos productos tiene cada una.
 - Inventario por lote:
   - `GET /inventario/productos/{id}` — existencia total y lotes en orden FEFO
     (primero el que caduca antes; los "sin caducidad" al final).
@@ -263,6 +275,14 @@ funcione sin internet.
   (caducados y lo que caduca en 3, 6 o 12 meses, con "Dar de baja").
   `/inventario?vista=por-caducar` abre directo esa pestaña (Reportes →
   Productos por caducar).
+- `/catalogo` — productos y precios (solo admin; Inventario → Productos y
+  precios en el inicio). Pestaña Productos: búsqueda, filtros (para revisar,
+  sin precio, sin categoría, desactivados, por categoría), lista de 50 en 50
+  con casillas para cambios en grupo (categoría, IVA 0%/16% preguntando si el
+  precio al público se queda igual o se ajusta, "ya revisados"), y editor del
+  producto con precio sugerido por el margen de la categoría, aviso si pasa
+  del precio máximo, margen real, historial de precios y desactivar. Pestaña
+  Categorías: nombre, margen y si maneja caducidad.
 - `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
   autorizar (autorizar o rechazar con motivo) y ventas sin existencia
   registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una

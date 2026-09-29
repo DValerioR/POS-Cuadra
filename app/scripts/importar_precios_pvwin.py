@@ -39,6 +39,7 @@ from app.importador.pvwin import (
     OMITIR, FormatoInvalido, PrecioPVWin, _comparable, impuestos_del_catalogo, leer_lista_precios,
 )
 from app.models import Negocio, Producto
+from app.services.catalogo import registrar_precio
 from app.services.precios import redondear_precio_venta
 
 CENTAVO = Decimal("0.01")
@@ -170,6 +171,7 @@ def aplicar_precios(
             )
             r.con_precio.append((producto.clave, producto.nombre, fila.precio, producto.iva_porcentaje,
                                  producto.ieps_porcentaje, anterior, producto.precio_venta))
+        registrar_precio(db, producto, anterior, None, "Lista de precios de PVWin")
         if nuevo:
             r.nuevos.append((producto.clave, producto.nombre, producto.precio_venta))
 
