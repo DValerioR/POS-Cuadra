@@ -107,6 +107,13 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     admin y bodega. Sin `lote_id` usa el lote sin caducidad (sirve para el
     conteo físico de productos importados en cero).
   - `GET /inventario/ajustes` — bitácora, filtrable por producto, tipo y fecha.
+  - `POST /inventario/conteo` con `{producto_id, conteo}` — conteo físico del
+    total: la existencia queda igual al conteo (respeta los lotes con
+    caducidad mientras alcance; lo demás va al lote sin caducidad). Admin y bodega.
+  - `GET /inventario/productos/{id}/movimientos` — ajustes, mermas y capturas
+    del producto con usuario y lote.
+  - `GET /inventario/por-caducar?meses=6` — lotes caducados y los que caducan
+    en esos meses, con los días que faltan.
   - `GET /inventario/avance-caducidades` — % de piezas con caducidad capturada
     y productos pendientes (los de más piezas primero). Solo cuenta productos
     cuya categoría controla lote.
@@ -248,6 +255,14 @@ funcione sin internet.
   cambios al momento; el cajero pide devoluciones y cancelaciones, que llegan
   al centro de notificaciones, y sigue cobrando. La respuesta (cuánto entregar,
   o que no se hace) le aparece en Vender hasta que la marca como vista.
+- `/inventario` — inventario (admin y bodega; F3 en el inicio): se busca el
+  producto (escáner o nombre, F2) y se ve su ficha con lotes y caducidades
+  (colores según qué tan cerca está), con Capturar caducidad, Contar (total
+  del producto) y Merma (por lote, con motivo), y su historial. Sin producto
+  elegido: avance de la captura de caducidades y la pestaña "Por caducar"
+  (caducados y lo que caduca en 3, 6 o 12 meses, con "Dar de baja").
+  `/inventario?vista=por-caducar` abre directo esa pestaña (Reportes →
+  Productos por caducar).
 - `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
   autorizar (autorizar o rechazar con motivo) y ventas sin existencia
   registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una

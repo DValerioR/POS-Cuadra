@@ -290,3 +290,44 @@ def fijar_existencia(
             ajustes.append(_registrar(db, lote, usuario, TipoAjuste.AJUSTE, -lote.cantidad, motivo))
     db.flush()
     return ajustes
+
+
+# --- Consultas de la pantalla de inventario ---------------------------------
+
+def movimientos(db: Session, negocio_id: int, producto_id: int, limite: int = 50) -> list[dict]:
+    """Ajustes, mermas, capturas e importación del producto, del más reciente
+    al más viejo, con quién lo hizo y de qué lote."""
+    obtener_producto(db, negocio_id, producto_id)
+    filas = db.execute(
+        select(AjusteInventario, Usuario.nombre_completo, Usuario.nombre_usuario, Lote.numero_lote, Lote.caducidad)
+        .join(Usuario, Usuario.id == AjusteInventario.usuario_id)
+        .join(Lote, Lote.id == AjusteInventario.lote_id)
+        .where(AjusteInventario.producto_id == producto_id)
+        .order_by(AjusteInventario.id.desc())
+        .limit(limite)
+    ).all()
+    return [
+        {
+            "id": a.id, "tipo": a.tipo, "cantidad": a.cantidad, "motivo": a.motivo, "created_at": a.created_at,
+            "usuario": nombre or usuario, "numero_lote": numero_lote, "caducidad": caducidad,
+        }
+        for a, nombre, usuario, numero_lote, caducidad in filas
+    ]
+
+
+def por_caducar(db: Session, negocio_id: int, hoy: date, hasta: date) -> list[dict]:
+    """Lotes con piezas que ya caducaron o caducan hasta `hasta`, el más próximo primero."""
+    filas = db.execute(
+        select(Lote, Producto.clave, Producto.nombre)
+        .join(Producto, Producto.id == Lote.producto_id)
+        .where(Lote.negocio_id == negocio_id, Lote.cantidad > 0, Lote.caducidad.is_not(None), Lote.caducidad <= hasta)
+        .order_by(Lote.caducidad, Producto.nombre)
+    ).all()
+    return [
+        {
+            "lote_id": l.id, "producto_id": l.producto_id, "clave": clave, "nombre": nombre,
+            "numero_lote": l.numero_lote, "caducidad": l.caducidad, "cantidad": l.cantidad,
+            "dias": (l.caducidad - hoy).days,
+        }
+        for l, clave, nombre in filas
+    ]

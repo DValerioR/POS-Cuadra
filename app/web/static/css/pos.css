@@ -138,7 +138,7 @@ a.marca:hover { opacity: 0.9; }
 }
 @media (prefers-reduced-motion: reduce) { .campana.con-pendientes { animation: none; } }
 
-@media (max-width: 1200px) {
+@media (max-width: 1440px) {
   /* Solo ícono, salvo "Inicio" y la pantalla actual; el nombre sale al pasar el ratón. */
   .barra { gap: 14px; }
   .barra nav a:not(.activo):not([href="/inicio"]) span { display: none; }
@@ -555,6 +555,59 @@ details.desglose table { margin-top: 8px; }
 .tabla th.derecha { text-align: right; }
 .tabla th.centro { text-align: center; }
 .tabla th.ajustado, .tabla td.ajustado { width: 1%; white-space: nowrap; } /* tan ancha como su contenido */
+
+/* --- Inventario --------------------------------------------------------- */
+
+.inventario { max-width: 960px; margin: 0 auto; }
+.ficha-encabezado { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+.ficha-encabezado h2 { margin: 4px 0 2px; }
+.ficha-encabezado p { margin: 0; }
+.volver { font-size: 15px; font-weight: 600; color: var(--primario); text-decoration: none; }
+.cifra.existencia { flex: 0 0 auto; min-width: 150px; text-align: right; }
+.cifra.existencia .rotulo { justify-content: flex-end; }
+.cifra.existencia.negativa { background: var(--peligro-suave); border-color: #f5c6c2; }
+.cifra.existencia.negativa .valor { color: var(--peligro); }
+.acciones-inventario { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+.caducidad { display: inline-flex; flex-direction: column; line-height: 1.25; padding: 2px 10px; border-radius: var(--radio-chico); }
+.caducidad span { font-size: 13px; color: var(--texto-suave); }
+.caducidad.caducado { background: var(--peligro-suave); color: var(--peligro); }
+.caducidad.pronto { background: var(--aviso-suave); color: var(--aviso); }
+.caducidad.medio { background: var(--info-suave); color: var(--info); }
+.caducidad.caducado span, .caducidad.pronto span, .caducidad.medio span { color: inherit; }
+.tabla tr.clicable, .tabla td.clicable { cursor: pointer; }
+.tabla tr.clicable:hover td, .tabla td.clicable:hover { background: var(--primario-suave); }
+
+.pestanas { display: flex; gap: 8px; border-bottom: 2px solid var(--borde); flex-wrap: wrap; }
+.pestanas button {
+  border: 0; border-radius: var(--radio-chico) var(--radio-chico) 0 0;
+  background: transparent; color: var(--texto-suave);
+  padding: 12px 18px; margin-bottom: -2px;
+  border-bottom: 3px solid transparent;
+}
+.pestanas button.activa { color: var(--primario-oscuro); border-bottom-color: var(--primario); background: var(--panel); }
+
+.avance { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.avance .porcentaje { font-size: 56px; font-weight: 800; color: var(--primario); line-height: 1; }
+.barra-avance { height: 14px; border-radius: 999px; background: var(--linea); overflow: hidden; margin: 10px 0; }
+.barra-avance > div { height: 100%; background: var(--primario); border-radius: 999px; min-width: 4px; }
+
+.meses { grid-template-columns: repeat(3, auto); }
+.meses .opcion { padding: 8px 14px; flex-direction: row; }
+.grupo-caducar { border-left: 6px solid var(--borde); }
+.grupo-caducar.caducado { border-left-color: var(--peligro); }
+.grupo-caducar.pronto { border-left-color: var(--aviso); }
+
+.ventana-inventario { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; box-shadow: var(--sombra-alta); }
+.encabezado .circulo.peligro { background: var(--peligro-suave); color: var(--peligro); }
+.lote-opcion { flex-direction: row; justify-content: space-between; padding: 12px 16px; color: var(--texto); }
+.numero-grande { font-size: 24px; font-weight: 700; }
+
+@media (max-width: 760px) {
+  .ficha-encabezado { flex-direction: column; }
+  .cifra.existencia { text-align: left; width: 100%; }
+  .cifra.existencia .rotulo { justify-content: flex-start; }
+  .avance .porcentaje { font-size: 44px; }
+}
 
 /* --- Centro de notificaciones ------------------------------------------ */
 

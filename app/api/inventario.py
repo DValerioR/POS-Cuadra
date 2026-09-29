@@ -1,10 +1,13 @@
-from datetime import date
+import calendar
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.auth import usuario_actual
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import AjusteInventario, TipoAjuste, Usuario
 from app.schemas.inventario import (
@@ -12,8 +15,11 @@ from app.schemas.inventario import (
     AjusteOut,
     AvanceCaducidadesOut,
     CapturaCaducidadIn,
+    ConteoIn,
     ExistenciaOut,
     LoteOut,
+    MovimientoOut,
+    PorCaducarOut,
 )
 from app.services import inventario
 from app.services.errores import ERRORES_NEGOCIO, NoEncontrado, a_http
@@ -28,6 +34,10 @@ def existencia_producto(producto_id: int, usuario: Usuario = Depends(usuario_act
         producto = inventario.obtener_producto(db, usuario.negocio_id, producto_id)
     except NoEncontrado as e:
         raise a_http(e)
+    return _existencia(db, producto)
+
+
+def _existencia(db: Session, producto) -> ExistenciaOut:
     lotes = inventario.lotes_fefo(db, producto.id)
     return ExistenciaOut(
         producto_id=producto.id,
@@ -35,6 +45,7 @@ def existencia_producto(producto_id: int, usuario: Usuario = Depends(usuario_act
         nombre=producto.nombre,
         controla_lote=inventario.controla_lote(db, producto),
         existencia=sum((l.cantidad for l in lotes), 0),
+        existencia_registrada=inventario.existencia_total(db, producto.id),
         sin_caducidad=sum((l.cantidad for l in lotes if l.caducidad is None), 0),
         lotes=[LoteOut.model_validate(l) for l in lotes],
     )
@@ -73,6 +84,44 @@ def registrar_ajuste(datos: AjusteIn, usuario: Usuario = Depends(usuario_actual)
     db.commit()
     db.refresh(ajuste)
     return ajuste
+
+
+@router.post("/conteo", response_model=ExistenciaOut)
+def registrar_conteo(datos: ConteoIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Conteo físico del total del producto: la existencia queda igual al
+    conteo (se respetan los lotes con caducidad mientras alcance)."""
+    try:
+        inventario.fijar_existencia(db, usuario.negocio_id, usuario.id, datos.producto_id, datos.conteo, datos.motivo)
+        producto = inventario.obtener_producto(db, usuario.negocio_id, datos.producto_id)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return _existencia(db, producto)
+
+
+@router.get("/productos/{producto_id}/movimientos", response_model=list[MovimientoOut])
+def movimientos(
+    producto_id: int, limite: int = Query(50, le=200),
+    usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db),
+):
+    """Ajustes, mermas y capturas de caducidad del producto, del más reciente al más viejo."""
+    try:
+        return inventario.movimientos(db, usuario.negocio_id, producto_id, limite)
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+
+
+@router.get("/por-caducar", response_model=list[PorCaducarOut])
+def por_caducar(
+    meses: int = Query(6, ge=0, le=24), usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db),
+):
+    """Lotes ya caducados y los que caducan en los próximos `meses`."""
+    hoy = datetime.now(ZoneInfo(settings.zona_horaria)).date()
+    mes = hoy.month - 1 + meses
+    anio, mes = hoy.year + mes // 12, mes % 12 + 1
+    hasta = date(anio, mes, min(hoy.day, calendar.monthrange(anio, mes)[1]))
+    return inventario.por_caducar(db, usuario.negocio_id, hoy, hasta)
 
 
 @router.get("/ajustes", response_model=list[AjusteOut])

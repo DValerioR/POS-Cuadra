@@ -198,3 +198,43 @@ def test_inventario_de_otro_negocio_es_invisible(como_admin, db, otro_negocio):
     assert capturar(como_admin, ajeno, "2027-01-01", 1).status_code == 404
     assert ajustar(como_admin, ajeno, "ajuste", 1).status_code == 404
     assert como_admin.get("/inventario/avance-caducidades").json()["piezas_total"] == "0"
+
+
+# --- Pantalla de inventario: conteo total, movimientos, por caducar ----------
+
+def test_conteo_total_del_producto(como_admin, admin, medicamento):
+    capturar(como_admin, medicamento, "2027-03-31", 4, "A")  # A=4, sin caducidad=6
+    r = como_admin.post("/inventario/conteo", json={"producto_id": medicamento.id, "conteo": "7"})
+    assert r.status_code == 200
+    e = r.json()
+    assert (e["existencia"], e["existencia_registrada"], e["sin_caducidad"]) == ("7.00", "7.00", "3.00")
+    [m] = [m for m in como_admin.get(f"/inventario/productos/{medicamento.id}/movimientos").json() if m["tipo"] == "ajuste"]
+    assert (m["cantidad"], m["motivo"], m["usuario"]) == ("-3.00", "Conteo físico", admin.nombre_completo)
+
+
+def test_conteo_solo_admin_y_bodega(como_mostrador, como_bodega, medicamento):
+    assert como_mostrador.post("/inventario/conteo", json={"producto_id": medicamento.id, "conteo": "1"}).status_code == 403
+    assert como_bodega.post("/inventario/conteo", json={"producto_id": medicamento.id, "conteo": "1"}).status_code == 200
+    assert como_bodega.post("/inventario/conteo", json={"producto_id": medicamento.id, "conteo": "-1"}).status_code == 422
+
+
+def test_movimientos_con_lote_y_usuario(como_admin, medicamento):
+    capturar(como_admin, medicamento, "2027-03-31", 2, "A")
+    movs = como_admin.get(f"/inventario/productos/{medicamento.id}/movimientos").json()
+    assert [(m["tipo"], m["cantidad"], m["numero_lote"]) for m in movs] == [
+        ("captura_caducidad", "2.00", "A"), ("captura_caducidad", "-2.00", None),
+    ]
+
+
+def test_por_caducar(como_admin, db, negocio, medicamento):
+    from datetime import date, timedelta
+    hoy = date.today()
+    for dias, num in ((-10, "VENCIDO"), (30, "PRONTO"), (400, "LEJOS")):
+        db.add(Lote(negocio_id=negocio.id, producto_id=medicamento.id, cantidad=D(2),
+                    caducidad=hoy + timedelta(days=dias), numero_lote=num))
+    db.add(Lote(negocio_id=negocio.id, producto_id=medicamento.id, cantidad=D(0),
+                caducidad=hoy + timedelta(days=5), numero_lote="VACIO"))
+    db.commit()
+    lista = como_admin.get("/inventario/por-caducar", params={"meses": 6}).json()
+    assert [(l["numero_lote"], l["dias"] < 0) for l in lista] == [("VENCIDO", True), ("PRONTO", False)]
+    assert lista[1]["nombre"] == "AMOXICILINA 500MG"

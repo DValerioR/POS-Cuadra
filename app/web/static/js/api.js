@@ -204,12 +204,12 @@ const SECCIONES = [
   { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin", "mostrador"] },
   { id: "notificaciones", texto: "Notificaciones", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
-  { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: false, roles: ["admin", "bodega"], tecla: "F3" },
+  { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: true, roles: ["admin", "bodega"], tecla: "F3" },
   { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/entradas", existe: false, roles: ["admin", "bodega"], tecla: "F4" },
   { id: "productos", texto: "Productos y precios", icono: "precio", grupo: "Inventario", ruta: "/productos", existe: false, roles: ["admin"] },
 
   { id: "reporte-ventas", texto: "Ventas del día", icono: "grafica", grupo: "Reportes", ruta: "/reportes/ventas", existe: false, roles: ["admin"] },
-  { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/reportes/caducidades", existe: false, roles: ["admin"] },
+  { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/inventario?vista=por-caducar", existe: true, roles: ["admin", "bodega"] },
 
   { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: false, roles: ["admin"] },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas", existe: false, roles: ["admin"] },
@@ -265,7 +265,8 @@ async function pintarBarra() {
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
     if (usuario.rol === "admin") vigilarSolicitudes(barra.querySelector(".campana"));
     nav.innerHTML += seccionesDe(usuario.rol)
-      .filter((s) => s.ruta && s.existe && s.id !== "notificaciones") // esa va en la campana
+      // Notificaciones va en la campana; las rutas con "?" son vistas de otra pantalla.
+      .filter((s) => s.ruta && s.existe && s.id !== "notificaciones" && !s.ruta.includes("?"))
       .map((s) => enlace(s.ruta, s.texto, s.icono, s.id === actual))
       .join("");
     const nombre = usuario.nombre_completo || usuario.nombre_usuario;

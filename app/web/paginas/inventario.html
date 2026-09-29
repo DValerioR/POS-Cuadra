@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inventario · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/inventario.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaInventario()">
+
+  <header class="barra" data-pagina="inventario"></header>
+
+  <main class="contenido inventario" x-cloak x-show="!cargando">
+
+    <template x-if="usuario && !puedeUsar">
+      <div class="panel">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+          <div><h2>Sin acceso</h2><p class="suave">El inventario lo manejan bodega y los administradores.</p></div>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="puedeUsar">
+      <div class="pila" style="gap: 16px">
+
+        <!-- Buscar producto -->
+        <div class="buscador">
+          <span class="lupa"><svg><use href="/static/iconos.svg#codigo"/></svg></span>
+          <input id="buscar-producto" x-model="buscar" @input="alBuscar" autocomplete="off"
+                 placeholder="Escanea el código o escribe el nombre del producto"
+                 @keydown.enter.prevent="alPresionarEnter()" @keydown.arrow-down.prevent="moverLista(1)"
+                 @keydown.arrow-up.prevent="moverLista(-1)">
+          <div class="resultados" x-show="encontrados.length" @click.outside="encontrados = []">
+            <template x-for="(p, i) in encontrados" :key="p.id">
+              <div class="resultado" :class="{ elegido: i === elegido }" @click="abrir(p.id)" @mouseenter="elegido = i">
+                <div>
+                  <div class="nombre" x-text="p.nombre"></div>
+                  <div class="suave" style="font-size: 14px" x-text="p.clave || 'sin clave'"></div>
+                </div>
+                <span class="etiqueta" x-show="!p.activo">Desactivado</span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="mensaje error" x-show="error" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+        </div>
+
+        <!-- ============ Ficha del producto ============ -->
+        <template x-if="producto">
+          <div class="pila" style="gap: 16px">
+            <div class="panel">
+              <div class="ficha-encabezado">
+                <div>
+                  <a href="#" class="volver" @click.prevent="cerrarProducto()">← Volver <kbd>Esc</kbd></a>
+                  <h2 x-text="producto.nombre"></h2>
+                  <p class="suave" x-text="producto.clave || 'Sin clave'"></p>
+                </div>
+                <div class="cifra existencia" :class="{ negativa: negativa }">
+                  <div class="rotulo">Existencia</div>
+                  <div class="valor" x-text="cantidad(producto.existencia_registrada)"></div>
+                </div>
+              </div>
+
+              <div class="mensaje aviso" x-show="negativa">
+                <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+                <span>Se vendieron más piezas de las que el sistema tenía registradas. Cuenta las que hay en anaquel con <strong>Contar</strong> para corregirlo.</span>
+              </div>
+
+              <div class="acciones-inventario">
+                <button type="button" class="opcion-grande" x-show="puedeCapturar" @click="abrirVentana('capturar')">
+                  <svg><use href="/static/iconos.svg#reloj"/></svg>
+                  <strong>Capturar caducidad</strong>
+                  <span x-text="`Hay ${cantidad(producto.sin_caducidad)} piezas sin caducidad registrada.`"></span>
+                </button>
+                <button type="button" class="opcion-grande" @click="abrirVentana('contar')">
+                  <svg><use href="/static/iconos.svg#paquete"/></svg>
+                  <strong>Contar</strong>
+                  <span>Escribe cuántas hay en anaquel y la existencia se ajusta.</span>
+                </button>
+                <button type="button" class="opcion-grande peligrosa" x-show="producto.lotes.length" @click="abrirVentana('merma')">
+                  <svg><use href="/static/iconos.svg#basura"/></svg>
+                  <strong>Merma</strong>
+                  <span>Sacar piezas caducadas, dañadas o extraviadas.</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Lotes -->
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <div class="paso" style="padding: 16px 18px 0">Lotes (sale primero el que caduca antes)</div>
+              <table class="tabla" x-show="producto.lotes.length">
+                <thead><tr><th>Lote</th><th>Caducidad</th><th class="derecha ajustado">Piezas</th><th class="ajustado"></th></tr></thead>
+                <tbody>
+                  <template x-for="l in producto.lotes" :key="l.id">
+                    <tr>
+                      <td class="nombre" x-text="textoLote(l)"></td>
+                      <td>
+                        <template x-if="l.caducidad">
+                          <span class="caducidad" :class="nivelCaducidad(diasDe(l.caducidad))">
+                            <strong x-text="mesAnio(l.caducidad)"></strong>
+                            <span x-text="textoDias(diasDe(l.caducidad))"></span>
+                          </span>
+                        </template>
+                        <span class="suave" x-show="!l.caducidad">—</span>
+                      </td>
+                      <td class="derecha"><strong x-text="cantidad(l.cantidad)"></strong></td>
+                      <td><button type="button" class="texto-peligro" @click="abrirVentana('merma', l)">Merma</button></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <p class="suave" style="padding: 12px 18px 18px; margin: 0" x-show="!producto.lotes.length">
+                No hay piezas registradas de este producto. Si hay en anaquel, usa <strong>Contar</strong>.
+              </p>
+            </div>
+
+            <!-- Movimientos -->
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <div class="paso" style="padding: 16px 18px 0">Movimientos de inventario</div>
+              <table class="tabla" x-show="movimientos.length">
+                <tbody>
+                  <template x-for="m in movimientos" :key="m.id">
+                    <tr>
+                      <td class="ajustado"><span class="etiqueta" :class="{ peligro: m.tipo === 'merma', verde: m.tipo === 'captura_caducidad' }" x-text="textoTipo(m.tipo)"></span></td>
+                      <td>
+                        <span x-text="m.motivo"></span>
+                        <div class="suave" style="font-size: 14px"
+                             x-text="`${fechaHora(m.created_at)} · ${m.usuario}` + (m.caducidad ? ` · cad. ${mesAnio(m.caducidad)}` : '') + (m.numero_lote ? ` · lote ${m.numero_lote}` : '')"></div>
+                      </td>
+                      <td class="derecha ajustado"><strong :class="Number(m.cantidad) < 0 ? 'diferencia-negativa' : 'diferencia-cero'" x-text="conSigno(m.cantidad)"></strong></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <p class="suave" style="padding: 12px 18px 18px; margin: 0" x-show="!movimientos.length">Sin movimientos todavía.</p>
+            </div>
+          </div>
+        </template>
+
+        <!-- ============ Sin producto: avance y por caducar ============ -->
+        <template x-if="!producto">
+          <div class="pila" style="gap: 16px">
+            <div class="pestanas">
+              <button type="button" :class="{ activa: pestana === 'avance' }" @click="pestana = 'avance'">
+                <svg class="ico"><use href="/static/iconos.svg#grafica"/></svg>Avance de caducidades
+              </button>
+              <button type="button" :class="{ activa: pestana === 'caducar' }" @click="pestana = 'caducar'">
+                <svg class="ico"><use href="/static/iconos.svg#reloj"/></svg>Por caducar
+                <span class="numero-aviso" x-show="urgentesPorCaducar" x-text="urgentesPorCaducar"
+                      title="Caducados o que caducan en menos de 3 meses"></span>
+              </button>
+            </div>
+
+            <!-- Avance -->
+            <template x-if="pestana === 'avance' && avance">
+              <div class="pila" style="gap: 16px">
+                <div class="panel">
+                  <div class="avance">
+                    <div class="porcentaje" x-text="`${Number(avance.porcentaje_capturado)}%`"></div>
+                    <div style="flex: 1">
+                      <strong>de las piezas ya tienen caducidad capturada</strong>
+                      <div class="barra-avance"><div :style="`width: ${Number(avance.porcentaje_capturado)}%`"></div></div>
+                      <p class="suave" style="margin: 0"
+                         x-text="`Faltan ${cantidad(avance.piezas_sin_caducidad)} de ${cantidad(avance.piezas_total)} piezas, en ${avance.productos_pendientes} productos. Se capturan al vender o aquí.`"></p>
+                    </div>
+                  </div>
+                </div>
+                <div class="panel" style="padding: 0; overflow: hidden" x-show="pendientes.length">
+                  <div class="paso" style="padding: 16px 18px 0">Pendientes (los de más piezas primero)</div>
+                  <table class="tabla">
+                    <tbody>
+                      <template x-for="p in pendientes" :key="p.producto_id">
+                        <tr class="clicable" @click="abrir(p.producto_id)">
+                          <td>
+                            <div class="nombre" x-text="p.nombre"></div>
+                            <div class="suave" style="font-size: 14px" x-text="p.clave || 'sin clave'"></div>
+                          </td>
+                          <td class="derecha ajustado"><strong x-text="piezas(p.piezas_sin_caducidad)"></strong></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                  <div class="centro" style="padding: 12px" x-show="pendientes.length < avance.productos_pendientes">
+                    <button type="button" @click="cargarMas()" :disabled="cargandoMas" x-text="cargandoMas ? 'Cargando…' : 'Ver más'"></button>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Por caducar -->
+            <template x-if="pestana === 'caducar'">
+              <div class="pila" style="gap: 16px">
+                <div class="fila" style="flex-wrap: wrap; justify-content: space-between">
+                  <p class="suave" style="margin: 0; flex: 1 1 320px">Los distribuidores suelen aceptar devoluciones con 3 a 6 meses de anticipación.</p>
+                  <div class="opciones meses" style="flex: 0 0 auto">
+                    <template x-for="m in [3, 6, 12]" :key="m">
+                      <button type="button" class="opcion" :class="{ activa: meses === m }" @click="cambiarMeses(m)" x-text="`${m} meses`"></button>
+                    </template>
+                  </div>
+                </div>
+                <div class="panel vacio-solicitudes" x-show="!porCaducar.length">
+                  <svg><use href="/static/iconos.svg#palomita"/></svg>
+                  <strong>Nada por caducar</strong>
+                  <span class="suave" x-text="`Ningún lote registrado caduca en los próximos ${meses} meses.`"></span>
+                </div>
+                <template x-for="g in gruposPorCaducar" :key="g.id">
+                  <div class="panel grupo-caducar" :class="g.id" style="padding: 0; overflow: hidden">
+                    <div class="paso" style="padding: 16px 18px 0" x-text="`${g.titulo} (${g.lotes.length})`"></div>
+                    <table class="tabla">
+                      <tbody>
+                        <template x-for="l in g.lotes" :key="l.lote_id">
+                          <tr>
+                            <td class="clicable" @click="abrir(l.producto_id)">
+                              <div class="nombre" x-text="l.nombre"></div>
+                              <div class="suave" style="font-size: 14px" x-text="(l.clave || 'sin clave') + (l.numero_lote ? ` · lote ${l.numero_lote}` : '')"></div>
+                            </td>
+                            <td class="ajustado">
+                              <span class="caducidad" :class="nivelCaducidad(l.dias)">
+                                <strong x-text="mesAnio(l.caducidad)"></strong><span x-text="textoDias(l.dias)"></span>
+                              </span>
+                            </td>
+                            <td class="derecha ajustado"><strong x-text="piezas(l.cantidad)"></strong></td>
+                            <td class="ajustado"><button type="button" class="texto-peligro" @click="bajaDeLote(l)">Dar de baja</button></td>
+                          </tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <!-- ============ Ventanas ============ -->
+  <div class="velo arriba" x-show="ventana" x-cloak @click.self="cerrarVentana()">
+
+    <!-- Capturar caducidad -->
+    <form class="panel ventana-inventario" x-show="ventana === 'capturar'" @submit.prevent="guardarCaptura()">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#reloj"/></svg></span>
+        <div><h2>Capturar caducidad</h2><p class="suave" x-text="producto && producto.nombre"></p></div>
+      </div>
+      <label for="captura-mes" style="margin-top: 0">Caducidad que trae la caja <span class="ayuda">(mes y año)</span></label>
+      <input id="captura-mes" type="month" x-model="captura.mes">
+      <div class="fila" style="align-items: flex-start">
+        <div>
+          <label for="captura-cantidad">¿Cuántas piezas?</label>
+          <input id="captura-cantidad" type="number" min="1" :max="producto && Number(producto.sin_caducidad)" step="1" x-model="captura.cantidad">
+          <p class="ayuda" style="margin: 4px 0 0" x-text="producto && `Hay ${cantidad(producto.sin_caducidad)} sin caducidad.`"></p>
+        </div>
+        <div>
+          <label for="captura-lote">Número de lote <span class="ayuda">(opcional)</span></label>
+          <input id="captura-lote" x-model="captura.lote" placeholder="Ej. B2304">
+        </div>
+      </div>
+      <div class="mensaje error" x-show="errorVentana"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorVentana"></span></div>
+      <div class="fila separado">
+        <button type="button" style="flex: 0 0 auto" @click="cerrarVentana()">Cancelar <kbd>Esc</kbd></button>
+        <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar caducidad'"></button>
+      </div>
+    </form>
+
+    <!-- Contar -->
+    <form class="panel ventana-inventario" x-show="ventana === 'contar'" @submit.prevent="guardarConteo()">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#paquete"/></svg></span>
+        <div><h2>Contar</h2><p class="suave" x-text="producto && producto.nombre"></p></div>
+      </div>
+      <label for="conteo-total" style="margin-top: 0">¿Cuántas hay en total en anaquel y bodega?</label>
+      <input id="conteo-total" class="numero-grande" type="number" min="0" step="1" x-model="conteo" placeholder="0">
+      <p class="ayuda" x-text="producto && `Hoy el sistema dice ${cantidad(producto.existencia_registrada)}. Se respetan las caducidades capturadas mientras alcance.`"></p>
+      <div class="mensaje error" x-show="errorVentana"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorVentana"></span></div>
+      <div class="fila separado">
+        <button type="button" style="flex: 0 0 auto" @click="cerrarVentana()">Cancelar <kbd>Esc</kbd></button>
+        <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar conteo'"></button>
+      </div>
+    </form>
+
+    <!-- Merma -->
+    <form class="panel ventana-inventario" x-show="ventana === 'merma'" @submit.prevent="guardarMerma()">
+      <div class="encabezado">
+        <span class="circulo peligro"><svg><use href="/static/iconos.svg#basura"/></svg></span>
+        <div><h2>Merma</h2><p class="suave" x-text="producto && producto.nombre"></p></div>
+      </div>
+      <div class="paso">¿De qué lote?</div>
+      <div class="pila" style="gap: 6px">
+        <template x-for="l in (producto ? producto.lotes : [])" :key="l.id">
+          <button type="button" class="opcion lote-opcion" :class="{ activa: merma.loteId === l.id }" @click="merma.loteId = l.id">
+            <span x-text="textoLote(l) + (l.caducidad ? ` · cad. ${mesAnio(l.caducidad)}` : '')"></span>
+            <strong x-text="piezas(l.cantidad)"></strong>
+          </button>
+        </template>
+      </div>
+      <label for="merma-cantidad">¿Cuántas piezas salen?</label>
+      <input id="merma-cantidad" class="numero-grande" type="number" min="1" step="1" x-model="merma.cantidad">
+      <div class="paso separado" style="margin-top: 16px">¿Por qué?</div>
+      <div class="chips">
+        <template x-for="m in motivosMerma" :key="m">
+          <button type="button" class="opcion" :class="{ activa: merma.motivo === m }" @click="merma.motivo = m" x-text="m"></button>
+        </template>
+        <button type="button" class="opcion" :class="{ activa: merma.motivo === 'otro' }"
+                @click="merma.motivo = 'otro'; $nextTick(() => document.getElementById('merma-otro').focus())">Otro</button>
+      </div>
+      <input id="merma-otro" x-show="merma.motivo === 'otro'" x-model="merma.otro" placeholder="Escribe el motivo" style="margin-top: 10px">
+      <div class="mensaje error" x-show="errorVentana"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorVentana"></span></div>
+      <div class="fila separado">
+        <button type="button" style="flex: 0 0 auto" @click="cerrarVentana()">Cancelar <kbd>Esc</kbd></button>
+        <button class="peligro grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Sacar del inventario'"></button>
+      </div>
+    </form>
+  </div>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>
