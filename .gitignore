@@ -8,3 +8,6 @@ venv/
 .vscode/
 .idea/
 *.log
+
+# Datos reales del negocio (exportaciones de PVWin, respaldos). Nunca a GitHub.
+datos/

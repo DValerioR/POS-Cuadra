@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, UniqueConstraint, false, func
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -23,8 +23,9 @@ class Producto(Base):
     requiere_receta: Mapped[bool] = mapped_column(default=False)
     # Puede faltar: el catálogo de PVWin no trae precio de venta.
     precio_venta: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
-    # Costo sin impuestos, por unidad de compra.
-    costo: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
+    # Costo sin impuestos, por unidad de compra. Con 4 decimales porque los
+    # proveedores manejan costos como 196.668.
+    costo: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), default=None)
     # Precio máximo al público impreso en caja (medicamentos de patente).
     # Si el margen calculado da un precio mayor, se usa este y el sistema avisa.
     precio_maximo_publico: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
@@ -43,3 +44,9 @@ class Producto(Base):
     motivo_revision: Mapped[str | None] = mapped_column(default=None)
     activo: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# Búsqueda por clave ignorando ceros a la izquierda: Excel se come el 0 inicial
+# de muchos códigos de barras al exportar de PVWin ("013117000894" quedó como
+# "13117000894"), así que se compara sin ceros de ambos lados.
+Index("ix_productos_clave_sin_ceros", func.ltrim(Producto.clave, "0"))

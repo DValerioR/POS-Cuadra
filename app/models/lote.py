@@ -27,5 +27,5 @@ class Lote(Base):
     numero_lote: Mapped[str | None] = mapped_column(default=None)
     caducidad: Mapped[date | None] = mapped_column(Date, default=None)
     cantidad: Mapped[Decimal] = mapped_column(Numeric(10, 2))
-    costo_unitario: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
+    costo_unitario: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

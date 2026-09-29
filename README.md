@@ -70,15 +70,34 @@ alembic/      migraciones de base de datos
 
 - `GET/PUT /negocios/{id}` — configuración del negocio.
 - `GET/POST /categorias`, `GET/PUT/DELETE /categorias/{id}`
-- `GET/POST /productos` (con búsqueda `?q=` por nombre parcial o clave exacta), `GET/PUT/DELETE /productos/{id}`
+- `GET/POST /productos` (con búsqueda `?q=` por nombre parcial o clave; la
+  clave se compara sin ceros a la izquierda), `GET/PUT/DELETE /productos/{id}`
   — "eliminar" un producto lo desactiva (`activo=false`), no lo borra. Al
   guardar, el precio de venta se redondea según la configuración del negocio.
 - Todos requieren `negocio_id` (todavía sin auth, así que se manda explícito).
 
+## Scripts
+
+Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
+
+- Crear un usuario (pide la contraseña sin mostrarla):
+  ```
+  python -m app.scripts.crear_usuario --negocio 1 --usuario diego --nombre "Diego Valerio" --rol admin
+  ```
+- Importar catálogo y existencias de PVWin (reglas en `CONTEXTO.md`,
+  "Importación desde PVWin"):
+  ```
+  python -m app.scripts.importar_pvwin --negocio 1 --usuario diego --catalogo "datos/Catalogo de articulos.xlsx" --inventario "datos/Reporte de inventario.xlsx" --simular
+  ```
+  `--simular` no guarda nada, solo genera el reporte. Quitarlo para guardar.
+  `--reemplazar` borra productos, lotes y ajustes del negocio e importa de
+  nuevo (solo antes de tener ventas reales; las categorías se conservan).
+  Cada corrida deja un reporte Excel en `datos/` con lo que hizo, los
+  productos a revisar y la lista de negativos para conteo físico.
+
 ## Pendiente para completar la etapa 1
 
-- Importador del Excel de PVWin — las reglas ya están en `CONTEXTO.md`
-  ("Importación desde PVWin"); faltan los archivos para probarlo.
+- Reimportar cuando llegue el catálogo completo A-Z (el actual se cortó en la D).
 - Autenticación (login) y aplicación de permisos por rol en los endpoints.
 - CRUD de inventario (lotes/caducidades) — el catálogo (categorías/productos)
   ya está.

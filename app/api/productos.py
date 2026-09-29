@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,11 @@ def listar_productos(negocio_id: int, q: str | None = None, db: Session = Depend
     stmt = select(Producto).where(Producto.negocio_id == negocio_id)
     if q:
         # Por nombre parcial, o por clave exacta (lo que manda el escáner).
-        stmt = stmt.where(or_(Producto.nombre.ilike(f"%{q}%"), Producto.clave == q))
+        # La clave se compara sin ceros a la izquierda: ver ix_productos_clave_sin_ceros.
+        condiciones = [Producto.nombre.ilike(f"%{q}%"), Producto.clave == q]
+        if q.lstrip("0"):
+            condiciones.append(func.ltrim(Producto.clave, "0") == q.lstrip("0"))
+        stmt = stmt.where(or_(*condiciones))
     return db.scalars(stmt).all()
 
 

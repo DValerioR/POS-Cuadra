@@ -122,7 +122,9 @@ La primera etapa es la estructura del proyecto, el modelo de datos, usuarios y p
 
 ## Estado actual
 
-De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la conexión a PostgreSQL con Alembic, el endpoint `/health`, las tablas `negocios`, `usuarios`, `categorias`, `productos` y `lotes` con `negocio_id` en todas, y el CRUD de categorías y productos con búsqueda y borrado lógico. Falta para cerrar la etapa 1 el importador de PVWin descrito arriba, la autenticación con permisos por rol, el CRUD de inventario por lotes, y ajustar el modelo para el factor de conversión de productos fraccionados y el control de lote configurable por categoría.
+De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la conexión a PostgreSQL con Alembic, el endpoint `/health`, las tablas `negocios`, `usuarios`, `categorias`, `productos`, `lotes` y `ajustes_inventario` con `negocio_id` en todas, el factor de conversión para productos a granel, el control de lote configurable por categoría, el redondeo de precio de venta por negocio, el CRUD de categorías y productos con búsqueda y borrado lógico, el script para crear usuarios y el importador de PVWin descrito arriba. Falta para cerrar la etapa 1 la autenticación con permisos por rol y el CRUD de inventario por lotes.
+
+Decisiones del importador ya tomadas: cada departamento de PVWin se vuelve una categoría "Depto N" que se renombra después (la categoría recuerda su número de PVWin, así que reimportar no pierde el nombre ni el margen); los códigos de barras que perdieron el cero inicial al pasar por Excel se guardan tal cual y la búsqueda por clave ignora los ceros a la izquierda; dos productos se consideran el mismo si comparten clave y su descripción coincide ignorando espacios y signos (así se fusionan los dos ZIVATA), y una clave usada por productos distintos (como "0" y "1") se quita y el producto queda marcado para asignarle clave nueva; volver a importar se hace con `--reemplazar`, que borra productos, lotes y ajustes, y solo se usa antes de tener ventas reales.
 
 ## Datos pendientes
 
