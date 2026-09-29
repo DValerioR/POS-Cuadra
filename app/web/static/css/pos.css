@@ -1,0 +1,220 @@
+/* Estilos del POS: pensado para mostrador (letra grande, alto contraste,
+   botones grandes, todo a la vista sin desplazarse). */
+
+:root {
+  --fondo: #f3f5f7;
+  --panel: #ffffff;
+  --texto: #1d2730;
+  --texto-suave: #5b6873;
+  --borde: #d5dce2;
+  --primario: #0f6e5c;      /* verde farmacia */
+  --primario-hover: #0b574a;
+  --primario-suave: #e2f2ee;
+  --peligro: #b3261e;
+  --peligro-suave: #fbe9e7;
+  --aviso: #8a5a00;
+  --aviso-suave: #fff4d6;
+  --radio: 10px;
+  --sombra: 0 1px 3px rgba(20, 30, 40, 0.08);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 16px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+[x-cloak] { display: none !important; }
+
+/* --- Barra superior -------------------------------------------------- */
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 20px;
+  background: var(--primario);
+  color: #fff;
+}
+.barra .marca { font-weight: 700; font-size: 18px; }
+.barra nav { display: flex; gap: 4px; }
+.barra nav a {
+  color: #fff;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  opacity: 0.85;
+}
+.barra nav a:hover, .barra nav a.activo { background: rgba(255, 255, 255, 0.18); opacity: 1; }
+.barra .usuario { margin-left: auto; font-size: 14px; opacity: 0.95; }
+.barra button { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; padding: 5px 12px; }
+.barra button:hover { background: rgba(255,255,255,.15); }
+
+/* --- Controles ------------------------------------------------------- */
+
+button {
+  font: inherit;
+  border: 1px solid var(--borde);
+  background: var(--panel);
+  color: var(--texto);
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+button:hover { background: #eef1f4; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primario { background: var(--primario); border-color: var(--primario); color: #fff; font-weight: 600; }
+button.primario:hover:not(:disabled) { background: var(--primario-hover); }
+button.grande { font-size: 20px; padding: 14px 20px; width: 100%; }
+button.icono { padding: 4px 10px; }
+
+input, select, textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--texto);
+  width: 100%;
+}
+input:focus, select:focus, textarea:focus, button:focus-visible {
+  outline: 3px solid rgba(15, 110, 92, 0.35);
+  outline-offset: 1px;
+  border-color: var(--primario);
+}
+label { display: block; font-size: 14px; color: var(--texto-suave); margin: 10px 0 4px; }
+
+/* --- Estructura ------------------------------------------------------- */
+
+.contenido { padding: 16px 20px; }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  padding: 16px;
+}
+.centrado { max-width: 420px; margin: 40px auto; }
+h1, h2, h3 { margin: 0 0 12px; }
+h2 { font-size: 20px; }
+.suave { color: var(--texto-suave); }
+.derecha { text-align: right; }
+.fila { display: flex; gap: 10px; align-items: center; }
+.fila > * { flex: 1; }
+
+.mensaje { padding: 10px 14px; border-radius: 8px; margin: 10px 0; }
+.mensaje.error { background: var(--peligro-suave); color: var(--peligro); }
+.mensaje.aviso { background: var(--aviso-suave); color: var(--aviso); }
+.mensaje.ok { background: var(--primario-suave); color: var(--primario); }
+
+.etiqueta {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--aviso-suave);
+  color: var(--aviso);
+  vertical-align: middle;
+}
+.etiqueta.peligro { background: var(--peligro-suave); color: var(--peligro); }
+
+/* --- Pantalla de venta ------------------------------------------------ */
+
+.venta {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+  height: calc(100vh - 54px);
+  padding: 16px 20px;
+}
+.venta .izquierda { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+
+.buscador { position: relative; }
+.buscador input { font-size: 22px; padding: 12px 14px; }
+.resultados {
+  position: absolute;
+  z-index: 10;
+  left: 0; right: 0; top: 100%;
+  margin-top: 4px;
+  background: #fff;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: 0 8px 24px rgba(20, 30, 40, 0.15);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.resultado {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #eef1f4;
+}
+.resultado.elegido, .resultado:hover { background: var(--primario-suave); }
+.resultado .precio { font-weight: 600; white-space: nowrap; }
+
+.carrito { flex: 1; overflow-y: auto; padding: 0; }
+.carrito table { width: 100%; border-collapse: collapse; }
+.carrito th {
+  position: sticky; top: 0;
+  background: #f8fafb;
+  text-align: left;
+  font-size: 13px;
+  color: var(--texto-suave);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--borde);
+}
+.carrito td { padding: 10px 12px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+.carrito .nombre { font-weight: 600; }
+.carrito .lote { font-size: 14px; color: var(--primario); margin-top: 4px; }
+.carrito .lote select, .carrito .lote input { width: auto; padding: 4px 8px; font-size: 14px; }
+.carrito input.cant { width: 70px; text-align: center; }
+.carrito .vacio { text-align: center; color: var(--texto-suave); padding: 60px 20px; }
+
+.cobro { display: flex; flex-direction: column; gap: 12px; }
+.total {
+  font-size: 44px;
+  font-weight: 700;
+  text-align: right;
+  letter-spacing: -1px;
+}
+.renglon-dinero { display: flex; justify-content: space-between; font-size: 18px; padding: 2px 0; }
+.renglon-dinero.grande { font-size: 26px; font-weight: 700; }
+.renglon-dinero.falta { color: var(--peligro); }
+.renglon-dinero.cambio { color: var(--primario); }
+.cobro input { font-size: 22px; text-align: right; }
+.atajos { font-size: 12px; color: var(--texto-suave); text-align: center; }
+
+/* --- Ventana del resultado de la venta -------------------------------- */
+
+.velo {
+  position: fixed; inset: 0;
+  background: rgba(20, 30, 40, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 50;
+}
+.ventana { width: min(460px, 92vw); text-align: center; }
+.ventana .cambio-grande { font-size: 56px; font-weight: 700; color: var(--primario); }
+
+/* --- Corte de caja ----------------------------------------------------- */
+
+.corte { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.corte table { width: 100%; border-collapse: collapse; }
+.corte td { padding: 6px 0; }
+.corte td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.corte tr.total-fila td { border-top: 2px solid var(--borde); font-weight: 700; font-size: 18px; padding-top: 10px; }
+.diferencia-negativa { color: var(--peligro); font-weight: 700; }
+.diferencia-positiva { color: var(--aviso); font-weight: 700; }
+.diferencia-cero { color: var(--primario); font-weight: 700; }
+
+@media (max-width: 900px) {
+  .venta { grid-template-columns: 1fr; height: auto; }
+}

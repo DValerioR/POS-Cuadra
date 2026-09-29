@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Turno y corte · POS</title>
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaTurno()">
+
+  <header class="barra">
+    <span class="marca">Farmacia</span>
+    <nav>
+      <a href="/venta">Venta</a>
+      <a href="/turno" class="activo">Turno y corte</a>
+    </nav>
+    <span class="usuario" x-show="usuario" x-cloak x-text="usuario?.nombre_completo"></span>
+    <button onclick="cerrarSesion()">Salir</button>
+  </header>
+
+  <main class="contenido corte" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error" x-text="error"></div>
+
+    <template x-if="!cajaId">
+      <div class="panel">
+        <p>Esta computadora todavía no tiene caja asignada. Entra a <a href="/venta">Venta</a> para elegirla.</p>
+      </div>
+    </template>
+
+    <!-- Turno cerrado: resultado del corte -->
+    <template x-if="cerrado">
+      <div class="panel">
+        <h2>Turno cerrado</h2>
+        <table>
+          <tr><td>Efectivo esperado</td><td x-text="dinero(cerrado.efectivo_esperado)"></td></tr>
+          <tr><td>Efectivo contado</td><td x-text="dinero(cerrado.efectivo_contado)"></td></tr>
+          <tr class="total-fila"><td>Diferencia en efectivo</td><td :class="claseDiferencia(cerrado.diferencia_efectivo)" x-text="textoDiferencia(cerrado.diferencia_efectivo)"></td></tr>
+          <tr><td>Tarjeta esperada</td><td x-text="dinero(cerrado.tarjeta_esperado)"></td></tr>
+          <tr><td>Tarjeta contada</td><td x-text="dinero(cerrado.tarjeta_contado)"></td></tr>
+          <tr class="total-fila"><td>Diferencia en tarjeta</td><td :class="claseDiferencia(cerrado.diferencia_tarjeta)" x-text="textoDiferencia(cerrado.diferencia_tarjeta)"></td></tr>
+        </table>
+        <p><a href="/venta"><button class="primario grande">Abrir el siguiente turno</button></a></p>
+      </div>
+    </template>
+
+    <template x-if="cajaId && !turno && !cerrado">
+      <div class="panel">
+        <p>La caja <strong x-text="cajaNombre"></strong> no tiene turno abierto.</p>
+        <p><a href="/venta"><button class="primario">Ir a abrir turno</button></a></p>
+      </div>
+    </template>
+
+    <!-- Turno abierto: corte -->
+    <template x-if="turno && corte">
+      <div class="panel">
+        <h2>Corte de caja · <span x-text="cajaNombre"></span></h2>
+        <p class="suave">
+          Turno de la <span x-text="turno.tipo === 'manana' ? 'mañana' : 'tarde'"></span>,
+          abierto el <span x-text="new Date(turno.abierto_en).toLocaleString('es-MX')"></span>
+        </p>
+        <table>
+          <tr><td>Fondo inicial</td><td x-text="dinero(corte.fondo_inicial)"></td></tr>
+          <tr><td>Ventas en efectivo</td><td x-text="dinero(corte.ventas_efectivo)"></td></tr>
+          <tr x-show="Number(corte.reembolsos_efectivo)"><td>Devoluciones en efectivo</td><td x-text="'−' + dinero(corte.reembolsos_efectivo)"></td></tr>
+          <tr class="total-fila"><td>Efectivo esperado en caja</td><td x-text="dinero(corte.efectivo_esperado)"></td></tr>
+          <tr><td>Ventas con tarjeta</td><td x-text="dinero(corte.ventas_tarjeta)"></td></tr>
+          <tr x-show="Number(corte.reembolsos_tarjeta)"><td>Devoluciones a tarjeta</td><td x-text="'−' + dinero(corte.reembolsos_tarjeta)"></td></tr>
+          <tr class="total-fila"><td>Tarjeta esperada</td><td x-text="dinero(corte.tarjeta_esperado)"></td></tr>
+        </table>
+
+        <form @submit.prevent="cerrar">
+          <h3 style="margin-top: 20px">Lo que contaste</h3>
+          <div class="fila">
+            <div>
+              <label>Efectivo en caja</label>
+              <input type="number" min="0" step="0.50" x-model="contado.efectivo" required>
+            </div>
+            <div>
+              <label>Total de vouchers de tarjeta</label>
+              <input type="number" min="0" step="0.01" x-model="contado.tarjeta" required>
+            </div>
+          </div>
+          <label>Notas (opcional)</label>
+          <textarea rows="2" x-model="contado.notas" placeholder="Ej. faltó un billete de $20"></textarea>
+          <p x-show="contado.efectivo !== ''">
+            Diferencia en efectivo:
+            <strong :class="claseDiferencia(diferenciaPrevia)" x-text="textoDiferencia(diferenciaPrevia)"></strong>
+          </p>
+          <p><button class="primario grande" :disabled="cerrando">Cerrar turno</button></p>
+        </form>
+      </div>
+    </template>
+  </main>
+
+  <script>
+    function pantallaTurno() {
+      return {
+        usuario: null,
+        cajaId: CajaLocal.obtener(),
+        cajas: [],
+        turno: null,
+        corte: null,
+        cerrado: null,
+        contado: { efectivo: "", tarjeta: "", notas: "" },
+        cargando: true,
+        cerrando: false,
+        error: "",
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            this.cajas = await API.get("/cajas");
+            if (this.cajaId) {
+              this.turno = await API.get(`/turnos/abierto?caja_id=${this.cajaId}`);
+              if (this.turno) this.corte = await API.get(`/turnos/${this.turno.id}/corte`);
+            }
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+
+        get cajaNombre() {
+          const caja = this.cajas.find((c) => c.id === this.cajaId);
+          return caja ? caja.nombre : "";
+        },
+        get diferenciaPrevia() {
+          return (centavos(this.contado.efectivo) - centavos(this.corte.efectivo_esperado)) / 100;
+        },
+
+        claseDiferencia(valor) {
+          const n = Number(valor);
+          return n < 0 ? "diferencia-negativa" : n > 0 ? "diferencia-positiva" : "diferencia-cero";
+        },
+        textoDiferencia(valor) {
+          const n = Number(valor);
+          if (n === 0) return "Cuadra exacto";
+          return n < 0 ? `Faltan ${dinero(-n)}` : `Sobran ${dinero(n)}`;
+        },
+
+        async cerrar() {
+          if (!confirm("¿Cerrar el turno? Después ya no se pueden cobrar ventas en él.")) return;
+          this.cerrando = true;
+          this.error = "";
+          try {
+            this.cerrado = await API.post(`/turnos/${this.turno.id}/cerrar`, {
+              efectivo_contado: this.contado.efectivo || "0",
+              tarjeta_contado: this.contado.tarjeta || "0",
+              notas: this.contado.notas || null,
+            });
+            this.turno = null;
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cerrando = false;
+          }
+        },
+
+        dinero,
+      };
+    }
+  </script>
+</body>
+</html>

@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     cookie_segura: bool = False
     # Para mostrar fechas (tickets, reportes); en la base todo se guarda en UTC.
     zona_horaria: str = "America/Mexico_City"
+    # Negocio que usa la pantalla de inicio de sesión cuando no se indica otro
+    # (en la farmacia hay uno solo).
+    negocio_predeterminado: int = 1
 
 
 settings = Settings()

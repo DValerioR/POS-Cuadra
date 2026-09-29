@@ -19,7 +19,7 @@ _HASH_FALSO = hashear_password("no-es-una-contraseña")
 
 
 class LoginIn(BaseModel):
-    negocio_id: int
+    negocio_id: int | None = None  # sin él, el negocio predeterminado de la configuración
     usuario: str
     password: str
 
@@ -48,8 +48,9 @@ def _usuario_out(u: Usuario) -> UsuarioOut:
 
 @router.post("/login", response_model=LoginOut)
 def login(datos: LoginIn, response: Response, db: Session = Depends(get_db)):
+    negocio_id = datos.negocio_id or settings.negocio_predeterminado
     usuario = db.scalar(
-        select(Usuario).where(Usuario.negocio_id == datos.negocio_id, Usuario.nombre_usuario == datos.usuario)
+        select(Usuario).where(Usuario.negocio_id == negocio_id, Usuario.nombre_usuario == datos.usuario.strip())
     )
     password_ok = verificar_password(datos.password, usuario.password_hash if usuario else _HASH_FALSO)
     if usuario is None or not password_ok or not usuario.activo:

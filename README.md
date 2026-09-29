@@ -175,6 +175,28 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   necesita texto, corte y cajón). Acentos con la tabla PC850.
 - Agente para impresoras USB: `agente_impresion/` (ver su `LEEME.md`).
 
+## Pantallas
+
+HTML + Alpine.js servidos por el mismo FastAPI (`app/web/`), sin Node.js ni
+compilación; Alpine.js está guardado en `app/web/static/vendor/` para que
+funcione sin internet.
+
+- `/login` — inicio de sesión (usa el negocio predeterminado, `NEGOCIO_PREDETERMINADO` en `.env`).
+- `/venta` — venta en mostrador. La primera vez pregunta qué caja es la
+  computadora (se recuerda en el navegador) y pide abrir turno si no hay.
+  Buscar o escanear (F2), flechas + Enter para agregar, lote sugerido por
+  FEFO con opción de elegir el lote entregado, caducidad opcional para
+  piezas sin caducidad, aviso de receta, cobro en efectivo/tarjeta/mixto con
+  cambio en vivo (F12), y reintento de impresión si el ticket falla.
+- `/turno` — corte de caja: lo esperado, captura de lo contado con la
+  diferencia en vivo, y cierre.
+
+En cada computadora de mostrador: acceso directo a
+`chrome.exe --app=http://IP-DEL-SERVIDOR:8000/venta`.
+
+Para ver las pantallas sin tocar datos reales: `python -m app.scripts.servidor_demo`
+(http://127.0.0.1:8001, usuario `demo` / `demo1234`, sobre la base de pruebas).
+
 ## Pruebas automáticas
 
 ```

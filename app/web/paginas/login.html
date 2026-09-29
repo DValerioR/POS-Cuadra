@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión · POS</title>
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body>
+  <div class="centrado panel" x-data="pantallaLogin()">
+    <h1>Farmacia</h1>
+    <p class="suave">Inicia sesión con tu usuario.</p>
+    <form @submit.prevent="entrar">
+      <label for="usuario">Usuario</label>
+      <input id="usuario" x-model="usuario" autocomplete="username" autofocus required>
+      <label for="password">Contraseña</label>
+      <input id="password" type="password" x-model="password" autocomplete="current-password" required>
+      <div class="mensaje error" x-show="error" x-text="error" x-cloak></div>
+      <p><button class="primario grande" :disabled="enviando">Entrar</button></p>
+    </form>
+  </div>
+
+  <script>
+    function pantallaLogin() {
+      return {
+        usuario: "",
+        password: "",
+        error: "",
+        enviando: false,
+        async entrar() {
+          this.error = "";
+          this.enviando = true;
+          try {
+            await API.post("/auth/login", { usuario: this.usuario, password: this.password });
+            const volver = new URLSearchParams(location.search).get("volver");
+            // Solo rutas internas, para no redirigir a otro sitio.
+            location.href = volver && volver.startsWith("/") && !volver.startsWith("//") ? volver : "/venta";
+          } catch (e) {
+            this.error = e.message;
+            this.password = "";
+          } finally {
+            this.enviando = false;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

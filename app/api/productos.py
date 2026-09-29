@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -16,19 +16,27 @@ router = APIRouter(prefix="/productos", tags=["productos"])
 def listar_productos(
     q: str | None = None,
     solo_revision: bool = False,
+    solo_activos: bool = False,
     limite: int = Query(50, le=500),
     desplazamiento: int = 0,
     usuario: Usuario = Depends(usuario_actual),
     db: Session = Depends(get_db),
 ):
     stmt = select(Producto).where(Producto.negocio_id == usuario.negocio_id)
-    if q:
-        # Por nombre parcial, o por clave exacta (lo que manda el escáner).
-        # La clave se compara sin ceros a la izquierda: ver ix_productos_clave_sin_ceros.
-        condiciones = [Producto.nombre.ilike(f"%{q}%"), Producto.clave == q]
+    if q := (q or "").strip():
+        # Por nombre: cada palabra en cualquier parte, sin importar acentos ni
+        # mayúsculas ("amox 500" encuentra "AMOXICILINA 500MG").
+        por_nombre = and_(*(
+            func.unaccent(Producto.nombre).ilike(func.unaccent(f"%{palabra}%")) for palabra in q.split()
+        ))
+        # O por clave exacta (lo que manda el escáner), sin ceros a la
+        # izquierda: ver ix_productos_clave_sin_ceros.
+        condiciones = [por_nombre, Producto.clave == q]
         if q.lstrip("0"):
             condiciones.append(func.ltrim(Producto.clave, "0") == q.lstrip("0"))
         stmt = stmt.where(or_(*condiciones))
+    if solo_activos:
+        stmt = stmt.where(Producto.activo.is_(True))
     if solo_revision:
         stmt = stmt.where(Producto.requiere_revision.is_(True))
     stmt = stmt.order_by(Producto.nombre, Producto.id).limit(limite).offset(desplazamiento)

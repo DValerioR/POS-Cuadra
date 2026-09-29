@@ -62,7 +62,7 @@ def agente(tmp_path):
     archivo = tmp_path / "ticket.bin"
     a = Agente(token="secreto", archivo=archivo)
     servidor = a.crear_servidor("127.0.0.1", 0)
-    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    threading.Thread(target=servidor.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True).start()
     yield f"http://127.0.0.1:{servidor.server_address[1]}", archivo
     servidor.shutdown()
 

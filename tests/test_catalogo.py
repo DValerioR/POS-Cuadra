@@ -165,3 +165,18 @@ def test_no_se_asigna_categoria_de_otro_negocio(como_admin, db, producto, otro_n
     db.add(ajena)
     db.commit()
     assert como_admin.put(f"/productos/{producto.id}", json={"categoria_id": ajena.id}).status_code == 404
+
+
+def test_busqueda_sin_acentos_y_por_palabras(como_admin, db, negocio):
+    p = Producto(negocio_id=negocio.id, nombre="ÁCIDO FÓLICO 5MG C/20")
+    db.add(p)
+    db.commit()
+    for q in ("acido folico", "ACIDO", "folico 5mg", "ácido c/20"):
+        assert [x["id"] for x in como_admin.get("/productos", params={"q": q}).json()] == [p.id], q
+    assert como_admin.get("/productos", params={"q": "acido 10mg"}).json() == []
+
+
+def test_solo_activos(como_admin, db, negocio):
+    db.add_all([Producto(negocio_id=negocio.id, nombre="ACTIVO"), Producto(negocio_id=negocio.id, nombre="VIEJO", activo=False)])
+    db.commit()
+    assert [p["nombre"] for p in como_admin.get("/productos", params={"solo_activos": True}).json()] == ["ACTIVO"]
