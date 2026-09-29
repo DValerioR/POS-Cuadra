@@ -248,8 +248,15 @@ Todas las pantallas llevan la barra superior con "Inicio" y se probaron a
 desplazamiento a los lados y con la acción principal (Cobrar, Cerrar turno)
 siempre a la vista.
 
-En cada computadora de mostrador: acceso directo a
-`chrome.exe --app=http://IP-DEL-SERVIDOR:8000/`.
+En cada computadora: acceso directo "Cuadra" en el escritorio, que abre
+`chrome.exe --app=http://IP-DEL-SERVIDOR:8000/` (Chrome como aplicación, sin
+barra de direcciones) con el ícono de Cuadra. Se crea con:
+```
+powershell -ExecutionPolicy Bypass -File acceso_directo\crear_acceso_directo.ps1 -Servidor http://IP-DEL-SERVIDOR:8000
+```
+El ícono (`app/web/static/app/`, también en `/favicon.ico` y en el manifiesto
+de la app) sale de `docs/referencia/icono.png`; si cambia la imagen, se
+regenera con `acceso_directo/generar_iconos.py` (necesita `pip install pillow`).
 
 Para ver las pantallas sin tocar datos reales: `python -m app.scripts.servidor_demo`
 (http://127.0.0.1:8001, administrador `demo` / `demo1234` y mostrador

@@ -32,6 +32,8 @@ Ya está hecho (29/09/2026). Al abrir la dirección del servidor (`/`), al inici
 
 Lo que se quería: que el programa NO empiece en la caja, sino en una pantalla de inicio o "núcleo" desde donde se entra a todas las funciones del sistema. El flujo es: acceso directo de Chrome en modo aplicación → inicio de sesión → núcleo → la función elegida, y desde cualquier pantalla se regresa al núcleo.
 
+Ícono del acceso directo (29/09/2026): el logo de Cuadra, `docs/referencia/icono.png`. Ya está en todas las pantallas (pestaña, manifiesto) y hay un script que crea el acceso directo con ese ícono (ver README.md, "Pantallas"); falta correrlo en las computadoras de la farmacia.
+
 Referencia visual: en `docs/referencia/` hay dos fotos de la pantalla principal de PVWin, el sistema que usa hoy la farmacia (una a pantalla completa y otra en ventana sin maximizar, que es como se usa normalmente). Revísalas antes de diseñar. El núcleo nuevo sigue la misma estructura, que el personal ya conoce, pero con el estilo visual actual del proyecto (`pos.css`, `iconos.svg`, barra común de `api.js`).
 
 Diseño decidido del núcleo, de arriba a abajo:

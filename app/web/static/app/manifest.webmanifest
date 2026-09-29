@@ -1,0 +1,16 @@
+{
+  "name": "Cuadra",
+  "short_name": "Cuadra",
+  "description": "Punto de venta",
+  "lang": "es-MX",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0e121c",
+  "theme_color": "#0a4d40",
+  "icons": [
+    { "src": "/static/app/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/static/app/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/static/app/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
