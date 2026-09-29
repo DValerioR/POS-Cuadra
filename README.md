@@ -110,6 +110,28 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     cuya categoría controla lote.
   - La lógica vive en `app/services/inventario.py` (las ventas usarán `lotes_fefo`).
 
+## Pruebas automáticas
+
+```
+pytest
+```
+
+Corre todas las pruebas (~90, unos 12 segundos). Antes de cada commit
+deben pasar todas.
+
+- Usan una base de datos aparte: la de `.env` con `_test` al final (`pos_test`).
+  Se crea sola; tu usuario de PostgreSQL necesita permiso para crear bases.
+  Hay un candado que impide correrlas contra una base que no termine en `_test`.
+- Al empezar, `pos_test` se reconstruye con las migraciones de Alembic, y
+  una prueba verifica que los modelos coincidan con las migraciones (si
+  cambias un modelo y olvidas `alembic revision --autogenerate`, falla).
+- Cada prueba corre en una transacción que se deshace al final: no se
+  estorban entre sí y nunca tocan los datos reales.
+- El importador se prueba con Excel pequeños generados al vuelo con el
+  formato de PVWin (los archivos reales de `datos/` no están en git).
+- Útiles: `pytest tests/test_inventario.py` (un archivo), `pytest -k merma`
+  (por nombre), `pytest -x` (detenerse en el primer fallo).
+
 ## Scripts
 
 Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
