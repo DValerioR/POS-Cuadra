@@ -129,6 +129,38 @@
     </div>
   </div>
 
+  <!-- Asistente de IA: clave de la API de Claude (solo administrador) -->
+  <div class="velo" x-show="ventana === 'ia'" x-cloak @click.self="cerrarVentana()">
+    <form class="panel ventana-texto" @submit.prevent="guardarClaveIa()">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#chispa"/></svg></span>
+        <div><h2>Asistente de IA</h2><p class="suave">Lee facturas en PDF o foto al dar entrada a la mercancía.</p></div>
+      </div>
+      <template x-if="ia">
+        <div class="mensaje" :class="ia.configurada ? 'ok' : 'aviso'" style="margin-top: 0">
+          <svg class="ico"><use :href="'/static/iconos.svg#' + (ia.configurada ? 'palomita' : 'alerta')"/></svg>
+          <span x-text="ia.configurada ? `Clave guardada (termina en …${ia.termina_en}).` : 'Todavía no hay clave: la lectura con IA está desactivada. El XML y la captura manual funcionan igual.'"></span>
+        </div>
+      </template>
+      <label for="clave-ia" style="margin-top: 0" x-text="ia && ia.configurada ? 'Cambiar por otra clave' : 'Clave de la API de Claude'"></label>
+      <input id="clave-ia" type="password" x-model="claveIa" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+      <p class="ayuda">Se saca en console.anthropic.com (API Keys). Se cobra por uso: unos centavos por factura. El servidor necesita internet para usarla. Se guarda en el archivo .env del servidor y no se vuelve a mostrar.</p>
+      <div class="mensaje" :class="pruebaIa.ok ? 'ok' : 'error'" x-show="pruebaIa" x-cloak>
+        <svg class="ico"><use :href="'/static/iconos.svg#' + (pruebaIa && pruebaIa.ok ? 'palomita' : 'alerta')"/></svg>
+        <span x-text="pruebaIa && pruebaIa.mensaje"></span>
+      </div>
+      <div class="mensaje error" x-show="error">
+        <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+      </div>
+      <button class="primario grande" :disabled="!claveIa.trim() || ocupadoIa" x-text="ocupadoIa ? 'Guardando…' : 'Guardar y probar'"></button>
+      <div class="fila separado" x-show="ia && ia.configurada">
+        <button type="button" :disabled="ocupadoIa" @click="probarIa()">Probar la clave</button>
+        <button type="button" class="texto-peligro" @click="quitarClaveIa()">Quitar la clave</button>
+      </div>
+      <button type="button" class="separado" @click="cerrarVentana()">Cerrar</button>
+    </form>
+  </div>
+
   <!-- Teclas del sistema -->
   <div class="velo" x-show="ventana === 'teclas'" x-cloak @click.self="cerrarVentana()">
     <div class="panel ventana-texto">

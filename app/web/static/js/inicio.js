@@ -26,7 +26,13 @@ function pantallaInicio() {
     opcionElegida: 0,
     altSolo: false,
 
-    ventana: null, // "imagen" | "teclas" | "acerca"
+    ventana: null, // "imagen" | "teclas" | "acerca" | "ia"
+
+    // Asistente de IA: la clave nunca se muestra completa.
+    ia: null, // {configurada, termina_en, modelo}
+    claveIa: "",
+    pruebaIa: null, // {ok, mensaje}
+    ocupadoIa: false,
     archivo: null,
     vistaPrevia: null,
     guardando: false,
@@ -101,6 +107,12 @@ function pantallaInicio() {
             ? "Listo: al iniciar sesión en esta computadora se entrará directo a Vender."
             : "Listo: al iniciar sesión en esta computadora se entrará a esta pantalla de inicio."
         );
+      } else if (s.accion === "ia") {
+        this.claveIa = "";
+        this.pruebaIa = null;
+        this.error = "";
+        this.ventana = "ia";
+        API.get("/ia/estado").then((e) => (this.ia = e)).catch((e) => (this.error = e.message));
       } else if (s.accion === "imagen") {
         this.archivo = null;
         this.vistaPrevia = null;
@@ -275,6 +287,45 @@ function pantallaInicio() {
       try {
         this.negocio = await API.borrar("/negocio/logo");
         this.cerrarVentana();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    // --- Asistente de IA (administrador) --------------------------------------
+
+    async guardarClaveIa() {
+      this.ocupadoIa = true;
+      this.error = "";
+      this.pruebaIa = null;
+      try {
+        this.ia = await API.put("/ia/clave", { clave: this.claveIa });
+        this.claveIa = "";
+        this.pruebaIa = await API.post("/ia/probar");
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.ocupadoIa = false;
+      }
+    },
+
+    async probarIa() {
+      this.ocupadoIa = true;
+      this.pruebaIa = null;
+      try {
+        this.pruebaIa = await API.post("/ia/probar");
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.ocupadoIa = false;
+      }
+    },
+
+    async quitarClaveIa() {
+      if (!confirm("¿Quitar la clave? La lectura de facturas en PDF o imagen quedará desactivada.")) return;
+      try {
+        this.ia = await API.borrar("/ia/clave");
+        this.pruebaIa = null;
       } catch (e) {
         this.error = e.message;
       }

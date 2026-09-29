@@ -9,6 +9,7 @@ leen, nunca se modifican) con precios inventados y algunos lotes. Las
 pruebas automáticas vuelven a borrar esa base al correr, así que no importa.
 """
 import random
+import tempfile
 from datetime import date
 from decimal import Decimal as D
 from pathlib import Path
@@ -16,7 +17,12 @@ from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
+from app.core import config
 from app.core.config import settings
+
+# El demo nunca escribe en el .env real (ej. al guardar la clave de IA).
+config.ENV_PATH = Path(tempfile.gettempdir()) / "pos_demo.env"
+settings.anthropic_api_key = None
 
 real = make_url(settings.database_url)
 prueba = real.set(database=real.database + "_test")

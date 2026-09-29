@@ -197,6 +197,17 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   respuestas sin ver; `POST /solicitudes/{id}/vista` las marca como vistas.
 - No se puede cerrar el turno de una caja con solicitudes pendientes.
 
+### Asistente de IA (clave de la API de Claude)
+
+- La clave se captura desde el programa: inicio → Configuración → Asistente
+  de IA (solo admin). Se guarda en `.env` como `ANTHROPIC_API_KEY` y se usa al
+  momento, sin reiniciar. Nunca se regresa completa.
+- `GET /ia/estado` — `{configurada, termina_en, modelo}` (termina_en solo admin).
+- `PUT /ia/clave` con `{clave}`, `DELETE /ia/clave`, `POST /ia/probar` (consulta
+  el modelo sin gastar tokens) — solo admin.
+- Sin clave, la lectura de facturas con IA queda desactivada; lo demás funciona.
+- El servidor de demostración usa su propio `.env` temporal, nunca el real.
+
 ### Avisos de inventario (ventas sin existencia registrada)
 
 - Si se vende más de lo que el sistema tiene, la venta no se detiene: lo
