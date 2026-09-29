@@ -11,3 +11,6 @@ venv/
 
 # Datos reales del negocio (exportaciones de PVWin, respaldos). Nunca a GitHub.
 datos/
+
+# Respaldos de la base (datos reales). Nunca a GitHub.
+backups/

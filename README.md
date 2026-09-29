@@ -399,6 +399,21 @@ Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
   Cada corrida deja un reporte Excel en `datos/` con lo que hizo, los
   productos a revisar y la lista de negativos para conteo físico.
 
+## Respaldos
+
+- `python -m app.scripts.respaldar` guarda un respaldo de la base con `pg_dump`
+  en `backups/<Negocio>/pos_AAAAMMDD_HHMMSS.dump` (ej. `backups/FarmaciaLaFe`),
+  revisa que se pueda leer y deja los últimos 30 por negocio. Todos los
+  negocios comparten la base, así que cada respaldo la trae completa.
+- La tarea de Windows **"Cuadra - respaldo diario"** corre `respaldar.cmd` todos
+  los días a las 22:00 (si la computadora estaba apagada, en cuanto se
+  prende) y deja el resultado en `backups/respaldo.log`. `backups/` no se sube
+  a GitHub. Conviene copiar de vez en cuando esa carpeta a otra unidad o USB.
+- Restaurar (BORRA lo que haya en la base de destino; probar primero en otra base):
+  ```
+  pg_restore --clean --if-exists --no-owner -d pos backups\FarmaciaLaFe\pos_AAAAMMDD_HHMMSS.dump
+  ```
+
 ## Pendiente
 
 - Reimportar cuando llegue el catálogo completo A-Z (el actual se cortó en la D).
