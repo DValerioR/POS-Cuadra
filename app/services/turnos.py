@@ -1,19 +1,18 @@
 """Reglas de turnos y corte de caja.
 
-Lo esperado en caja se calcula en `totales_del_turno`. Hoy solo cuenta el
-fondo; cuando existan las ventas (etapa 2, parte 2) se sumarán aquí sus
-pagos, así que el corte no tendrá que cambiar.
+Lo esperado en caja se calcula en `totales_del_turno`: fondo más lo cobrado
+en ventas completadas del turno (las canceladas no cuentan).
 """
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Caja, RolUsuario, TipoTurno, Turno, Usuario
+from app.models import Caja, EstadoVenta, MetodoPago, Pago, RolUsuario, TipoTurno, Turno, Usuario, Venta
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 # Quien cobra abre y cierra turno; bodega no cobra.
@@ -59,11 +58,16 @@ def turno_abierto(db: Session, caja_id: int) -> Turno | None:
 
 
 def totales_del_turno(db: Session, turno: Turno) -> TotalesTurno:
-    # Las ventas del turno se sumarán aquí cuando existan.
+    cobrado = dict(db.execute(
+        select(Pago.metodo, func.sum(Pago.monto))
+        .join(Venta, Venta.id == Pago.venta_id)
+        .where(Venta.turno_id == turno.id, Venta.estado == EstadoVenta.COMPLETADA)
+        .group_by(Pago.metodo)
+    ).all())
     return TotalesTurno(
         fondo_inicial=turno.fondo_inicial,
-        ventas_efectivo=Decimal(0),
-        ventas_tarjeta=Decimal(0),
+        ventas_efectivo=cobrado.get(MetodoPago.EFECTIVO, Decimal(0)),
+        ventas_tarjeta=cobrado.get(MetodoPago.TARJETA, Decimal(0)),
     )
 
 

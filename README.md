@@ -126,13 +126,32 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - Hoy lo esperado es solo el fondo; al agregar ventas se suman en
   `totales_del_turno` (`app/services/turnos.py`).
 
+### Ventas (etapa 2)
+
+- `POST /ventas` con `{caja_id, renglones: [{producto_id, cantidad, lote_id?,
+  caducidad?, numero_lote?}], tarjeta, efectivo_recibido}` — admin y mostrador.
+  - Requiere turno abierto en la caja. Todo o nada: si algo falla no se guarda.
+  - Lotes: con `lote_id` sale de ese lote; sin él, FEFO. Con `caducidad`
+    (caja en mano sin caducidad registrada) se captura y se vende de ahí.
+  - Cobro: lo que no cubre `tarjeta` se paga en efectivo y se calcula el
+    cambio (pago mixto automático). Transferencia preparada pero desactivada.
+  - Precios con impuestos incluidos; se guarda el desglose (IEPS sobre el
+    subtotal, IVA sobre subtotal + IEPS). Precio e impuestos se copian a la
+    venta, así que cambiar el precio después no altera ventas pasadas.
+  - Folio consecutivo por negocio. Las ventas se serializan con un bloqueo
+    del negocio para que dos cajas nunca vendan la misma pieza.
+  - Responde `avisos` (ej. producto que requiere receta) y de qué lote salió
+    cada pieza (`renglones[].lotes`).
+- `GET /ventas/{id}` — detalle (para reimprimir). `GET /ventas` — historial, solo admin.
+- El corte de turno ya suma lo cobrado en efectivo y tarjeta.
+
 ## Pruebas automáticas
 
 ```
 pytest
 ```
 
-Corre todas las pruebas (~90, unos 12 segundos). Antes de cada commit
+Corre todas las pruebas (~140, unos 5 segundos). Antes de cada commit
 deben pasar todas.
 
 - Usan una base de datos aparte: la de `.env` con `_test` al final (`pos_test`).
@@ -145,6 +164,8 @@ deben pasar todas.
   estorban entre sí y nunca tocan los datos reales.
 - El importador se prueba con Excel pequeños generados al vuelo con el
   formato de PVWin (los archivos reales de `datos/` no están en git).
+- Los usuarios de prueba usan bcrypt de costo 4 para que el login sea
+  rápido; una prueba aparte verifica que la app use costo 12.
 - Útiles: `pytest tests/test_inventario.py` (un archivo), `pytest -k merma`
   (por nombre), `pytest -x` (detenerse en el primer fallo).
 

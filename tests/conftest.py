@@ -12,6 +12,7 @@ que las pruebas no se estorban entre sí y nunca tocan los datos reales.
 from collections.abc import Iterator
 from pathlib import Path
 
+import bcrypt
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
@@ -31,14 +32,15 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core.database import engine, get_db  # noqa: E402
-from app.core.seguridad import hashear_password  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import Negocio, RolUsuario, Usuario  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 PASSWORD = "secreta1"
-# El hash de bcrypt es lento a propósito; se calcula una sola vez.
-_PASSWORD_HASH = hashear_password(PASSWORD)
+# bcrypt es lento a propósito (costo 12, ~0.4 s por login). En las pruebas se
+# usa costo 4: verificar toma el costo del propio hash, así que el login se
+# prueba igual pero rápido. La app real sigue usando hashear_password.
+_PASSWORD_HASH = bcrypt.hashpw(PASSWORD.encode(), bcrypt.gensalt(rounds=4)).decode()
 
 
 def _crear_base_si_no_existe() -> None:

@@ -100,3 +100,12 @@ def test_desactivar_usuario_corta_su_sesion(como_bodega, bodega, db):
 def test_docs_muestra_boton_authorize(cliente):
     spec = cliente.get("/openapi.json").json()
     assert "HTTPBearer" in spec["components"]["securitySchemes"]
+
+
+def test_hash_de_produccion_es_bcrypt_costo_12():
+    from app.core.seguridad import hashear_password, verificar_password
+
+    h = hashear_password("mi contraseña")
+    assert h.startswith("$2b$12$")
+    assert verificar_password("mi contraseña", h)
+    assert not verificar_password("otra", h)

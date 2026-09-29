@@ -7,6 +7,7 @@ from app.api.inventario import router as inventario_router
 from app.api.negocios import router as negocios_router
 from app.api.productos import router as productos_router
 from app.api.turnos import router as turnos_router
+from app.api.ventas import router as ventas_router
 
 app = FastAPI(title="POS Farmacia")
 
@@ -17,3 +18,4 @@ app.include_router(categorias_router)
 app.include_router(productos_router)
 app.include_router(inventario_router)
 app.include_router(turnos_router)
+app.include_router(ventas_router)

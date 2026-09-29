@@ -80,6 +80,8 @@ Hardware existente que se reutiliza: lector de código de barras, impresoras de 
 
 Como la app corre en el navegador y el servidor está en otra computadora, el navegador no puede mandar comandos directos a una impresora USB. Si las impresoras están conectadas por Ethernet, el servidor les imprime directo por IP (puerto 9100). Si están por USB, se instala un pequeño agente de impresión en cada computadora de mostrador que recibe el ticket y lo manda a su impresora. Hoy las impresoras están conectadas por USB (así que se necesita el agente de impresión en las computadoras de mostrador), pero el código de impresión debe quedar detrás de una interfaz que permita ambos modos, configurable por caja, para poder pasar a Ethernet sin reprogramar.
 
+Si el sistema no tiene existencia suficiente de un producto, la venta se bloquea con un mensaje que pide a bodega o admin hacer un ajuste de inventario; así no se repiten las existencias negativas de PVWin. Se decidió así mientras se corrigen los negativos heredados y se hace el conteo físico; más adelante se puede revisar permitir la venta dejando el producto marcado para conteo.
+
 No hay crédito a clientes ni ventas a cuenta. Los descuentos quedan preparados pero desactivados; cuando se activen, el vendedor tendrá un tope y por encima de él se requiere autorización de administrador, con registro de quién lo aplicó.
 
 Devoluciones y cancelaciones solo las hace un administrador, con motivo registrado. La mercancía devuelta regresa siempre al inventario, a su lote original (el vendedor verifica que se pueda revender).

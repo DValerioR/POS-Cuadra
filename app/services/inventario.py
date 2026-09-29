@@ -108,7 +108,7 @@ def _validar_usuario(db: Session, negocio_id: int, usuario_id: int, roles: set[R
     return usuario
 
 
-def _lote_sin_caducidad(db: Session, producto: Producto, crear: bool) -> Lote | None:
+def lote_sin_caducidad(db: Session, producto: Producto, crear: bool) -> Lote | None:
     """El lote especial (sin número ni caducidad) de un producto, bloqueado para escritura."""
     lote = db.scalar(
         select(Lote)
@@ -167,7 +167,7 @@ def capturar_caducidad(
     if cantidad <= 0:
         raise OperacionInvalida("La cantidad debe ser mayor que cero")
 
-    origen = _lote_sin_caducidad(db, producto, crear=False)
+    origen = lote_sin_caducidad(db, producto, crear=False)
     disponibles = origen.cantidad if origen else Decimal(0)
     if cantidad > disponibles:
         raise OperacionInvalida(f"Solo hay {disponibles} piezas sin caducidad registrada")
@@ -226,7 +226,7 @@ def ajustar(
         raise OperacionInvalida("El motivo es obligatorio")
 
     if lote_id is None:
-        lote = _lote_sin_caducidad(db, producto, crear=cantidad > 0)
+        lote = lote_sin_caducidad(db, producto, crear=cantidad > 0)
         if lote is None:
             raise OperacionInvalida("El producto no tiene piezas sin caducidad; indica el lote")
     else:

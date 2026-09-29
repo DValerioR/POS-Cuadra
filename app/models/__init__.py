@@ -7,6 +7,7 @@ from app.models.ajuste_inventario import AjusteInventario, TipoAjuste
 from app.models.sesion import Sesion
 from app.models.caja import Caja
 from app.models.turno import TipoTurno, Turno
+from app.models.venta import EstadoVenta, MetodoPago, Pago, Venta, VentaRenglon, VentaRenglonLote
 
 __all__ = [
     "Negocio",
@@ -21,4 +22,10 @@ __all__ = [
     "Caja",
     "TipoTurno",
     "Turno",
+    "EstadoVenta",
+    "MetodoPago",
+    "Pago",
+    "Venta",
+    "VentaRenglon",
+    "VentaRenglonLote",
 ]
