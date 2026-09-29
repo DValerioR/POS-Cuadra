@@ -760,6 +760,23 @@ details.desglose table { margin-top: 8px; }
 .asistente-pie { margin: 0; padding: 0 12px 8px; font-size: 12px; color: var(--texto-suave); }
 @media (max-width: 760px) { .asistente-boton span { display: none; } .asistente-boton { padding: 12px; } }
 
+/* --- Faltantes por proveedor --------------------------------------------- */
+
+.faltantes { max-width: 1100px; margin: 0 auto; }
+.proveedores-faltantes { display: flex; flex-wrap: wrap; gap: 8px; }
+.proveedores-faltantes .opcion { flex-direction: row; padding: 10px 16px; color: var(--texto); }
+.tabla-faltantes tr.otro-mejor td { background: var(--aviso-suave); }
+.tabla-faltantes tr.otro-mejor td:last-child { color: var(--aviso); }
+.sin-proveedor summary { cursor: pointer; }
+.sin-proveedor .tabla { margin-top: 12px; }
+
+@media print {
+  body { background: #fff; }
+  .barra, .no-imprimir, #asistente, .aviso-flotante { display: none !important; }
+  .contenido { padding: 0; }
+  .panel { box-shadow: none; border: 0; }
+}
+
 /* --- Centro de notificaciones ------------------------------------------ */
 
 .notificaciones { max-width: 860px; margin: 0 auto; }

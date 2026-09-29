@@ -50,6 +50,7 @@ function pantallaCatalogo() {
     editor: null, // copia editable del producto (id null = nuevo)
     original: null,
     historial: [],
+    proveedoresDelProducto: [],
     guardando: false,
     errorEditor: "",
 
@@ -219,6 +220,7 @@ function pantallaCatalogo() {
     async abrirEditor(p) {
       this.errorEditor = "";
       this.historial = [];
+      this.proveedoresDelProducto = [];
       const vacio = {
         id: null, nombre: "", clave: "", categoria_id: null, laboratorio: "", requiere_receta: false,
         costo: "", precio_venta: "", precio_maximo_publico: "", iva_porcentaje: 0, ieps_porcentaje: 0,
@@ -239,7 +241,10 @@ function pantallaCatalogo() {
       this.$nextTick(() => document.getElementById("editor-nombre").focus());
       if (p) {
         try {
-          this.historial = await API.get(`/productos/${p.id}/precios`);
+          [this.historial, this.proveedoresDelProducto] = await Promise.all([
+            API.get(`/productos/${p.id}/precios`),
+            API.get(`/productos/${p.id}/proveedores`),
+          ]);
         } catch {
           /* sin historial */
         }

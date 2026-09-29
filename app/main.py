@@ -14,6 +14,7 @@ from app.api.avisos_inventario import router as avisos_inventario_router
 from app.api.ia import router as ia_router
 from app.api.entradas import router as entradas_router
 from app.api.asistente import router as asistente_router
+from app.api.faltantes import router as faltantes_router
 from app.api.web import estaticos, router as web_router
 
 app = FastAPI(title="POS Farmacia")
@@ -32,6 +33,7 @@ app.include_router(avisos_inventario_router)
 app.include_router(ia_router)
 app.include_router(entradas_router)
 app.include_router(asistente_router)
+app.include_router(faltantes_router)
 
 # Pantallas: al final, para que las rutas del API tengan prioridad.
 app.mount("/static", estaticos, name="static")

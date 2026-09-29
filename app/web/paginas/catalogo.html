@@ -296,6 +296,23 @@
           <div><label style="margin-top: 0">Máximo</label><input type="number" min="0" step="1" x-model="editor.maximo"></div>
         </div>
 
+        <template x-if="proveedoresDelProducto.length">
+          <div>
+            <div class="paso separado">Proveedores que lo han surtido <span class="ayuda">(último costo por pieza)</span></div>
+            <table class="tabla historial-precios">
+              <tbody>
+                <template x-for="(pr, i) in proveedoresDelProducto" :key="pr.proveedor_id">
+                  <tr>
+                    <td><strong x-text="pr.proveedor"></strong> <span class="etiqueta verde" x-show="i === 0 && proveedoresDelProducto.length > 1">El más barato</span></td>
+                    <td class="derecha" x-text="dinero(pr.costo)"></td>
+                    <td class="suave derecha ajustado" x-text="new Date(pr.fecha + 'T00:00:00').toLocaleDateString('es-MX')"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
         <template x-if="historial.length">
           <div>
             <div class="paso separado">Historial de precios</div>

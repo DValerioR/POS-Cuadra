@@ -154,6 +154,8 @@ Compran a unos nueve o diez proveedores. El sistema maneja pedidos: sugiere qué
 
 Lectura de facturas para dar entrada: primero se usa el XML del CFDI, que se lee directamente sin IA. Solo cuando no hay XML (PDF, foto, nota de remisión) se usa IA. Lote y caducidad pueden no venir en el XML, y la IA puede complementarlos desde el PDF. La IA nunca mete datos directamente al inventario: siempre hay una pantalla de revisión donde el usuario corrige y confirma, con validaciones como que la suma de renglones coincida con el total, y marcando lo que no se leyó con seguridad.
 
+Reporte de faltantes por proveedor (hecho el 29/09/2026): los pedidos se hacen por proveedor, y un producto puede surtirlo más de uno. El historial de proveedores de cada producto sale de las entradas de mercancía (proveedor, costo por pieza y fecha), así que el producto aparece en el reporte de cada proveedor que lo haya surtido. Para decidir a quién pedirlo se compara el último costo de cada proveedor (decisión del dueño: un precio viejo puede ya no existir) y se marca si otro lo da más barato. Los faltantes sin historial salen en todos los reportes, aparte. Faltante = existencia en su mínimo o menos; pedir = máximo − existencia. Pendiente: importar de PVWin el historial de compras (producto, proveedor, costo, fecha) cuando el dueño tenga acceso a ese reporte, para no empezar el historial de cero.
+
 Se guarda una tabla de equivalencias por proveedor que relaciona cómo nombra el proveedor cada producto con el producto del catálogo. La primera vez se relaciona a mano (con sugerencia de la IA) y después se reconoce solo. Si el producto no existe, se propone darlo de alta con los datos leídos.
 
 ## Asistente de IA

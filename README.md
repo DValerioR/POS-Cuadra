@@ -220,6 +220,19 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - `GET /entradas`, `GET /entradas/{id}`, `GET /entradas/archivos/{id}` (el
   archivo original).
 
+### Faltantes por proveedor (para pedidos)
+
+- `GET /reportes/faltantes?proveedor_id=` — productos activos con máximo que
+  están en su mínimo o menos (existencia del sistema), con cantidad sugerida
+  (máximo − existencia). Salen en el reporte de cada proveedor que los haya
+  surtido (el historial sale de las entradas de mercancía), con el último
+  costo con ese proveedor y, si otro proveedor tiene un último costo más
+  bajo, cuál, a cuánto y qué tan más caro sale aquí. Los faltantes sin
+  proveedor registrado salen en todos los reportes, aparte. Admin y bodega.
+- `GET /reportes/faltantes/excel?proveedor_id=` — lo mismo en Excel.
+- `GET /productos/{id}/proveedores` — proveedores que lo han surtido con su
+  último costo por pieza (también en el editor del catálogo).
+
 ### Asistente de IA: chat para administradores
 
 - Botón "Asistente" abajo a la izquierda en todas las pantallas (solo admin).
@@ -337,6 +350,9 @@ funcione sin internet.
   dudoso en amarillo; suma contra la factura; cambio de costo y casilla para
   aplicar el precio sugerido, solo admin; dar de alta productos nuevos con
   los datos leídos, solo admin). La ruta no es `/entradas` porque esa es del API.
+- `/faltantes` — faltantes por proveedor (admin y bodega; Inventario →
+  Faltantes por proveedor): se elige el proveedor; lo que otro proveedor dio
+  más barato en su última compra sale en amarillo; Excel e imprimir.
 - `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
   autorizar (autorizar o rechazar con motivo) y ventas sin existencia
   registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una
