@@ -111,16 +111,19 @@ def reimprimir(
 @router.get("", response_model=list[VentaResumenOut])
 def listar_ventas(
     turno_id: int | None = None,
+    folio: int | None = None,
     desde: date | None = None,
     limite: int = Query(50, le=500),
     desplazamiento: int = 0,
     usuario: Usuario = Depends(solo_admin),
     db: Session = Depends(get_db),
 ):
-    """Historial de ventas (solo admin)."""
+    """Historial de ventas (solo admin). `folio` es el número del ticket."""
     stmt = select(Venta).where(Venta.negocio_id == usuario.negocio_id)
     if turno_id is not None:
         stmt = stmt.where(Venta.turno_id == turno_id)
+    if folio is not None:
+        stmt = stmt.where(Venta.folio == folio)
     if desde is not None:
         stmt = stmt.where(Venta.created_at >= desde)
     return db.scalars(stmt.order_by(Venta.id.desc()).limit(limite).offset(desplazamiento)).all()

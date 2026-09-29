@@ -5,7 +5,7 @@ import pytest
 from tests.conftest import PASSWORD
 
 
-@pytest.mark.parametrize("pagina", ["login", "venta", "turno"])
+@pytest.mark.parametrize("pagina", ["login", "venta", "turno", "devoluciones"])
 def test_paginas(cliente, pagina):
     r = cliente.get(f"/{pagina}")
     assert r.status_code == 200
@@ -22,7 +22,7 @@ def test_pagina_desconocida_redirige(cliente):
     assert cliente.get("/no-existe", follow_redirects=False).headers["location"] == "/venta"
 
 
-@pytest.mark.parametrize("archivo", ["js/api.js", "js/venta.js", "css/pos.css", "iconos.svg", "vendor/alpine-3.17.4.min.js"])
+@pytest.mark.parametrize("archivo", ["js/api.js", "js/venta.js", "js/devoluciones.js", "css/pos.css", "iconos.svg", "vendor/alpine-3.17.4.min.js"])
 def test_estaticos(cliente, archivo):
     assert cliente.get(f"/static/{archivo}").status_code == 200
 

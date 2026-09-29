@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 WEB = Path(__file__).resolve().parent.parent / "web"
-PAGINAS = {"login", "venta", "turno"}
+PAGINAS = {"login", "venta", "turno", "devoluciones"}
 
 router = APIRouter(include_in_schema=False)
 estaticos = StaticFiles(directory=WEB / "static")

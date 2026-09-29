@@ -252,3 +252,10 @@ def test_historial_de_ventas_solo_admin(como_mostrador, como_admin, caja, shampo
     vender(como_mostrador, caja, [r(shampoo, 1)], efectivo="116")
     assert como_mostrador.get("/ventas").status_code == 403
     assert [v["total"] for v in como_admin.get("/ventas").json()] == ["116.00"]
+
+
+def test_buscar_venta_por_folio(como_mostrador, como_admin, caja, shampoo):
+    primera = vender(como_mostrador, caja, [r(shampoo, 1)], efectivo="116").json()
+    vender(como_mostrador, caja, [r(shampoo, 2)], efectivo="232")
+    assert [v["id"] for v in como_admin.get("/ventas", params={"folio": primera["folio"]}).json()] == [primera["id"]]
+    assert como_admin.get("/ventas", params={"folio": 999}).json() == []

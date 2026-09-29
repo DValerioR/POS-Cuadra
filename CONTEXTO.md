@@ -137,7 +137,7 @@ De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja
 Para retomar, lo pendiente es:
 - Conseguir de PVWin el reporte con precios de venta (hoy ningún producto real tiene precio, así que no se puede vender con datos reales) y el catálogo completo de la A a la Z, y reimportar.
 - Probar la impresión en la farmacia: instalar el agente en una computadora de mostrador (`agente_impresion/LEEME.md`), configurar la caja y usar la prueba de impresión para revisar acentos, corte y cajón.
-- Pantallas que faltan: cancelaciones, devoluciones y cambios de producto (hoy solo por API), inventario (captura de caducidades, ajustes, mermas, avance), catálogo y precios para el administrador, y la vista sencilla para la tableta.
+- Pantallas que faltan: cambio de producto (hoy solo por API), inventario (captura de caducidades, ajustes, mermas, avance), catálogo y precios para el administrador, y la vista sencilla para la tableta. La de devoluciones y cancelaciones ya está (`/devoluciones`, solo admin): se busca la venta por folio o de la lista de hoy, se elige devolver piezas o cancelar todo, se pide motivo y se confirma diciendo cuánto entregar en efectivo y cuánto regresar a tarjeta.
 - Dejar el servidor instalado como servicio de Windows en la computadora dedicada, con arranque automático.
 - Después sigue la etapa 3 (entradas de mercancía, proveedores, pedidos, márgenes y lectura de facturas XML).
 

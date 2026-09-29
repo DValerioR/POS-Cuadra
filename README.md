@@ -143,7 +143,7 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     del negocio para que dos cajas nunca vendan la misma pieza.
   - Responde `avisos` (ej. producto que requiere receta) y de qué lote salió
     cada pieza (`renglones[].lotes`).
-- `GET /ventas/{id}` — detalle (para reimprimir). `GET /ventas` — historial, solo admin.
+- `GET /ventas/{id}` — detalle (para reimprimir). `GET /ventas` — historial, solo admin (`?folio=` busca por el número del ticket).
 - `POST /ventas/{id}/cancelar` con `{caja_id, motivo}` — cancela toda la venta.
 - `POST /ventas/{id}/devoluciones` con `{caja_id, motivo, piezas: [{renglon_id,
   cantidad, lote_id?}]}` — devuelve algunas piezas.

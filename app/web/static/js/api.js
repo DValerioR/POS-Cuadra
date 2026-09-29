@@ -100,6 +100,7 @@ function icono(nombre, clase = "ico") {
 const SECCIONES = [
   { pagina: "venta", texto: "Vender", icono: "carrito" },
   { pagina: "turno", texto: "Turno y corte", icono: "caja" },
+  { pagina: "devoluciones", texto: "Devoluciones", icono: "regresar", soloAdmin: true },
 ];
 
 function escapar(texto) {
@@ -112,8 +113,11 @@ async function pintarBarra() {
   const barra = document.querySelector("header.barra[data-pagina]");
   if (!barra) return;
   const actual = barra.dataset.pagina;
+  // Las secciones de administrador aparecen cuando se sabe el rol.
   const enlaces = SECCIONES.map(
-    (s) => `<a href="/${s.pagina}" class="${s.pagina === actual ? "activo" : ""}">${icono(s.icono)}${s.texto}</a>`
+    (s) =>
+      `<a href="/${s.pagina}" class="${s.pagina === actual ? "activo" : ""}"` +
+      `${s.soloAdmin ? ` data-solo-admin hidden` : ""}>${icono(s.icono)}${s.texto}</a>`
   ).join("");
   barra.innerHTML = `
     <span class="marca"><span class="logo">${icono("cruz", "")}</span><span data-negocio>Farmacia</span></span>
@@ -123,6 +127,7 @@ async function pintarBarra() {
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
+    if (usuario.rol === "admin") barra.querySelectorAll("[data-solo-admin]").forEach((a) => (a.hidden = false));
     const nombre = usuario.nombre_completo || usuario.nombre_usuario;
     barra.querySelector("[data-usuario]").innerHTML =
       `<span class="avatar">${escapar(nombre.trim().charAt(0).toUpperCase())}</span>` +
