@@ -1,27 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
-from app.models.negocio import Negocio
+from app.models import Negocio, Usuario
 from app.schemas.negocio import NegocioOut, NegocioUpdate
 
-router = APIRouter(prefix="/negocios", tags=["negocios"])
+router = APIRouter(prefix="/negocio", tags=["negocio"])
 
 
-@router.get("/{negocio_id}", response_model=NegocioOut)
-def obtener_negocio(negocio_id: int, db: Session = Depends(get_db)):
-    negocio = db.get(Negocio, negocio_id)
-    if negocio is None:
-        raise HTTPException(status_code=404, detail="Negocio no encontrado")
-    return negocio
+@router.get("", response_model=NegocioOut)
+def obtener_negocio(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """El negocio del usuario que inició sesión."""
+    return db.get(Negocio, usuario.negocio_id)
 
 
-@router.put("/{negocio_id}", response_model=NegocioOut)
-def actualizar_negocio(negocio_id: int, datos: NegocioUpdate, db: Session = Depends(get_db)):
+@router.put("", response_model=NegocioOut)
+def actualizar_negocio(datos: NegocioUpdate, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
     """Configuración del negocio. Mandar `redondeo_precio_venta: null` apaga el redondeo."""
-    negocio = db.get(Negocio, negocio_id)
-    if negocio is None:
-        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    negocio = db.get(Negocio, usuario.negocio_id)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(negocio, campo, valor)
     db.commit()

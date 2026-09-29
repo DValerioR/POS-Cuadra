@@ -66,12 +66,33 @@ alembic/      migraciones de base de datos
   entrada (importación, ajuste, merma, captura de caducidad), con cantidad
   con signo, motivo y usuario. Nunca se edita ni se borra.
 
+## Sesión y permisos
+
+Todo (salvo `/health` y `/auth/login`) requiere sesión. El negocio y el
+usuario salen de la sesión: no se mandan en las peticiones, y un usuario
+nunca ve datos de otro negocio (responden 404).
+
+- `POST /auth/login` con `{negocio_id, usuario, password}` — deja una cookie
+  `httpOnly` que dura 12 horas (`HORAS_SESION` en `.env`). También regresa el
+  token para usarlo como `Authorization: Bearer <token>` desde `/docs` o scripts.
+- `POST /auth/logout` — cierra la sesión (el token deja de servir al instante).
+- `GET /auth/yo` — usuario de la sesión.
+- Las sesiones viven en la tabla `sesiones` (solo el hash del token), así que
+  desactivar a un usuario corta sus sesiones abiertas.
+
+Permisos por rol: consultar es para todos; crear/editar productos, categorías
+y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
+`bodega`; capturar caducidades es para todos. La lógica está en `app/core/auth.py`
+(`usuario_actual`, `requiere_rol`, `solo_admin`).
+
 ## Endpoints disponibles
 
-- `GET/PUT /negocios/{id}` — configuración del negocio.
+- `GET/PUT /negocio` — configuración del negocio de la sesión.
 - `GET/POST /categorias`, `GET/PUT/DELETE /categorias/{id}`
 - `GET/POST /productos` (con búsqueda `?q=` por nombre parcial o clave; la
-  clave se compara sin ceros a la izquierda), `GET/PUT/DELETE /productos/{id}`
+  clave se compara sin ceros a la izquierda; `?solo_revision=true` para los
+  marcados por el importador; paginado con `limite`/`desplazamiento`, 50 por
+  defecto), `GET/PUT/DELETE /productos/{id}`
   — "eliminar" un producto lo desactiva (`activo=false`), no lo borra. Al
   guardar, el precio de venta se redondea según la configuración del negocio.
 - Inventario por lote:
@@ -88,8 +109,6 @@ alembic/      migraciones de base de datos
     y productos pendientes (los de más piezas primero). Solo cuenta productos
     cuya categoría controla lote.
   - La lógica vive en `app/services/inventario.py` (las ventas usarán `lotes_fefo`).
-- Todos requieren `negocio_id`, y las operaciones que cambian inventario
-  también `usuario_id` (todavía sin auth, así que se mandan explícitos).
 
 ## Scripts
 
@@ -110,9 +129,6 @@ Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
   Cada corrida deja un reporte Excel en `datos/` con lo que hizo, los
   productos a revisar y la lista de negativos para conteo físico.
 
-## Pendiente para completar la etapa 1
+## Pendiente
 
 - Reimportar cuando llegue el catálogo completo A-Z (el actual se cortó en la D).
-- Autenticación (login): hoy `usuario_id` se manda en cada petición; con login
-  saldrá de la sesión y los permisos por rol ya validados en inventario se
-  extenderán a los demás endpoints.

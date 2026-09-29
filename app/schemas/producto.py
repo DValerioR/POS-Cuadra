@@ -24,7 +24,7 @@ class ProductoBase(BaseModel):
 
 
 class ProductoCreate(ProductoBase):
-    negocio_id: int
+    pass
 
 
 class ProductoUpdate(BaseModel):

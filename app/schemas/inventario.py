@@ -28,8 +28,6 @@ class ExistenciaOut(BaseModel):
 
 
 class CapturaCaducidadIn(BaseModel):
-    negocio_id: int
-    usuario_id: int
     producto_id: int
     caducidad: date
     cantidad: Decimal = Field(gt=0)
@@ -37,8 +35,6 @@ class CapturaCaducidadIn(BaseModel):
 
 
 class AjusteIn(BaseModel):
-    negocio_id: int
-    usuario_id: int
     producto_id: int
     tipo: Literal["ajuste", "merma"]
     cantidad: Decimal  # con signo: + suma piezas, - las quita

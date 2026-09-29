@@ -11,7 +11,7 @@ class CategoriaBase(BaseModel):
 
 
 class CategoriaCreate(CategoriaBase):
-    negocio_id: int
+    pass
 
 
 class CategoriaUpdate(BaseModel):
