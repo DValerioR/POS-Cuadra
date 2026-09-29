@@ -6,7 +6,7 @@ from decimal import Decimal as D
 
 import pytest
 
-from app.models import Caja, Categoria, Lote, Producto, Turno, TipoTurno
+from app.models import AvisoInventario, Caja, Categoria, Lote, Producto, Turno, TipoTurno
 from app.services.ventas import desglosar
 
 
@@ -149,9 +149,13 @@ def test_vendedor_indica_el_lote_que_entrego(como_mostrador, caja, amoxicilina, 
 
 
 def test_lote_elegido_sin_suficientes_piezas(como_mostrador, caja, amoxicilina, db):
+    """Se vende igual: lo que no alcanza en el lote sale del sin caducidad y se avisa."""
     lote_a = db.query(Lote).filter_by(producto_id=amoxicilina.id, numero_lote="A").one()
     res = vender(como_mostrador, caja, [r(amoxicilina, 3, lote_id=lote_a.id)], efectivo="999")
-    assert res.status_code == 409
+    assert res.status_code == 201
+    ex = existencias(db, amoxicilina)
+    assert (ex[("A", date(2027, 1, 31))], ex[(None, None)]) == (D(0), D(9))
+    assert db.query(AvisoInventario).filter_by(producto_id=amoxicilina.id).one().faltantes == D(1)
 
 
 def test_captura_caducidad_al_vender(como_mostrador, caja, amoxicilina, db):
@@ -163,18 +167,30 @@ def test_captura_caducidad_al_vender(como_mostrador, caja, amoxicilina, db):
     assert ex[("C", date(2027, 9, 30))] == D(0)  # ...pasaron al lote C y se vendieron
 
 
-def test_misma_pieza_no_se_vende_dos_veces_en_una_venta(como_mostrador, caja, db, negocio):
+def test_misma_pieza_no_se_cuenta_dos_veces_en_una_venta(como_mostrador, caja, db, negocio):
     p = producto(db, negocio, "UNICO", "10", [(1, None, None)])
     res = vender(como_mostrador, caja, [r(p, 1), r(p, 1)], efectivo="20")
-    assert res.status_code == 409
-    assert existencias(db, p)[(None, None)] == D(1)  # todo o nada
+    assert res.status_code == 201
+    assert existencias(db, p)[(None, None)] == D(-1)  # el segundo renglón ya no la tenía
+    assert db.query(AvisoInventario).filter_by(producto_id=p.id).one().faltantes == D(1)
 
 
-def test_sin_existencia_no_se_vende(como_mostrador, caja, db, negocio):
+def test_sin_existencia_se_vende_y_avisa(como_mostrador, mostrador, caja, db, negocio):
+    """Físicamente sí había: la venta no se detiene, el sin caducidad queda en
+    negativo y los administradores reciben un aviso."""
     p = producto(db, negocio, "AGOTADO", "10", [(2, None, None)])
     res = vender(como_mostrador, caja, [r(p, 3)], efectivo="30")
-    assert res.status_code == 409
-    assert "Solo hay 2" in res.json()["detail"]
+    assert res.status_code == 201
+    assert res.json()["avisos"] == ["AGOTADO: el sistema no tenía 1 pieza; se avisó al administrador para revisarlo"]
+    assert existencias(db, p)[(None, None)] == D(-1)
+    aviso = db.query(AvisoInventario).one()
+    assert (aviso.vendidas, aviso.faltantes, aviso.usuario_id, aviso.estado.value) == (D(3), D(1), mostrador.id, "pendiente")
+
+
+def test_producto_sin_ningun_lote_tambien_se_vende(como_mostrador, caja, db, negocio):
+    p = producto(db, negocio, "NUNCA REGISTRADO", "10")
+    assert vender(como_mostrador, caja, [r(p, 2)], efectivo="20").status_code == 201
+    assert existencias(db, p) == {(None, None): D(-2)}
 
 
 # --- Validaciones -----------------------------------------------------------------

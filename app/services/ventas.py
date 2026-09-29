@@ -1,6 +1,12 @@
 """Registro de ventas: precios, desglose de impuestos, descuento de lotes y
-cobro. Todo ocurre en una sola transacción: si algo falla (sin existencia,
-pago insuficiente...) no se guarda nada.
+cobro. Todo ocurre en una sola transacción: si algo falla (sin precio, pago
+insuficiente...) no se guarda nada.
+
+Si el sistema no tiene todas las piezas que se venden, la venta NO se
+detiene (físicamente sí las hay; el registro está mal): lo que falta se
+descuenta del lote "sin caducidad" del producto, que queda en negativo, y se
+crea un aviso para que un administrador cuente y corrija la existencia
+(models/aviso_inventario.py).
 
 Concurrencia: al empezar se bloquea el renglón del negocio. Eso da folios
 consecutivos sin huecos ni repetidos y hace que las ventas de las dos cajas
@@ -16,7 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
-    Lote, MetodoPago, Negocio, Pago, Producto, RolUsuario, Usuario, Venta,
+    AvisoInventario, Lote, MetodoPago, Negocio, Pago, Producto, RolUsuario, Usuario, Venta,
     VentaRenglon, VentaRenglonLote,
 )
 from app.services import inventario, turnos
@@ -47,33 +53,43 @@ def desglosar(importe: Decimal, iva_pct: Decimal, ieps_pct: Decimal) -> tuple[De
     return subtotal, ieps, importe - subtotal - ieps
 
 
-def _asignar_lotes(db: Session, producto: Producto, cantidad: Decimal, lote_id: int | None) -> list[tuple[Lote, Decimal]]:
-    """De qué lotes salen las piezas. Con lote_id, de ese; si no, FEFO."""
+def _asignar_lotes(
+    db: Session, producto: Producto, cantidad: Decimal, lote_id: int | None,
+) -> tuple[list[tuple[Lote, Decimal]], Decimal]:
+    """De qué lotes salen las piezas: con lote_id, de ese; si no, FEFO.
+    Regresa (asignaciones, faltantes). Las faltantes (las que el sistema no
+    tenía) también salen, del lote sin caducidad, que queda en negativo."""
+    asignados: list[tuple[Lote, Decimal]] = []
+    pendiente = cantidad
     if lote_id is not None:
         lote = db.scalar(select(Lote).where(Lote.id == lote_id, Lote.producto_id == producto.id).with_for_update())
         if lote is None:
             raise NoEncontrado(f"Lote no encontrado para {producto.nombre}")
-        if lote.cantidad < cantidad:
-            raise OperacionInvalida(f"El lote elegido de {producto.nombre} solo tiene {lote.cantidad} piezas")
-        return [(lote, cantidad)]
+        tomar = min(max(lote.cantidad, Decimal(0)), pendiente)
+        if tomar > 0:
+            asignados.append((lote, tomar))
+            pendiente -= tomar
+    else:
+        for lote in inventario.lotes_fefo(db, producto.id, bloquear=True):
+            if pendiente == 0:
+                break
+            tomar = min(lote.cantidad, pendiente)
+            asignados.append((lote, tomar))
+            pendiente -= tomar
 
-    asignados, pendiente = [], cantidad
-    for lote in inventario.lotes_fefo(db, producto.id, bloquear=True):
-        if pendiente == 0:
-            break
-        tomar = min(lote.cantidad, pendiente)
-        asignados.append((lote, tomar))
-        pendiente -= tomar
-    if pendiente > 0:
-        disponibles = cantidad - pendiente
-        raise OperacionInvalida(
-            f"Solo hay {disponibles} piezas de {producto.nombre} en inventario; "
-            "si hay más en anaquel, bodega o admin deben hacer un ajuste"
-        )
-    return asignados
+    faltantes = pendiente
+    if faltantes > 0:
+        sin_caducidad = inventario.lote_sin_caducidad(db, producto, crear=True)
+        for i, (lote, tomado) in enumerate(asignados):
+            if lote.id == sin_caducidad.id:  # ya se tomaron piezas de ahí: una sola asignación
+                asignados[i] = (lote, tomado + faltantes)
+                break
+        else:
+            asignados.append((sin_caducidad, faltantes))
+    return asignados, faltantes
 
 
-def _capturar_en_venta(db: Session, usuario: Usuario, producto: Producto, r: RenglonSolicitado) -> int:
+def _capturar_en_venta(db: Session, usuario: Usuario, producto: Producto, r: RenglonSolicitado) -> int | None:
     """El vendedor capturó la caducidad de la caja en mano: esas piezas pasan
     del lote sin caducidad a su lote real, y se venden de ahí. Regresa el lote."""
     if not inventario.controla_lote(db, producto):
@@ -81,7 +97,7 @@ def _capturar_en_venta(db: Session, usuario: Usuario, producto: Producto, r: Ren
     sin_caducidad = inventario.lote_sin_caducidad(db, producto, crear=False)
     disponibles = sin_caducidad.cantidad if sin_caducidad else Decimal(0)
     if disponibles <= 0:
-        raise OperacionInvalida(f"{producto.nombre} ya no tiene piezas sin caducidad; elige el lote que entregas")
+        return None  # el sistema no tiene esas piezas: se vende igual y se avisa (ver _asignar_lotes)
     lote = inventario.capturar_caducidad(
         db, usuario.negocio_id, usuario.id, producto.id, r.caducidad, min(r.cantidad, disponibles), r.numero_lote,
     )
@@ -141,6 +157,7 @@ def registrar_venta(
     )
     db.add(venta)
     avisos: list[str] = []
+    sin_existencia: list[tuple[Producto, Decimal, Decimal]] = []  # producto, vendidas, faltantes
 
     for r in renglones:
         producto = inventario.obtener_producto(db, usuario.negocio_id, r.producto_id)
@@ -155,10 +172,14 @@ def registrar_venta(
         if r.caducidad is not None and lote_id is None:
             lote_id = _capturar_en_venta(db, usuario, producto, r)
 
-        asignados = _asignar_lotes(db, producto, r.cantidad, lote_id)
+        asignados, faltantes = _asignar_lotes(db, producto, r.cantidad, lote_id)
         for lote, cantidad in asignados:
             lote.cantidad -= cantidad
         db.flush()  # que el siguiente renglón del mismo producto vea lo ya descontado
+        if faltantes > 0:
+            sin_existencia.append((producto, r.cantidad, faltantes))
+            piezas = "1 pieza" if faltantes == 1 else f"{faltantes.normalize():f} piezas"
+            avisos.append(f"{producto.nombre}: el sistema no tenía {piezas}; se avisó al administrador para revisarlo")
 
         importe = (producto.precio_venta * r.cantidad).quantize(CENTAVO)
         subtotal, ieps, iva = desglosar(importe, producto.iva_porcentaje, producto.ieps_porcentaje)
@@ -180,6 +201,12 @@ def registrar_venta(
     venta.pagos = ([Pago(metodo=MetodoPago.SALDO_A_FAVOR, monto=saldo_aplicado)] if saldo_aplicado > 0 else []) + _pagos(
         venta.total - saldo_aplicado, tarjeta, efectivo_recibido
     )
+    db.flush()
+    for producto, vendidas, faltantes in sin_existencia:
+        db.add(AvisoInventario(
+            negocio_id=venta.negocio_id, producto_id=producto.id, venta_id=venta.id, caja_id=venta.caja_id,
+            usuario_id=usuario.id, vendidas=vendidas, faltantes=faltantes,
+        ))
     db.flush()
     return venta, avisos
 

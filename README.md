@@ -178,6 +178,16 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   respuestas sin ver; `POST /solicitudes/{id}/vista` las marca como vistas.
 - No se puede cerrar el turno de una caja con solicitudes pendientes.
 
+### Avisos de inventario (ventas sin existencia registrada)
+
+- Si se vende más de lo que el sistema tiene, la venta no se detiene: lo
+  que falta sale del lote sin caducidad (queda en negativo) y se crea un aviso.
+- `GET /avisos-inventario?estado=&desde=` — solo admin.
+- `POST /avisos-inventario/{id}/conteo` con `{conteo}` — ajusta la existencia
+  del producto a lo que se contó en anaquel y cierra todos sus avisos.
+  `POST /avisos-inventario/{id}/revisado` los cierra sin tocar la existencia.
+- `GET /notificaciones/pendientes` — `{solicitudes, inventario, total}` para la campana.
+
 ### Ventas en espera
 
 - `GET /ventas-en-espera?caja_id=` — ventas guardadas de una caja.
@@ -238,11 +248,12 @@ funcione sin internet.
   cambios al momento; el cajero pide devoluciones y cancelaciones, que llegan
   al centro de notificaciones, y sigue cobrando. La respuesta (cuánto entregar,
   o que no se hace) le aparece en Vender hasta que la marca como vista.
-- `/notificaciones` — centro de notificaciones (solo admin): solicitudes por
-  autorizar, con autorizar o rechazar (con motivo) y las respondidas hoy. Una
+- `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
+  autorizar (autorizar o rechazar con motivo) y ventas sin existencia
+  registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una
   campana con el número de pendientes aparece en la barra de todas las
   pantallas y en el inicio (ahí también en el menú "Ventas" y en su opción
-  "Solicitudes por autorizar"); se revisa cada 20 segundos.
+  "Notificaciones"); se revisa cada 20 segundos.
 
 Todas las pantallas llevan la barra superior con "Inicio" y se probaron a
 1920×1080, 1366×768, 1200×700, 683 de ancho y 600 de alto: sin

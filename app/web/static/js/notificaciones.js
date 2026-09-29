@@ -1,7 +1,9 @@
-// Centro de notificaciones (solo administradores): devoluciones y
-// cancelaciones que pidieron los cajeros. Se autorizan o rechazan desde
-// cualquier computadora; al autorizar, la devolución se hace en la caja que
-// la pidió y al cajero le aparece en Vender cuánto entregar.
+// Centro de notificaciones (solo administradores):
+//  - Devoluciones y cancelaciones que pidieron los cajeros. Se autorizan o
+//    rechazan desde cualquier computadora; al autorizar, la devolución se hace
+//    en la caja que la pidió y al cajero le aparece en Vender cuánto entregar.
+//  - Ventas sin existencia registrada: se vendió más de lo que el sistema
+//    tenía. Se cuenta lo que hay en anaquel y la existencia se ajusta a eso.
 // La lista se actualiza sola cada 15 segundos.
 
 function pantallaNotificaciones() {
@@ -11,6 +13,9 @@ function pantallaNotificaciones() {
     error: "",
     pendientes: [],
     respondidas: [],
+    avisos: [], // ventas sin existencia pendientes
+    avisosRevisados: [],
+    conteos: {}, // producto_id -> lo que se escribió en "¿Cuántas hay?"
     rechazando: null, // id de la solicitud a la que se le escribe el motivo del rechazo
     respuesta: "",
     procesando: null, // id de la solicitud que se está guardando
@@ -26,9 +31,9 @@ function pantallaNotificaciones() {
       } finally {
         this.cargando = false;
       }
-      setInterval(() => this.esAdmin && !this.rechazando && this.cargar(), 15000);
+      setInterval(() => this.esAdmin && !this.ocupado && this.cargar(), 15000);
       document.addEventListener("solicitudes-pendientes", (ev) => {
-        if (ev.detail !== this.pendientes.length && !this.rechazando) this.cargar();
+        if (ev.detail !== this.pendientes.length + this.avisos.length && !this.ocupado) this.cargar();
       });
       window.addEventListener("keydown", (ev) => {
         if (ev.key === "Escape" && this.rechazando) this.rechazando = null;
@@ -43,12 +48,17 @@ function pantallaNotificaciones() {
       try {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
-        const [pendientes, hechas] = await Promise.all([
+        const desde = encodeURIComponent(hoy.toISOString());
+        const [pendientes, hechas, avisos, avisosHoy] = await Promise.all([
           API.get("/solicitudes?estado=pendiente&limite=100"),
-          API.get(`/solicitudes?desde=${encodeURIComponent(hoy.toISOString())}&limite=50`),
+          API.get(`/solicitudes?desde=${desde}&limite=50`),
+          API.get("/avisos-inventario?estado=pendiente&limite=200"),
+          API.get(`/avisos-inventario?desde=${desde}&limite=100`),
         ]);
         this.pendientes = pendientes;
         this.respondidas = hechas.filter((s) => s.estado !== "pendiente");
+        this.avisos = avisos;
+        this.avisosRevisados = avisosHoy.filter((a) => a.estado === "revisado");
         this.error = "";
       } catch (e) {
         this.error = e.message;
@@ -66,6 +76,7 @@ function pantallaNotificaciones() {
       } finally {
         this.procesando = null;
         await this.cargar();
+        if (window.revisarCampana) window.revisarCampana();
       }
     },
 
@@ -87,6 +98,61 @@ function pantallaNotificaciones() {
       } finally {
         this.procesando = null;
         await this.cargar();
+        if (window.revisarCampana) window.revisarCampana();
+      }
+    },
+
+    // Mientras se escribe un rechazo o un conteo no se recarga la lista.
+    get ocupado() {
+      return Boolean(this.rechazando) || Object.values(this.conteos).some((c) => c !== "" && c !== undefined);
+    },
+
+    // --- Ventas sin existencia registrada --------------------------------
+
+    // Un grupo por producto: contar una vez cierra todos sus avisos.
+    get productosSinExistencia() {
+      const grupos = new Map();
+      for (const a of this.avisos) {
+        if (!grupos.has(a.producto_id)) grupos.set(a.producto_id, { ...a, ventas: [] });
+        grupos.get(a.producto_id).ventas.push(a);
+      }
+      return [...grupos.values()];
+    },
+
+    async contar(g) {
+      const conteo = this.conteos[g.producto_id];
+      if (conteo === undefined || conteo === "" || Number(conteo) < 0) {
+        this.error = `${g.producto}: escribe cuántas piezas hay en anaquel.`;
+        return;
+      }
+      this.procesando = `p${g.producto_id}`;
+      this.error = "";
+      try {
+        await API.post(`/avisos-inventario/${g.ventas[0].id}/conteo`, { conteo: String(conteo) });
+        delete this.conteos[g.producto_id];
+        this.avisar(`Listo: ${g.producto} queda con ${cantidad(conteo)} en existencia.`);
+      } catch (e) {
+        this.error = `${g.producto}: ${e.message}`;
+      } finally {
+        this.procesando = null;
+        await this.cargar();
+        if (window.revisarCampana) window.revisarCampana();
+      }
+    },
+
+    async yaRevisado(g) {
+      this.procesando = `p${g.producto_id}`;
+      this.error = "";
+      try {
+        await API.post(`/avisos-inventario/${g.ventas[0].id}/revisado`);
+        delete this.conteos[g.producto_id];
+        this.avisar(`${g.producto}: marcado como revisado, sin cambiar la existencia.`);
+      } catch (e) {
+        this.error = `${g.producto}: ${e.message}`;
+      } finally {
+        this.procesando = null;
+        await this.cargar();
+        if (window.revisarCampana) window.revisarCampana();
       }
     },
 

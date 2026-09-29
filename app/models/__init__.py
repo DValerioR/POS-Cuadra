@@ -11,6 +11,7 @@ from app.models.venta import EstadoVenta, MetodoPago, Pago, Venta, VentaRenglon,
 from app.models.devolucion import Devolucion, DevolucionRenglon, TipoDevolucion
 from app.models.venta_en_espera import VentaEnEspera
 from app.models.solicitud import EstadoSolicitud, SolicitudDevolucion
+from app.models.aviso_inventario import AvisoInventario, EstadoAviso
 
 __all__ = [
     "Negocio",
@@ -38,4 +39,6 @@ __all__ = [
     "VentaEnEspera",
     "EstadoSolicitud",
     "SolicitudDevolucion",
+    "AvisoInventario",
+    "EstadoAviso",
 ]

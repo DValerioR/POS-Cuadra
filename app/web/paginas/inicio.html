@@ -26,7 +26,7 @@
                   :aria-expanded="menuAbierto === i" @click="alternarMenu(i)" @mouseenter="if (menuAbierto !== null) abrirMenu(i)">
             <span x-text="g.nombre"></span><svg class="ico flecha"><use href="/static/iconos.svg#flecha-abajo"/></svg>
             <span class="numero-aviso en-titulo" x-show="avisosGrupo(g)" x-text="avisosGrupo(g)"
-                  :title="`${avisosGrupo(g)} por autorizar`"></span>
+                  :title="`${avisosGrupo(g)} pendientes`"></span>
           </button>
           <div class="menu-lista panel" role="menu" x-show="menuAbierto === i">
             <template x-for="(s, j) in g.secciones" :key="s.id">
@@ -44,7 +44,7 @@
         </div>
       </template>
     </nav>
-    <a class="campana" href="/notificaciones" title="Solicitudes por autorizar" hidden>
+    <a class="campana" href="/notificaciones" title="Notificaciones" hidden>
       <svg><use href="/static/iconos.svg#campana"/></svg><span class="numero"></span>
     </a>
     <button type="button" class="salir" onclick="cerrarSesion()" title="Cerrar sesión">

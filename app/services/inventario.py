@@ -235,3 +235,58 @@ def ajustar(
             raise NoEncontrado("Lote no encontrado para ese producto")
 
     return _registrar(db, lote, usuario, tipo, cantidad, motivo)
+
+
+def existencia_total(db: Session, producto_id: int) -> Decimal:
+    """Suma de todos los lotes, incluido el sin caducidad aunque esté en
+    negativo (piezas vendidas que el sistema no tenía registradas)."""
+    return db.scalar(select(func.coalesce(func.sum(Lote.cantidad), 0)).where(Lote.producto_id == producto_id))
+
+
+def fijar_existencia(
+    db: Session, negocio_id: int, usuario_id: int, producto_id: int, conteo: Decimal, motivo: str,
+) -> list[AjusteInventario]:
+    """Deja la existencia del producto igual al conteo físico, con ajustes
+    registrados. Los lotes con caducidad se respetan mientras alcance el
+    conteo; lo demás queda en el lote sin caducidad (que ya no queda en
+    negativo). Si el conteo es menor que lo que hay en lotes con caducidad,
+    se quitan primero de los que caducan antes. No hace commit."""
+    usuario = _validar_usuario(db, negocio_id, usuario_id, ROLES_AJUSTE)
+    producto = obtener_producto(db, negocio_id, producto_id)
+    if conteo < 0:
+        raise OperacionInvalida("El conteo no puede ser negativo")
+    motivo = motivo.strip()
+    if not motivo:
+        raise OperacionInvalida("El motivo es obligatorio")
+
+    lotes = db.scalars(
+        select(Lote).where(Lote.producto_id == producto.id)
+        .order_by(Lote.caducidad.asc().nulls_last(), Lote.id).with_for_update()
+    ).all()
+    con_caducidad = [l for l in lotes if not (l.caducidad is None and l.numero_lote is None)]
+    en_lotes = sum((max(l.cantidad, Decimal(0)) for l in con_caducidad), Decimal(0))
+
+    ajustes = []
+    if conteo >= en_lotes:
+        objetivo_sin_caducidad = conteo - en_lotes
+    else:
+        # Sobran piezas en lotes con caducidad: se quitan de las que caducan antes.
+        objetivo_sin_caducidad = Decimal(0)
+        sobran = en_lotes - conteo
+        for lote in con_caducidad:
+            if sobran == 0:
+                break
+            quitar = min(max(lote.cantidad, Decimal(0)), sobran)
+            if quitar > 0:
+                ajustes.append(_registrar(db, lote, usuario, TipoAjuste.AJUSTE, -quitar, motivo))
+                sobran -= quitar
+    sin_caducidad = lote_sin_caducidad(db, producto, crear=objetivo_sin_caducidad > 0)
+    if sin_caducidad is not None and sin_caducidad.cantidad != objetivo_sin_caducidad:
+        diferencia = objetivo_sin_caducidad - sin_caducidad.cantidad
+        ajustes.append(_registrar(db, sin_caducidad, usuario, TipoAjuste.AJUSTE, diferencia, motivo))
+    # Lotes con caducidad en negativo (no debería haber) también se corrigen a cero.
+    for lote in con_caducidad:
+        if lote.cantidad < 0:
+            ajustes.append(_registrar(db, lote, usuario, TipoAjuste.AJUSTE, -lote.cantidad, motivo))
+    db.flush()
+    return ajustes

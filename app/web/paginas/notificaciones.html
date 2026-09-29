@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Solicitudes · POS</title>
+  <title>Notificaciones · POS</title>
   <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="/static/app/icono-180.png">
@@ -24,7 +24,7 @@
       <div class="panel">
         <div class="encabezado">
           <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
-          <div><h2>Solo administradores</h2><p class="suave">Aquí se autorizan las devoluciones que piden los cajeros.</p></div>
+          <div><h2>Solo administradores</h2><p class="suave">Aquí se autorizan devoluciones y se revisan las ventas sin existencia.</p></div>
         </div>
       </div>
     </template>
@@ -34,8 +34,8 @@
         <div class="encabezado" style="margin: 0">
           <span class="circulo"><svg><use href="/static/iconos.svg#campana"/></svg></span>
           <div>
-            <h1>Solicitudes por autorizar</h1>
-            <p class="suave">Devoluciones y cancelaciones que pidieron en las cajas. El dinero sale de la caja que la pidió.</p>
+            <h1>Notificaciones</h1>
+            <p class="suave">Lo que necesita a un administrador: devoluciones por autorizar y ventas sin existencia registrada.</p>
           </div>
         </div>
 
@@ -44,11 +44,13 @@
         </div>
 
         <!-- Sin pendientes -->
-        <div class="panel vacio-solicitudes" x-show="!pendientes.length">
+        <div class="panel vacio-solicitudes" x-show="!pendientes.length && !avisos.length">
           <svg><use href="/static/iconos.svg#palomita"/></svg>
-          <strong>No hay nada por autorizar</strong>
-          <span class="suave">Cuando un cajero pida una devolución aparecerá aquí, y en la campana de arriba en cualquier pantalla.</span>
+          <strong>No hay nada pendiente</strong>
+          <span class="suave">Cuando un cajero pida una devolución o venda algo que el sistema no tenía, aparecerá aquí y en la campana de arriba, en cualquier pantalla.</span>
         </div>
+
+        <div class="paso" style="margin: 0" x-show="pendientes.length">Devoluciones por autorizar</div>
 
         <!-- Pendientes, la más vieja primero -->
         <template x-for="s in pendientes" :key="s.id">
@@ -107,10 +109,75 @@
           </article>
         </template>
 
+        <!-- Ventas sin existencia registrada: una tarjeta por producto -->
+        <div class="paso" style="margin: 0" x-show="avisos.length">Ventas sin existencia registrada</div>
+        <template x-for="g in productosSinExistencia" :key="g.producto_id">
+          <article class="panel solicitud existencia">
+            <div class="cabeza">
+              <span class="etiqueta">Sin existencia</span>
+              <strong x-text="g.producto"></strong>
+              <span class="suave" x-text="g.clave || 'sin clave'"></span>
+            </div>
+            <p class="motivo">
+              Se vendieron piezas que el sistema no tenía registradas. Hoy el sistema dice que hay
+              <strong x-text="cantidad(g.existencia_actual)"></strong>.
+            </p>
+            <table class="tabla">
+              <thead><tr><th>Venta</th><th class="centro ajustado">Vendidas</th><th class="centro ajustado">Faltaban</th></tr></thead>
+              <tbody>
+                <template x-for="a in g.ventas" :key="a.id">
+                  <tr>
+                    <td><strong x-text="`Folio ${a.folio}`"></strong>
+                      <span class="suave" x-text="` · ${a.caja} · vendió ${a.vendio} · ${hace(a.created_at)}`"></span></td>
+                    <td class="centro" x-text="cantidad(a.vendidas)"></td>
+                    <td class="centro" x-text="cantidad(a.faltantes)"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <form class="conteo" @submit.prevent="contar(g)">
+              <label :for="`conteo-${g.producto_id}`">¿Cuántas hay en anaquel ahora? <span class="ayuda">(se ajusta la existencia a ese número)</span></label>
+              <div class="fila">
+                <input :id="`conteo-${g.producto_id}`" type="number" min="0" step="1" placeholder="0" x-model="conteos[g.producto_id]">
+                <button class="primario grande" :disabled="procesando === `p${g.producto_id}`">
+                  <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
+                  <span x-text="procesando === `p${g.producto_id}` ? 'Guardando…' : 'Guardar conteo'"></span>
+                </button>
+              </div>
+            </form>
+            <div class="fila acciones">
+              <button type="button" class="texto-suave" style="flex: 0 0 auto" :disabled="procesando === `p${g.producto_id}`" @click="yaRevisado(g)">
+                Ya lo revisé, no cambiar la existencia
+              </button>
+            </div>
+          </article>
+        </template>
+
+        <!-- Ventas sin existencia revisadas hoy -->
+        <template x-if="avisosRevisados.length">
+          <div class="panel" style="padding: 0; overflow: hidden">
+            <div class="paso" style="padding: 16px 18px 0">Ventas sin existencia revisadas hoy</div>
+            <table class="tabla">
+              <tbody>
+                <template x-for="a in avisosRevisados" :key="a.id">
+                  <tr>
+                    <td class="ajustado"><span class="etiqueta verde">Revisado</span></td>
+                    <td>
+                      <strong x-text="a.producto"></strong> · <span x-text="`folio ${a.folio}, faltaban ${cantidad(a.faltantes)}`"></span>
+                      <div class="suave" style="font-size: 14px"
+                           x-text="`${a.revisado_por} a las ${hora(a.revisado_en)}` + (a.conteo !== null ? ` · contó ${cantidad(a.conteo)}` : ' · sin conteo')"></div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
         <!-- Respondidas hoy -->
         <template x-if="respondidas.length">
           <div class="panel" style="padding: 0; overflow: hidden">
-            <div class="paso" style="padding: 16px 18px 0">Respondidas hoy</div>
+            <div class="paso" style="padding: 16px 18px 0">Devoluciones respondidas hoy</div>
             <table class="tabla">
               <tbody>
                 <template x-for="s in respondidas" :key="s.id">

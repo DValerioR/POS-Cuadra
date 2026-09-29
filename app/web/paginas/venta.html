@@ -181,7 +181,7 @@
                     <input x-show="r.caducidadMes" x-model="r.numeroLote" placeholder="Lote (opcional)" style="width: 130px">
                   </div>
                   <div class="lote" x-show="faltaExistencia(r) !== null">
-                    <span class="etiqueta peligro" x-text="`Solo hay ${faltaExistencia(r)} en inventario`"></span>
+                    <span class="etiqueta" x-text="`El sistema tiene ${cantidad(faltaExistencia(r))}; al cobrar se avisará al administrador`"></span>
                   </div>
                 </td>
                 <td>

@@ -10,6 +10,7 @@ from app.api.turnos import router as turnos_router
 from app.api.ventas import router as ventas_router
 from app.api.ventas_en_espera import router as ventas_en_espera_router
 from app.api.solicitudes import router as solicitudes_router
+from app.api.avisos_inventario import router as avisos_inventario_router
 from app.api.web import estaticos, router as web_router
 
 app = FastAPI(title="POS Farmacia")
@@ -24,6 +25,7 @@ app.include_router(turnos_router)
 app.include_router(ventas_router)
 app.include_router(ventas_en_espera_router)
 app.include_router(solicitudes_router)
+app.include_router(avisos_inventario_router)
 
 # Pantallas: al final, para que las rutas del API tengan prioridad.
 app.mount("/static", estaticos, name="static")
