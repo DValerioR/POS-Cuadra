@@ -1,5 +1,9 @@
-// Pantalla de devoluciones, cancelaciones y cambios de producto (solo
-// administrador).
+// Pantalla de devoluciones, cancelaciones y cambios de producto.
+//
+// El administrador las hace al momento. El cajero no: envía una solicitud de
+// devolución o cancelación (el cambio de producto es solo del administrador)
+// y sigue cobrando; un administrador la autoriza desde el centro de
+// notificaciones y al cajero le aparece en Vender cuánto entregar.
 //
 // Flujo: buscar la venta por el folio del ticket (o elegirla de las de hoy)
 // -> "Devolver algunos productos", "Cambiar por otro producto" o "Cancelar
@@ -55,7 +59,7 @@ function pantallaDevoluciones() {
     async init() {
       try {
         this.usuario = await API.get("/auth/yo");
-        if (!this.esAdmin) return;
+        if (!this.puedeUsar) return;
         if (this.cajaId) {
           const caja = (await API.get("/cajas")).find((c) => c.id === this.cajaId);
           this.cajaNombre = caja ? caja.nombre : "";
@@ -79,6 +83,17 @@ function pantallaDevoluciones() {
 
     get esAdmin() {
       return this.usuario && this.usuario.rol === "admin";
+    },
+    // El cajero también entra, pero para pedir la devolución, no para hacerla.
+    get puedeUsar() {
+      return this.usuario && this.usuario.rol !== "bodega";
+    },
+    get pideAutorizacion() {
+      return !this.esAdmin;
+    },
+    get textoAccion() {
+      if (this.pideAutorizacion) return { cancelar: "Pedir la cancelación", devolver: "Pedir la devolución" }[this.modo];
+      return { cancelar: "Cancelar la venta", cambiar: "Hacer el cambio", devolver: "Hacer la devolución" }[this.modo];
     },
     get puedeRegresarDinero() {
       return Boolean(this.turno);
@@ -371,6 +386,18 @@ function pantallaDevoluciones() {
       const reparto = this.reparto;
       try {
         let devolucion;
+        if (this.pideAutorizacion) {
+          const solicitud = await API.post(`/ventas/${this.venta.id}/solicitudes`, {
+            caja_id: this.cajaId,
+            tipo: this.modo === "cancelar" ? "cancelacion" : "devolucion",
+            motivo: this.motivoFinal,
+            piezas: this.modo === "cancelar" ? [] : this.piezasDevueltas(),
+          });
+          this.resultado = { tipo: "solicitud", folio: this.venta.folio, total: solicitud.total, cancelacion: this.modo === "cancelar" };
+          this.confirmando = false;
+          this.$nextTick(() => document.getElementById("boton-listo").focus());
+          return;
+        }
         if (this.modo === "cancelar") {
           devolucion = await API.post(`/ventas/${this.venta.id}/cancelar`, {
             caja_id: this.cajaId,

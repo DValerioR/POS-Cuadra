@@ -44,6 +44,7 @@ function pantallaInicio() {
       try {
         [this.usuario, this.negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
         document.title = `Inicio · ${this.negocio.nombre}`;
+        if (this.usuario.rol === "admin") vigilarSolicitudes(document.querySelector(".barra-menus .campana"));
       } catch {
         return; // sin sesión: API ya manda al login
       }

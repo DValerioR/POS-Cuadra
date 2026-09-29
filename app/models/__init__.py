@@ -10,6 +10,7 @@ from app.models.turno import TipoTurno, Turno
 from app.models.venta import EstadoVenta, MetodoPago, Pago, Venta, VentaRenglon, VentaRenglonLote
 from app.models.devolucion import Devolucion, DevolucionRenglon, TipoDevolucion
 from app.models.venta_en_espera import VentaEnEspera
+from app.models.solicitud import EstadoSolicitud, SolicitudDevolucion
 
 __all__ = [
     "Negocio",
@@ -35,4 +36,6 @@ __all__ = [
     "DevolucionRenglon",
     "TipoDevolucion",
     "VentaEnEspera",
+    "EstadoSolicitud",
+    "SolicitudDevolucion",
 ]

@@ -2,6 +2,10 @@
 Las piezas regresan siempre al lote del que salieron, y el dinero sale del
 turno abierto de la caja indicada (ver models/devolucion.py).
 
+El cajero no las hace: pide una devolución o cancelación y un administrador
+la autoriza desde cualquier computadora (services/solicitudes.py, que usa
+`calcular_reembolso` para decir cuánto se regresaría).
+
 Cada registro de devolución guarda el valor devuelto (`total`) y cuánto de
 eso se regresó en dinero (`efectivo` + `tarjeta`). En devoluciones y
 cancelaciones todo el valor se regresa en dinero; en un cambio de producto
@@ -40,17 +44,22 @@ class PiezaDevuelta:
 def _validar(db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str):
     if usuario.rol != RolUsuario.ADMIN:
         raise SinPermiso("Solo un administrador puede cancelar, hacer devoluciones o cambios")
+    return validar_operacion(db, usuario.negocio_id, venta_id, caja_id, motivo)
+
+
+def validar_operacion(db: Session, negocio_id: int, venta_id: int, caja_id: int, motivo: str):
+    """Motivo, venta no cancelada y turno abierto en la caja. Bloquea la venta."""
     motivo = (motivo or "").strip()
     if not motivo:
         raise OperacionInvalida("El motivo es obligatorio")
     venta = db.scalar(
-        select(Venta).where(Venta.id == venta_id, Venta.negocio_id == usuario.negocio_id).with_for_update()
+        select(Venta).where(Venta.id == venta_id, Venta.negocio_id == negocio_id).with_for_update()
     )
     if venta is None:
         raise NoEncontrado("Venta no encontrada")
     if venta.estado == EstadoVenta.CANCELADA:
         raise OperacionInvalida("La venta ya está cancelada")
-    caja = turnos.obtener_caja(db, usuario.negocio_id, caja_id)
+    caja = turnos.obtener_caja(db, negocio_id, caja_id)
     turno = turnos.turno_abierto(db, caja.id)
     if turno is None:
         raise OperacionInvalida(f"La caja '{caja.nombre}' no tiene turno abierto para regresar el dinero")
@@ -133,6 +142,24 @@ def _piezas_solicitadas(venta: Venta, solicitadas: list[PiezaDevuelta]) -> Pieza
                 ya_pedido[asignacion.id] += tomar
                 pendiente -= tomar
     return piezas
+
+
+def calcular_reembolso(
+    db: Session, venta: Venta, tipo: TipoDevolucion, solicitadas: list[PiezaDevuelta] | None = None,
+) -> tuple[Decimal, Decimal, Decimal]:
+    """(total, efectivo, tarjeta) que se regresaría con una devolución o
+    cancelación, sin registrar nada. Valida las piezas igual que al hacerla."""
+    if tipo == TipoDevolucion.CANCELACION:
+        total = _por_regresar(db, venta)
+        if total <= 0:
+            raise OperacionInvalida("Todo lo de esta venta ya se devolvió")
+    elif tipo == TipoDevolucion.DEVOLUCION:
+        piezas = _piezas_solicitadas(venta, solicitadas or [])
+        total = min(sum((importe for _, _, importe in piezas), Decimal(0)), _por_regresar(db, venta))
+    else:
+        raise OperacionInvalida("Los cambios de producto los hace un administrador en la caja")
+    efectivo, tarjeta = _repartir_reembolso(db, venta, total)
+    return total, efectivo, tarjeta
 
 
 def cancelar_venta(db: Session, usuario: Usuario, venta_id: int, caja_id: int, motivo: str) -> Devolucion:

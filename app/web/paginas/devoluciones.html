@@ -15,16 +15,16 @@
 
   <main class="contenido devoluciones" x-cloak x-show="!cargando">
 
-    <template x-if="usuario && !esAdmin">
+    <template x-if="usuario && !puedeUsar">
       <div class="panel">
         <div class="encabezado">
           <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
-          <div><h2>Solo el administrador</h2><p class="suave">Las devoluciones y cancelaciones las hace un administrador. Pídele que entre con su usuario.</p></div>
+          <div><h2>Sin acceso</h2><p class="suave">Las devoluciones las piden en la caja y las autoriza un administrador.</p></div>
         </div>
       </div>
     </template>
 
-    <template x-if="esAdmin">
+    <template x-if="puedeUsar">
       <div class="pila" style="gap: 18px">
 
         <div class="mensaje aviso" x-show="!puedeRegresarDinero" style="margin: 0">
@@ -45,7 +45,10 @@
           <div class="panel">
             <div class="encabezado">
               <span class="circulo"><svg><use href="/static/iconos.svg#regresar"/></svg></span>
-              <div><h2>Devoluciones y cancelaciones</h2><p class="suave">Busca la venta con el folio que viene en el ticket.</p></div>
+              <div><h2>Devoluciones y cancelaciones</h2>
+                <p class="suave" x-text="pideAutorizacion
+                  ? 'Busca la venta con el folio del ticket. Lo que pidas lo autoriza un administrador y tú sigues cobrando.'
+                  : 'Busca la venta con el folio que viene en el ticket.'"></p></div>
             </div>
             <form class="fila" style="align-items: stretch" @submit.prevent="buscarFolio()">
               <div class="buscador" style="flex: 1">
@@ -168,7 +171,7 @@
                     <strong>Devolver algunos productos</strong>
                     <span>El cliente regresa una parte y se le devuelve lo que costó.</span>
                   </button>
-                  <button type="button" class="opcion-grande" @click="elegirModo('cambiar')">
+                  <button type="button" class="opcion-grande" x-show="esAdmin" @click="elegirModo('cambiar')">
                     <svg><use href="/static/iconos.svg#intercambio"/></svg>
                     <strong>Cambiar por otro producto</strong>
                     <span>Regresa algo y se lleva otra cosa; se paga o se regresa la diferencia.</span>
@@ -311,7 +314,7 @@
 
                 <div class="resumen-dinero separado" x-show="modo !== 'cambiar' && totalARegresar > 0">
                   <div class="fila">
-                    <span>Se le regresa al cliente</span>
+                    <span x-text="pideAutorizacion ? 'Se le regresaría al cliente' : 'Se le regresa al cliente'"></span>
                     <strong class="derecha" x-text="dinero(totalARegresar / 100)"></strong>
                   </div>
                   <div class="detalle" x-show="reparto.efectivo > 0 && reparto.tarjeta > 0">
@@ -326,7 +329,8 @@
                   <button type="button" style="flex: 0 0 auto" @click="modo = null">Volver</button>
                   <button type="button" class="grande" :class="modo === 'cancelar' ? 'peligro' : 'primario'"
                           :disabled="!listo" @click="pedirConfirmacion()">
-                    <span x-text="{ cancelar: 'Cancelar la venta', cambiar: 'Hacer el cambio', devolver: 'Hacer la devolución' }[modo]"></span>
+                    <svg class="ico" x-show="pideAutorizacion"><use href="/static/iconos.svg#enviar"/></svg>
+                    <span x-text="textoAccion"></span>
                   </button>
                 </div>
                 <p class="suave derecha" style="font-size: 14px; margin-top: 8px" x-show="!listo && puedeRegresarDinero">
@@ -352,7 +356,10 @@
     <div class="panel ventana" x-show="confirmando">
       <template x-if="confirmando">
         <div>
-          <h2 x-text="{ cancelar: '¿Cancelar la venta completa?', cambiar: '¿Hacer el cambio?', devolver: '¿Hacer la devolución?' }[modo]"></h2>
+          <h2 x-text="pideAutorizacion
+            ? (modo === 'cancelar' ? '¿Pedir que se cancele la venta?' : '¿Pedir la devolución?')
+            : { cancelar: '¿Cancelar la venta completa?', cambiar: '¿Hacer el cambio?', devolver: '¿Hacer la devolución?' }[modo]"></h2>
+          <p x-show="pideAutorizacion">La solicitud le llega a los administradores. Cuando la autoricen, te aparecerá en Vender cuánto entregar.</p>
           <p class="suave">Folio <strong x-text="venta.folio"></strong> · Motivo: <span x-text="motivoFinal"></span></p>
           <template x-if="modo !== 'cambiar'">
             <div>
@@ -374,7 +381,7 @@
             <button type="button" class="grande" @click="confirmando = false">No, regresar</button>
             <button type="button" id="boton-confirmar" class="grande" :class="modo === 'cancelar' ? 'peligro' : 'primario'"
                     :disabled="procesando" @click="confirmar()">
-              <span x-text="procesando ? 'Guardando…' : 'Sí, confirmar'"></span>
+              <span x-text="procesando ? 'Enviando…' : (pideAutorizacion ? 'Sí, enviar' : 'Sí, confirmar')"></span>
             </button>
           </div>
         </div>
@@ -382,10 +389,34 @@
     </div>
   </div>
 
+  <!-- Solicitud enviada (cajero) -->
+  <div class="velo" x-show="resultado && resultado.tipo === 'solicitud'" x-cloak>
+    <div class="panel ventana">
+      <template x-if="resultado && resultado.tipo === 'solicitud'">
+        <div>
+          <div class="palomita"><svg><use href="/static/iconos.svg#enviar"/></svg></div>
+          <h2>Solicitud enviada</h2>
+          <p class="suave">
+            <span x-text="resultado.cancelacion ? 'Cancelación' : 'Devolución'"></span> del folio <strong x-text="resultado.folio"></strong>
+            por <strong x-text="dinero(resultado.total)"></strong>.
+          </p>
+          <div class="mensaje info" style="text-align: left">
+            <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+            <span>Todavía <strong>no entregues dinero</strong>. Un administrador la revisará desde su computadora; cuando la responda, te aparecerá en la pantalla de Vender cuánto entregar. Mientras, sigue cobrando.</span>
+          </div>
+          <div class="fila separado">
+            <button type="button" class="grande" @click="otraVenta()">Otra devolución</button>
+            <a id="boton-listo" class="boton primario grande" href="/venta">Volver a Vender</a>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
   <!-- Resultado -->
-  <div class="velo" x-show="resultado" x-cloak>
+  <div class="velo" x-show="resultado && resultado.tipo !== 'solicitud'" x-cloak>
     <div class="panel ventana" x-show="resultado">
-      <template x-if="resultado">
+      <template x-if="resultado && resultado.tipo !== 'solicitud'">
         <div>
           <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
           <h2 x-text="{ cancelacion: 'Venta cancelada', cambio: 'Cambio hecho', devolucion: 'Devolución hecha' }[resultado.tipo]"></h2>

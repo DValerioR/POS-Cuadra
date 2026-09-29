@@ -250,7 +250,7 @@ def test_venta_de_otro_negocio_es_invisible(como_mostrador, como_admin, caja, sh
 
 def test_historial_de_ventas_solo_admin(como_mostrador, como_admin, caja, shampoo):
     vender(como_mostrador, caja, [r(shampoo, 1)], efectivo="116")
-    assert como_mostrador.get("/ventas").status_code == 403
+    assert como_mostrador.get("/ventas").status_code == 200  # solo las de hoy (ver test_solicitudes)
     assert [v["total"] for v in como_admin.get("/ventas").json()] == ["116.00"]
 
 

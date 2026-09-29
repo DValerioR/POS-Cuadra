@@ -201,7 +201,8 @@ const TODOS = ["admin", "mostrador", "bodega"];
 const SECCIONES = [
   { id: "venta", texto: "Vender", icono: "carrito", grupo: "Ventas", ruta: "/venta", existe: true, roles: ["admin", "mostrador"], tecla: "F1" },
   { id: "turno", texto: "Turno y corte", icono: "caja", grupo: "Ventas", ruta: "/turno", existe: true, roles: ["admin", "mostrador"], tecla: "F2" },
-  { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin"] },
+  { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin", "mostrador"] },
+  { id: "notificaciones", texto: "Solicitudes por autorizar", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
   { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: false, roles: ["admin", "bodega"], tecla: "F3" },
   { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/entradas", existe: false, roles: ["admin", "bodega"], tecla: "F4" },
@@ -244,6 +245,7 @@ async function pintarBarra() {
     <a class="marca" href="/inicio" title="Ir a la pantalla de inicio"><span class="logo">${icono("cruz", "")}</span><span data-negocio>Farmacia</span></a>
     <button type="button" class="boton-menu" aria-expanded="false">${icono("menu")}Menú</button>
     <nav></nav>
+    <a class="campana" href="/notificaciones" title="Solicitudes por autorizar" hidden>${icono("campana", "")}<span class="numero"></span></a>
     <span class="usuario" data-usuario></span>
     <button type="button" class="salir" onclick="cerrarSesion()" title="Cerrar sesión">${icono("salir")}<span>Salir</span></button>`;
   const nav = barra.querySelector("nav");
@@ -261,8 +263,9 @@ async function pintarBarra() {
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
+    if (usuario.rol === "admin") vigilarSolicitudes(barra.querySelector(".campana"));
     nav.innerHTML += seccionesDe(usuario.rol)
-      .filter((s) => s.ruta && s.existe)
+      .filter((s) => s.ruta && s.existe && s.id !== "notificaciones") // esa va en la campana
       .map((s) => enlace(s.ruta, s.texto, s.icono, s.id === actual))
       .join("");
     const nombre = usuario.nombre_completo || usuario.nombre_usuario;
@@ -272,6 +275,30 @@ async function pintarBarra() {
   } catch {
     /* sin sesión: API ya manda al login */
   }
+}
+
+// --- Campana de solicitudes (solo administradores) -------------------------
+// Cuenta las devoluciones y cancelaciones que esperan autorización y la
+// muestra en la barra (y en el título de la pestaña) desde cualquier pantalla.
+// Se revisa cada 20 segundos.
+
+function vigilarSolicitudes(campana) {
+  const revisar = async () => {
+    let n = 0;
+    try {
+      n = (await API.get("/solicitudes/pendientes")).pendientes;
+    } catch {
+      return; // sin conexión: se queda como estaba
+    }
+    campana.hidden = false;
+    campana.classList.toggle("con-pendientes", n > 0);
+    campana.querySelector(".numero").textContent = n > 0 ? String(n) : "";
+    campana.title = n === 0 ? "No hay solicitudes por autorizar" : `${n} ${n === 1 ? "solicitud" : "solicitudes"} por autorizar`;
+    document.title = (n > 0 ? `(${n}) ` : "") + document.title.replace(/^\(\d+\) /, "");
+    document.dispatchEvent(new CustomEvent("solicitudes-pendientes", { detail: n }));
+  };
+  revisar();
+  setInterval(revisar, 20000);
 }
 
 document.addEventListener("DOMContentLoaded", pintarBarra);

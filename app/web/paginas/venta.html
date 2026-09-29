@@ -88,6 +88,39 @@
         </button>
       </div>
 
+      <!-- Respuestas del administrador a devoluciones pedidas desde esta caja -->
+      <template x-for="s in respuestas" :key="s.id">
+        <div class="respuesta-solicitud" :class="s.estado">
+          <div class="icono"><svg><use :href="'/static/iconos.svg#' + (s.estado === 'autorizada' ? 'billete' : 'tache')"/></svg></div>
+          <div class="texto">
+            <template x-if="s.estado === 'autorizada'">
+              <div>
+                <strong>Autorizada la <span x-text="textoTipoSolicitud(s)"></span> del folio <span x-text="s.folio"></span></strong>
+                <div>
+                  <span x-show="Number(s.efectivo) > 0">Entrega <b class="monto" x-text="dinero(s.efectivo)"></b> en efectivo al cliente.</span>
+                  <span x-show="Number(s.tarjeta) > 0">Regresa <b class="monto" x-text="dinero(s.tarjeta)"></b> a su tarjeta en la terminal.</span>
+                </div>
+              </div>
+            </template>
+            <template x-if="s.estado === 'rechazada'">
+              <div>
+                <strong>No se autorizó la <span x-text="textoTipoSolicitud(s)"></span> del folio <span x-text="s.folio"></span></strong>
+                <div>No entregues dinero.<span x-show="s.respuesta" x-text="` Motivo: ${s.respuesta}`"></span></div>
+              </div>
+            </template>
+            <div class="suave quien" x-text="`${s.estado === 'autorizada' ? 'Autorizó' : 'Respondió'} ${s.resuelta_por}`"></div>
+          </div>
+          <button type="button" :class="s.estado === 'autorizada' ? 'primario' : ''" @click="marcarVista(s)"
+                  x-text="s.estado === 'autorizada' ? 'Ya lo entregué' : 'Entendido'"></button>
+        </div>
+      </template>
+      <div class="esperando" x-show="esperando.length">
+        <svg class="ico"><use href="/static/iconos.svg#reloj"/></svg>
+        <span x-text="esperando.length === 1
+          ? `Esperando que un administrador autorice la ${textoTipoSolicitud(esperando[0])} del folio ${esperando[0].folio}.`
+          : `Esperando que un administrador autorice ${esperando.length} devoluciones.`"></span>
+      </div>
+
       <!-- Ventas guardadas de esta caja: un clic las regresa a la pantalla -->
       <div class="guardadas" x-show="guardadas.length">
         <span class="rotulo"><svg class="ico"><use href="/static/iconos.svg#pausa"/></svg>

@@ -102,6 +102,42 @@ a.marca:hover { opacity: 0.9; }
 .barra button:hover { background: rgba(255, 255, 255, 0.14); }
 .barra .boton-menu { display: none; }
 
+/* Campana de solicitudes por autorizar (solo administradores) */
+.campana {
+  position: relative;
+  display: grid; place-items: center;
+  flex: 0 0 auto;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  color: #fff;
+  opacity: 0.75;
+}
+.barra .campana { margin-left: auto; }
+.barra .campana:not([hidden]) + .usuario { margin-left: 0; }
+.barra-menus .campana { margin-left: auto; }
+.barra-menus .campana:not([hidden]) + .salir { margin-left: 0; }
+.campana:hover { opacity: 1; background: rgba(255, 255, 255, 0.12); }
+.campana svg { width: 24px; height: 24px; }
+.campana.con-pendientes { opacity: 1; animation: timbre 2.5s ease-in-out infinite; }
+.campana .numero:empty { display: none; }
+.campana .numero {
+  position: absolute; top: 2px; right: 0;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  border-radius: 999px;
+  background: #ff5a4f;
+  color: #fff;
+  font-size: 12px; font-weight: 800; line-height: 20px; text-align: center;
+  box-shadow: 0 0 0 2px var(--primario-oscuro);
+}
+@keyframes timbre {
+  0%, 80%, 100% { transform: rotate(0); }
+  84% { transform: rotate(14deg); }
+  88% { transform: rotate(-12deg); }
+  92% { transform: rotate(8deg); }
+  96% { transform: rotate(-4deg); }
+}
+@media (prefers-reduced-motion: reduce) { .campana.con-pendientes { animation: none; } }
+
 @media (max-width: 1200px) {
   /* Solo ícono, salvo "Inicio" y la pantalla actual; el nombre sale al pasar el ratón. */
   .barra { gap: 14px; }
@@ -326,6 +362,29 @@ p { margin: 0 0 12px; }
 .guardada .suave { font-size: 13px; font-weight: 500; }
 .ventana-guardar { width: min(520px, 100%); box-shadow: var(--sombra-alta); }
 
+/* Respuesta del administrador a una devolución pedida desde esta caja */
+.respuesta-solicitud {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px;
+  border-radius: var(--radio);
+  border: 2px solid var(--primario);
+  background: var(--primario-suave);
+  box-shadow: var(--sombra);
+}
+.respuesta-solicitud.rechazada { border-color: var(--peligro); background: var(--peligro-suave); }
+.respuesta-solicitud .icono {
+  display: grid; place-items: center; flex: 0 0 auto;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--primario); color: #fff;
+}
+.respuesta-solicitud.rechazada .icono { background: var(--peligro); }
+.respuesta-solicitud .icono svg { width: 24px; height: 24px; }
+.respuesta-solicitud .texto { flex: 1; min-width: 0; line-height: 1.35; }
+.respuesta-solicitud .monto { font-size: 20px; }
+.respuesta-solicitud .quien { font-size: 13px; }
+.respuesta-solicitud button { flex: 0 0 auto; }
+.esperando { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--info); }
+
 /* Ventana de búsqueda por nombre (F2) */
 .velo.arriba { align-items: flex-start; padding-top: 8vh; }
 .busqueda-nombre { width: min(760px, 100%); padding: 0; overflow: hidden; box-shadow: var(--sombra-alta); }
@@ -495,7 +554,24 @@ details.desglose table { margin-top: 8px; }
 }
 .tabla th.derecha { text-align: right; }
 .tabla th.centro { text-align: center; }
-.tabla th.ajustado { width: 1%; white-space: nowrap; } /* tan ancha como su contenido */
+.tabla th.ajustado, .tabla td.ajustado { width: 1%; white-space: nowrap; } /* tan ancha como su contenido */
+
+/* --- Centro de notificaciones ------------------------------------------ */
+
+.notificaciones { max-width: 860px; margin: 0 auto; }
+.vacio-solicitudes { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 40px 20px; }
+.vacio-solicitudes svg { width: 56px; height: 56px; color: var(--primario); }
+.vacio-solicitudes strong { font-size: 20px; }
+.solicitud { display: flex; flex-direction: column; gap: 14px; border-left: 6px solid var(--aviso); }
+.solicitud.cancelacion { border-left-color: var(--peligro); }
+.solicitud .cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.solicitud .cabeza strong { font-size: 20px; }
+.solicitud .motivo { margin: 0; }
+.solicitud .tabla { border: 1px solid var(--linea); border-radius: var(--radio-chico); overflow: hidden; }
+.solicitud .acciones { justify-content: flex-end; }
+.solicitud .acciones .grande { width: auto; min-width: 220px; flex: 0 1 auto; }
+.solicitud .rechazo { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: var(--radio-chico); background: var(--peligro-suave); }
+.solicitud .rechazo label { margin: 0; }
 .tabla td { padding: 12px; border-bottom: 1px solid var(--linea); vertical-align: middle; }
 .tabla .nombre { font-weight: 600; }
 .tabla tr.marcada td { background: var(--primario-suave); }

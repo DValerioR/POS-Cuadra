@@ -17,6 +17,10 @@
 // otro cliente y se retoma después desde la fila de "Ventas guardadas".
 // Máximo 5 por caja; mientras haya alguna, no se puede salir de Vender ni
 // hacer el corte. Tampoco se sale con una venta sin cobrar en la pantalla.
+//
+// Devoluciones: el cajero las pide en Devoluciones y las autoriza un
+// administrador. Aquí aparece la respuesta (cuánto entregar, o que no se
+// hace) hasta que el cajero la marca como vista. Se revisa cada 15 segundos.
 
 function pantallaVenta() {
   return {
@@ -56,6 +60,9 @@ function pantallaVenta() {
     aviso: "",
     _avisoTimer: null,
 
+    // Solicitudes de devolución de esta caja (pendientes y respuestas sin ver)
+    solicitudes: [],
+
     async init() {
       try {
         this.usuario = await API.get("/auth/yo");
@@ -68,6 +75,7 @@ function pantallaVenta() {
         this.cargando = false;
       }
       window.addEventListener("keydown", (ev) => this.atajo(ev));
+      setInterval(() => this.turno && this.cargarSolicitudes(), 15000);
       Salida.bloquear(() => {
         const n = this.guardadas.length;
         if (n) {
@@ -101,7 +109,7 @@ function pantallaVenta() {
 
     async cargarTurno() {
       this.turno = await API.get(`/turnos/abierto?caja_id=${this.cajaId}`);
-      await this.cargarGuardadas();
+      await Promise.all([this.cargarGuardadas(), this.cargarSolicitudes()]);
     },
 
     async abrirTurno() {
@@ -487,6 +495,34 @@ function pantallaVenta() {
       }
       await this.cargarGuardadas();
       this.$nextTick(() => this.enfocarCodigo());
+    },
+
+    // --- Respuestas a solicitudes de devolución ----------------------------
+
+    async cargarSolicitudes() {
+      try {
+        this.solicitudes = await API.get(`/solicitudes/caja/${this.cajaId}`);
+      } catch {
+        /* sin conexión: se revisa en la siguiente vuelta */
+      }
+    },
+    get respuestas() {
+      return this.solicitudes.filter((s) => s.estado !== "pendiente");
+    },
+    get esperando() {
+      return this.solicitudes.filter((s) => s.estado === "pendiente");
+    },
+    async marcarVista(s) {
+      try {
+        await API.post(`/solicitudes/${s.id}/vista`);
+      } catch (e) {
+        this.error = e.message;
+      }
+      await this.cargarSolicitudes();
+      this.$nextTick(() => this.enfocarCodigo());
+    },
+    textoTipoSolicitud(s) {
+      return s.tipo === "cancelacion" ? "cancelación" : "devolución";
     },
 
     textoGuardada(g, i) {

@@ -1,14 +1,16 @@
-from datetime import date
+from datetime import date, datetime, time
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import solo_admin, usuario_actual
+from app.core.auth import usuario_actual
+from app.core.config import settings
 from app.core.database import get_db
-from app.models import Usuario, Venta
+from app.models import RolUsuario, Usuario, Venta
 from app.schemas.venta import (
     CambioIn, CambioOut, CancelarIn, DevolucionOut, DevolverIn, ImpresionOut, LoteVendidoOut, PagoOut, ReimprimirIn, RenglonOut, VentaIn,
     VentaOut, VentaResumenOut,
@@ -115,10 +117,15 @@ def listar_ventas(
     desde: date | None = None,
     limite: int = Query(50, le=500),
     desplazamiento: int = 0,
-    usuario: Usuario = Depends(solo_admin),
+    usuario: Usuario = Depends(usuario_actual),
     db: Session = Depends(get_db),
 ):
-    """Historial de ventas (solo admin). `folio` es el número del ticket."""
+    """Historial de ventas. `folio` es el número del ticket.
+
+    El administrador ve todo. Quien cobra (para pedir una devolución) busca
+    cualquier venta por folio, pero sin folio solo ve las de hoy."""
+    if usuario.rol == RolUsuario.BODEGA:
+        raise HTTPException(status_code=403, detail="Tu usuario no tiene acceso a las ventas")
     stmt = select(Venta).where(Venta.negocio_id == usuario.negocio_id)
     if turno_id is not None:
         stmt = stmt.where(Venta.turno_id == turno_id)
@@ -126,6 +133,9 @@ def listar_ventas(
         stmt = stmt.where(Venta.folio == folio)
     if desde is not None:
         stmt = stmt.where(Venta.created_at >= desde)
+    if usuario.rol != RolUsuario.ADMIN and folio is None:
+        zona = ZoneInfo(settings.zona_horaria)
+        stmt = stmt.where(Venta.created_at >= datetime.combine(datetime.now(zona).date(), time.min, tzinfo=zona))
     return db.scalars(stmt.order_by(Venta.id.desc()).limit(limite).offset(desplazamiento)).all()
 
 

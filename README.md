@@ -144,7 +144,8 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     del negocio para que dos cajas nunca vendan la misma pieza.
   - Responde `avisos` (ej. producto que requiere receta) y de qué lote salió
     cada pieza (`renglones[].lotes`).
-- `GET /ventas/{id}` — detalle (para reimprimir). `GET /ventas` — historial, solo admin (`?folio=` busca por el número del ticket).
+- `GET /ventas/{id}` — detalle (para reimprimir). `GET /ventas` — historial (`?folio=` busca por el número del ticket).
+  El administrador ve todo; mostrador busca cualquier venta por folio, pero sin folio solo ve las de hoy; bodega no entra.
 - `POST /ventas/{id}/cancelar` con `{caja_id, motivo}` — cancela toda la venta.
 - `POST /ventas/{id}/devoluciones` con `{caja_id, motivo, piezas: [{renglon_id,
   cantidad, lote_id?}]}` — devuelve algunas piezas.
@@ -160,6 +161,22 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   `saldo_a_favor`) en una venta nueva; si lo nuevo cuesta más el cliente
   paga la diferencia, si cuesta menos se le regresa en efectivo. Todo o nada.
 - Corte de turno: fondo + cobrado en el turno − reembolsado en el turno.
+
+### Solicitudes de devolución (cajero → administrador)
+
+- `POST /ventas/{id}/solicitudes` con `{caja_id, tipo: "devolucion" | "cancelacion",
+  motivo, piezas?}` — el cajero pide una devolución o cancelación (admin y
+  mostrador). Se valida como si se hiciera, pero no se mueve nada. Una sola
+  pendiente por venta. Los cambios de producto siguen siendo solo del admin.
+- `GET /solicitudes?estado=&desde=` y `GET /solicitudes/pendientes` (cuántas) —
+  centro de notificaciones, solo admin.
+- `POST /solicitudes/{id}/autorizar` — solo admin: hace la devolución o
+  cancelación en el turno de la caja que la pidió (de ahí sale el dinero).
+  Si ya no se puede (alguien ya la hizo), avisa y sigue pendiente.
+  `POST /solicitudes/{id}/rechazar` con `{respuesta?}`.
+- `GET /solicitudes/caja/{caja_id}` — lo que ve el cajero: sus pendientes y las
+  respuestas sin ver; `POST /solicitudes/{id}/vista` las marca como vistas.
+- No se puede cerrar el turno de una caja con solicitudes pendientes.
 
 ### Ventas en espera
 
@@ -217,7 +234,14 @@ funcione sin internet.
   la ventana) ni hacer el corte.
 - `/turno` — corte de caja: lo esperado, captura de lo contado con la
   diferencia en vivo, y cierre.
-- `/devoluciones` — devoluciones, cancelaciones y cambios de producto (solo admin).
+- `/devoluciones` — el administrador hace devoluciones, cancelaciones y
+  cambios al momento; el cajero pide devoluciones y cancelaciones, que llegan
+  al centro de notificaciones, y sigue cobrando. La respuesta (cuánto entregar,
+  o que no se hace) le aparece en Vender hasta que la marca como vista.
+- `/notificaciones` — centro de notificaciones (solo admin): solicitudes por
+  autorizar, con autorizar o rechazar (con motivo) y las respondidas hoy. Una
+  campana con el número de pendientes aparece en la barra de todas las
+  pantallas y en el inicio; se revisa cada 20 segundos.
 
 Todas las pantallas llevan la barra superior con "Inicio" y se probaron a
 1920×1080, 1366×768, 1200×700, 683 de ancho y 600 de alto: sin
@@ -228,7 +252,8 @@ En cada computadora de mostrador: acceso directo a
 `chrome.exe --app=http://IP-DEL-SERVIDOR:8000/`.
 
 Para ver las pantallas sin tocar datos reales: `python -m app.scripts.servidor_demo`
-(http://127.0.0.1:8001, usuario `demo` / `demo1234`, sobre la base de pruebas).
+(http://127.0.0.1:8001, administrador `demo` / `demo1234` y mostrador
+`cajero` / `cajero1234`, sobre la base de pruebas).
 
 ## Pruebas automáticas
 

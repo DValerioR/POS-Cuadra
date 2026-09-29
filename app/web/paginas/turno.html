@@ -181,11 +181,21 @@
         },
 
         async revisarPendientes() {
-          const guardadas = (await API.get(`/ventas-en-espera?caja_id=${this.cajaId}`)).length;
-          this.pendientes = guardadas
-            ? [`Hay ${guardadas === 1 ? "una venta guardada" : `${guardadas} ventas guardadas`} en esta caja: ` +
-               "cóbralas o bórralas antes de hacer el corte."]
-            : [];
+          const [espera, solicitudes] = await Promise.all([
+            API.get(`/ventas-en-espera?caja_id=${this.cajaId}`),
+            API.get(`/solicitudes/caja/${this.cajaId}`),
+          ]);
+          const guardadas = espera.length;
+          const porAutorizar = solicitudes.filter((s) => s.estado === "pendiente").length;
+          this.pendientes = [];
+          if (guardadas) {
+            this.pendientes.push(`Hay ${guardadas === 1 ? "una venta guardada" : `${guardadas} ventas guardadas`} en esta caja: ` +
+              "cóbralas o bórralas antes de hacer el corte.");
+          }
+          if (porAutorizar) {
+            this.pendientes.push(`Hay ${porAutorizar === 1 ? "una devolución" : `${porAutorizar} devoluciones`} de esta caja ` +
+              "esperando que un administrador la responda; el dinero saldría de este turno.");
+          }
         },
 
         get cajaNombre() {

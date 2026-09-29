@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Solicitudes · POS</title>
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/notificaciones.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaNotificaciones()">
+
+  <header class="barra" data-pagina="notificaciones"></header>
+
+  <main class="contenido notificaciones" x-cloak x-show="!cargando">
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+          <div><h2>Solo administradores</h2><p class="suave">Aquí se autorizan las devoluciones que piden los cajeros.</p></div>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="esAdmin">
+      <div class="pila" style="gap: 18px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#campana"/></svg></span>
+          <div>
+            <h1>Solicitudes por autorizar</h1>
+            <p class="suave">Devoluciones y cancelaciones que pidieron en las cajas. El dinero sale de la caja que la pidió.</p>
+          </div>
+        </div>
+
+        <div class="mensaje error" x-show="error" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+        </div>
+
+        <!-- Sin pendientes -->
+        <div class="panel vacio-solicitudes" x-show="!pendientes.length">
+          <svg><use href="/static/iconos.svg#palomita"/></svg>
+          <strong>No hay nada por autorizar</strong>
+          <span class="suave">Cuando un cajero pida una devolución aparecerá aquí, y en la campana de arriba en cualquier pantalla.</span>
+        </div>
+
+        <!-- Pendientes, la más vieja primero -->
+        <template x-for="s in pendientes" :key="s.id">
+          <article class="panel solicitud" :class="{ cancelacion: s.tipo === 'cancelacion' }">
+            <div class="cabeza">
+              <span class="etiqueta" :class="{ peligro: s.tipo === 'cancelacion' }" x-text="textoTipo(s)"></span>
+              <strong x-text="`Folio ${s.folio}`"></strong>
+              <span class="suave" x-text="`${s.caja} · pidió ${s.solicitada_por} · ${hace(s.created_at)}`"></span>
+            </div>
+
+            <p class="motivo"><span class="suave">Motivo:</span> <strong x-text="s.motivo"></strong></p>
+
+            <template x-if="s.piezas.length">
+              <table class="tabla">
+                <thead><tr><th>Regresa</th><th class="centro ajustado">Piezas</th><th class="derecha ajustado">Importe</th></tr></thead>
+                <tbody>
+                  <template x-for="p in s.piezas" :key="p.renglon_id">
+                    <tr><td class="nombre" x-text="p.nombre"></td><td class="centro" x-text="cantidad(p.cantidad)"></td><td class="derecha" x-text="dinero(p.importe)"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </template>
+            <p class="suave" x-show="!s.piezas.length">
+              Se cancela toda la venta del <span x-text="fecha(s.fecha_venta)"></span> (total <span x-text="dinero(s.total_venta)"></span>);
+              todo lo que falte regresa al inventario.
+            </p>
+
+            <div class="resumen-dinero">
+              <div class="fila"><span>Se le regresa al cliente</span><strong class="derecha" x-text="dinero(s.total)"></strong></div>
+              <div class="detalle" x-text="textoDinero(s) + ', desde ' + s.caja"></div>
+            </div>
+
+            <!-- Rechazar: pide por qué (opcional) -->
+            <template x-if="rechazando === s.id">
+              <form class="rechazo" @submit.prevent="rechazar(s)">
+                <label :for="`respuesta-${s.id}`" style="margin-top: 0">¿Por qué no? <span class="ayuda">(opcional, lo verá el cajero)</span></label>
+                <input :id="`respuesta-${s.id}`" x-model="respuesta" maxlength="200" placeholder="Ej. la caja ya viene abierta">
+                <div class="fila">
+                  <button type="button" style="flex: 0 0 auto" @click="rechazando = null">Volver</button>
+                  <button class="peligro grande" :disabled="procesando === s.id">
+                    <span x-text="procesando === s.id ? 'Guardando…' : 'Rechazar la solicitud'"></span>
+                  </button>
+                </div>
+              </form>
+            </template>
+
+            <div class="fila acciones" x-show="rechazando !== s.id">
+              <button type="button" class="texto-peligro" style="flex: 0 0 auto" :disabled="procesando === s.id" @click="empezarRechazo(s)">
+                <svg class="ico"><use href="/static/iconos.svg#tache"/></svg>Rechazar
+              </button>
+              <button type="button" class="primario grande" :disabled="procesando === s.id" @click="autorizar(s)">
+                <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
+                <span x-text="procesando === s.id ? 'Autorizando…' : 'Autorizar'"></span>
+              </button>
+            </div>
+          </article>
+        </template>
+
+        <!-- Respondidas hoy -->
+        <template x-if="respondidas.length">
+          <div class="panel" style="padding: 0; overflow: hidden">
+            <div class="paso" style="padding: 16px 18px 0">Respondidas hoy</div>
+            <table class="tabla">
+              <tbody>
+                <template x-for="s in respondidas" :key="s.id">
+                  <tr>
+                    <td class="ajustado">
+                      <span class="etiqueta" :class="s.estado === 'autorizada' ? 'verde' : 'peligro'"
+                            x-text="s.estado === 'autorizada' ? 'Autorizada' : 'Rechazada'"></span>
+                    </td>
+                    <td>
+                      <strong x-text="`Folio ${s.folio}`"></strong> · <span x-text="textoTipo(s)"></span> · <span x-text="dinero(s.total)"></span>
+                      <div class="suave" style="font-size: 14px"
+                           x-text="`${s.caja}, pidió ${s.solicitada_por} · ${s.estado === 'autorizada' ? 'autorizó' : 'rechazó'} ${s.resuelta_por} a las ${hora(s.resuelta_en)}` + (s.respuesta ? ` · “${s.respuesta}”` : '')"></div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

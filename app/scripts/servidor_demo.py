@@ -1,7 +1,7 @@
 """Servidor de demostración para ver las pantallas sin tocar datos reales.
 
 Uso:  python -m app.scripts.servidor_demo
-Abre: http://127.0.0.1:8001/login  (usuario: demo, contraseña: demo1234)
+Abre: http://127.0.0.1:8001/login  (admin: demo / demo1234; mostrador: cajero / cajero1234)
 
 Usa la base de pruebas (la de .env con "_test" al final), la BORRA y la llena
 con 60 productos tomados de la base real (solo nombres, claves e IVA; se
@@ -61,6 +61,8 @@ with SessionLocal() as db:
     db.add_all([
         Usuario(negocio_id=negocio.id, nombre_usuario="demo", nombre_completo="Usuario Demo",
                 password_hash=hashear_password("demo1234"), rol=RolUsuario.ADMIN),
+        Usuario(negocio_id=negocio.id, nombre_usuario="cajero", nombre_completo="Cajero Demo",
+                password_hash=hashear_password("cajero1234"), rol=RolUsuario.MOSTRADOR),
         Caja(negocio_id=negocio.id, nombre="Mostrador 1"),
         Caja(negocio_id=negocio.id, nombre="Mostrador 2"),
     ])
@@ -78,6 +80,6 @@ with SessionLocal() as db:
         db.add(Lote(negocio_id=negocio.id, producto_id=producto.id, cantidad=D(random.randint(2, 15))))
     db.commit()
     settings.negocio_predeterminado = negocio.id
-    print(f"Demo lista: {len(nombres)} productos. Abre http://127.0.0.1:8001/login (demo / demo1234)")
+    print(f"Demo lista: {len(nombres)} productos. Abre http://127.0.0.1:8001/login (demo / demo1234, cajero / cajero1234)")
 
 uvicorn.run("app.main:app", host="127.0.0.1", port=8001)
