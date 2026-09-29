@@ -122,6 +122,8 @@ Como la app corre en el navegador y el servidor está en otra computadora, el na
 
 Si el sistema no tiene existencia suficiente de un producto, la venta se bloquea con un mensaje que pide a bodega o admin hacer un ajuste de inventario; así no se repiten las existencias negativas de PVWin. Se decidió así mientras se corrigen los negativos heredados y se hace el conteo físico; más adelante se puede revisar permitir la venta dejando el producto marcado para conteo.
 
+Ventas en espera (hecho el 29/09/2026): el cajero puede guardar la venta que tiene en pantalla (F4, con una nota opcional para reconocer al cliente) para atender a otro, y retomarla después. Máximo 5 guardadas por caja, guardadas en el servidor (no se pierden si se cierra el navegador) y sin apartar existencia. Mientras haya ventas guardadas, o una venta sin cobrar en la pantalla, no se puede salir de la pantalla de venta; y mientras haya ventas guardadas en una caja, no se puede hacer su corte (lo impide también el servidor).
+
 No hay crédito a clientes ni ventas a cuenta. Los descuentos quedan preparados pero desactivados; cuando se activen, el vendedor tendrá un tope y por encima de él se requiere autorización de administrador, con registro de quién lo aplicó.
 
 Devoluciones y cancelaciones solo las hace un administrador, con motivo registrado. La mercancía devuelta regresa siempre al inventario, a su lote original (el vendedor verifica que se pueda revender).

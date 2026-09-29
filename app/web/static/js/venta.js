@@ -12,6 +12,11 @@
 //  - Cobro (Esc con productos): el cursor va a "¿Con cuánto paga?"; Enter
 //    cobra, Esc regresa a escanear.
 // F12 cobra desde cualquier modo.
+//
+// Ventas en espera (F4): la venta de la pantalla se guarda para atender a
+// otro cliente y se retoma después desde la fila de "Ventas guardadas".
+// Máximo 5 por caja; mientras haya alguna, no se puede salir de Vender ni
+// hacer el corte. Tampoco se sale con una venta sin cobrar en la pantalla.
 
 function pantallaVenta() {
   return {
@@ -43,6 +48,14 @@ function pantallaVenta() {
     cobrando: false,
     ultimaVenta: null,
 
+    // Ventas en espera
+    guardadas: [],
+    ventanaGuardar: false,
+    notaGuardar: "",
+    guardandoVenta: false,
+    aviso: "",
+    _avisoTimer: null,
+
     async init() {
       try {
         this.usuario = await API.get("/auth/yo");
@@ -55,6 +68,18 @@ function pantallaVenta() {
         this.cargando = false;
       }
       window.addEventListener("keydown", (ev) => this.atajo(ev));
+      Salida.bloquear(() => {
+        const n = this.guardadas.length;
+        if (n) {
+          return `Hay ${n === 1 ? "una venta guardada" : `${n} ventas guardadas`} en esta caja. ` +
+            "Retómalas para cobrarlas o borrarlas antes de salir de Vender.";
+        }
+        // Una venta en pantalla (quizá retomada) se perdería al salir.
+        if (this.carrito.length && !this.ultimaVenta) {
+          return "Tienes una venta sin cobrar en la pantalla. Cóbrala, guárdala (F4) o bórrala antes de salir.";
+        }
+        return null;
+      });
       this.$nextTick(() => this.enfocarCodigo());
     },
 
@@ -76,6 +101,7 @@ function pantallaVenta() {
 
     async cargarTurno() {
       this.turno = await API.get(`/turnos/abierto?caja_id=${this.cajaId}`);
+      await this.cargarGuardadas();
     },
 
     async abrirTurno() {
@@ -213,7 +239,7 @@ function pantallaVenta() {
     },
 
     importe(renglon) {
-      return Math.round(centavos(renglon.producto.precio_venta) * Number(renglon.cantidad || 0)) / 100;
+      return Math.round(centavos(renglon.producto.precio_venta || 0) * Number(renglon.cantidad || 0)) / 100;
     },
 
     // Lote que se sugiere entregar (FEFO) o el que eligió el vendedor.
@@ -277,7 +303,7 @@ function pantallaVenta() {
         !this.cobrando &&
         this.faltaCentavos === 0 &&
         this.tarjetaCentavos <= this.totalCentavos &&
-        this.carrito.every((r) => Number(r.cantidad) > 0)
+        this.carrito.every((r) => Number(r.cantidad) > 0 && r.producto.precio_venta !== null)
       );
     },
 
@@ -368,6 +394,114 @@ function pantallaVenta() {
       this.nuevaVenta();
     },
 
+    // --- Ventas en espera (F4) -------------------------------------------
+
+    MAXIMO_GUARDADAS: 5,
+
+    async cargarGuardadas() {
+      try {
+        this.guardadas = await API.get(`/ventas-en-espera?caja_id=${this.cajaId}`);
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    abrirGuardar() {
+      if (!this.carrito.length || this.ultimaVenta) return;
+      this.error = "";
+      if (this.guardadas.length >= this.MAXIMO_GUARDADAS) {
+        this.error = `Ya hay ${this.MAXIMO_GUARDADAS} ventas guardadas; cobra o borra alguna antes de guardar otra.`;
+        return;
+      }
+      this.modoCobro = false;
+      this.notaGuardar = "";
+      this.ventanaGuardar = true;
+      this.$nextTick(() => document.getElementById("nota-guardar").focus());
+    },
+
+    cerrarGuardar() {
+      this.ventanaGuardar = false;
+      this.$nextTick(() => this.enfocarCodigo());
+    },
+
+    async guardarVenta() {
+      if (this.guardandoVenta) return;
+      this.guardandoVenta = true;
+      this.error = "";
+      try {
+        await API.post("/ventas-en-espera", {
+          caja_id: this.cajaId,
+          nota: this.notaGuardar.trim() || null,
+          renglones: this.carrito.map((r) => ({
+            producto_id: r.producto.id,
+            cantidad: String(r.cantidad),
+            lote_id: r.loteId ? Number(r.loteId) : null,
+            caducidad_mes: !r.loteId && r.caducidadMes ? r.caducidadMes : null,
+            numero_lote: !r.loteId && r.caducidadMes && r.numeroLote ? r.numeroLote : null,
+          })),
+        });
+        this.ventanaGuardar = false;
+        this.nuevaVenta();
+        this.avisar("Venta guardada. Puedes atender al siguiente cliente.");
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.guardandoVenta = false;
+        await this.cargarGuardadas();
+      }
+    },
+
+    // Carga la venta guardada en la pantalla y la saca de la lista. Primero se
+    // arma el carrito y después se retoma: si otra computadora ya la tomó, no
+    // se pierde nada.
+    async retomar(guardada) {
+      this.error = "";
+      if (this.carrito.length) {
+        this.error = "Primero cobra o guarda la venta que tienes en pantalla (F4 para guardarla).";
+        return;
+      }
+      try {
+        const carrito = [];
+        for (const r of guardada.renglones) {
+          const [producto, existencia] = await Promise.all([
+            API.get(`/productos/${r.producto_id}`),
+            API.get(`/inventario/productos/${r.producto_id}`),
+          ]);
+          const lote = r.lote_id && existencia.lotes.some((l) => l.id === r.lote_id) ? String(r.lote_id) : "";
+          carrito.push({
+            clave: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+            producto,
+            existencia,
+            cantidad: Number(r.cantidad),
+            loteId: lote,
+            caducidadMes: r.caducidad_mes || "",
+            numeroLote: r.numero_lote || "",
+          });
+        }
+        await API.post(`/ventas-en-espera/${guardada.id}/retomar`);
+        this.carrito = carrito;
+        const sinPrecio = carrito.filter((r) => r.producto.precio_venta === null);
+        if (sinPrecio.length) this.error = `${sinPrecio[0].producto.nombre} ya no tiene precio de venta; quítalo para poder cobrar.`;
+      } catch (e) {
+        this.error = e.message;
+      }
+      await this.cargarGuardadas();
+      this.$nextTick(() => this.enfocarCodigo());
+    },
+
+    textoGuardada(g, i) {
+      return g.nota || `Venta ${i + 1}`;
+    },
+    horaGuardada(g) {
+      return new Date(g.created_at).toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit" });
+    },
+
+    avisar(texto) {
+      this.aviso = texto;
+      clearTimeout(this._avisoTimer);
+      this._avisoTimer = setTimeout(() => (this.aviso = ""), 3500);
+    },
+
     // --- Teclado --------------------------------------------------------
 
     atajo(ev) {
@@ -379,8 +513,18 @@ function pantallaVenta() {
         return;
       }
       if (!this.turno) return;
+      if (this.ventanaGuardar) {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          this.cerrarGuardar();
+        }
+        return;
+      }
 
-      if (ev.key === "F2") {
+      if (ev.key === "F4") {
+        ev.preventDefault();
+        this.abrirGuardar();
+      } else if (ev.key === "F2") {
         ev.preventDefault();
         this.abrirBusqueda();
       } else if (ev.key === "F12") {

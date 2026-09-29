@@ -81,6 +81,14 @@
           </div>
         </div>
 
+        <!-- Lo que impide hacer el corte (ventas guardadas en esta caja) -->
+        <template x-for="p in pendientes" :key="p">
+          <div class="mensaje aviso" style="margin-top: 0">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+            <span><span x-text="p"></span> <a href="/venta">Ir a Vender</a></span>
+          </div>
+        </template>
+
         <div class="paso">1. Lo que debe haber</div>
         <div class="cifras">
           <div class="cifra">
@@ -131,7 +139,7 @@
 
           <label>Notas <span class="ayuda">(opcional)</span></label>
           <textarea rows="2" x-model="contado.notas" placeholder="Ej. faltó un billete de $20"></textarea>
-          <button class="primario grande separado pegado-abajo" :disabled="cerrando">
+          <button class="primario grande separado pegado-abajo" :disabled="cerrando || pendientes.length > 0">
             <span x-text="cerrando ? 'Cerrando…' : 'Cerrar turno'"></span>
           </button>
         </form>
@@ -152,6 +160,7 @@
         cargando: true,
         cerrando: false,
         error: "",
+        pendientes: [], // por qué no se puede hacer el corte todavía
 
         async init() {
           try {
@@ -159,13 +168,24 @@
             this.cajas = await API.get("/cajas");
             if (this.cajaId) {
               this.turno = await API.get(`/turnos/abierto?caja_id=${this.cajaId}`);
-              if (this.turno) this.corte = await API.get(`/turnos/${this.turno.id}/corte`);
+              if (this.turno) {
+                this.corte = await API.get(`/turnos/${this.turno.id}/corte`);
+                await this.revisarPendientes();
+              }
             }
           } catch (e) {
             this.error = e.message;
           } finally {
             this.cargando = false;
           }
+        },
+
+        async revisarPendientes() {
+          const guardadas = (await API.get(`/ventas-en-espera?caja_id=${this.cajaId}`)).length;
+          this.pendientes = guardadas
+            ? [`Hay ${guardadas === 1 ? "una venta guardada" : `${guardadas} ventas guardadas`} en esta caja: ` +
+               "cóbralas o bórralas antes de hacer el corte."]
+            : [];
         },
 
         get cajaNombre() {

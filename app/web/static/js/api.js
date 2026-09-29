@@ -109,7 +109,65 @@ const EntradaDirecta = {
   },
 };
 
+// Una pantalla puede impedir que se salga de ella mientras tenga algo
+// pendiente (la venta, con ventas guardadas): Salida.bloquear(() => "por qué"
+// o null). Lo respetan los enlaces de la barra, el botón Salir, y cerrar o
+// recargar la ventana (ahí el navegador pregunta con su propio mensaje).
+const Salida = {
+  _revisar: null,
+  bloquear(revisar) {
+    this._revisar = revisar;
+  },
+  motivo() {
+    return this._revisar ? this._revisar() : null;
+  },
+  // true si se puede salir; si no, avisa por qué.
+  permitir() {
+    const motivo = this.motivo();
+    if (motivo) avisoSalida(motivo);
+    return !motivo;
+  },
+};
+
+window.addEventListener("beforeunload", (ev) => {
+  if (Salida.motivo()) {
+    ev.preventDefault();
+    ev.returnValue = "";
+  }
+});
+
+function avisoSalida(mensaje) {
+  let velo = document.getElementById("aviso-salida");
+  if (!velo) {
+    velo = document.createElement("div");
+    velo.id = "aviso-salida";
+    velo.className = "velo";
+    velo.innerHTML = `
+      <div class="panel ventana" role="alertdialog" aria-labelledby="aviso-salida-titulo">
+        <div class="palomita alerta">${icono("alerta", "")}</div>
+        <h2 id="aviso-salida-titulo">Todavía no puedes salir</h2>
+        <p data-mensaje></p>
+        <button type="button" class="primario grande separado">Entendido</button>
+      </div>`;
+    const cerrar = () => (velo.hidden = true);
+    velo.querySelector("button").addEventListener("click", cerrar);
+    velo.addEventListener("click", (ev) => ev.target === velo && cerrar());
+    velo.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" || ev.key === "Enter") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        cerrar();
+      }
+    });
+    document.body.append(velo);
+  }
+  velo.querySelector("[data-mensaje]").textContent = mensaje;
+  velo.hidden = false;
+  velo.querySelector("button").focus();
+}
+
 async function cerrarSesion() {
+  if (!Salida.permitir()) return;
   try {
     await API.post("/auth/logout");
   } finally {
@@ -189,6 +247,9 @@ async function pintarBarra() {
     <span class="usuario" data-usuario></span>
     <button type="button" class="salir" onclick="cerrarSesion()" title="Cerrar sesión">${icono("salir")}<span>Salir</span></button>`;
   const nav = barra.querySelector("nav");
+  barra.addEventListener("click", (ev) => {
+    if (ev.target.closest("a[href]") && !Salida.permitir()) ev.preventDefault();
+  });
   const botonMenu = barra.querySelector(".boton-menu");
   botonMenu.addEventListener("click", () => {
     const abierta = barra.classList.toggle("menu-abierto");

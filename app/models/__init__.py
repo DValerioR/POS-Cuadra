@@ -9,6 +9,7 @@ from app.models.caja import Caja, ModoImpresora
 from app.models.turno import TipoTurno, Turno
 from app.models.venta import EstadoVenta, MetodoPago, Pago, Venta, VentaRenglon, VentaRenglonLote
 from app.models.devolucion import Devolucion, DevolucionRenglon, TipoDevolucion
+from app.models.venta_en_espera import VentaEnEspera
 
 __all__ = [
     "Negocio",
@@ -33,4 +34,5 @@ __all__ = [
     "Devolucion",
     "DevolucionRenglon",
     "TipoDevolucion",
+    "VentaEnEspera",
 ]

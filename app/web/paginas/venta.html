@@ -83,6 +83,21 @@
         <button type="button" class="buscar-nombre" @click="abrirBusqueda()">
           <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg><span class="texto">Buscar por nombre</span> <kbd>F2</kbd>
         </button>
+        <button type="button" class="buscar-nombre" x-show="carrito.length" @click="abrirGuardar()" title="Guardar esta venta para atender a otro cliente">
+          <svg class="ico"><use href="/static/iconos.svg#pausa"/></svg><span class="texto">Guardar</span> <kbd>F4</kbd>
+        </button>
+      </div>
+
+      <!-- Ventas guardadas de esta caja: un clic las regresa a la pantalla -->
+      <div class="guardadas" x-show="guardadas.length">
+        <span class="rotulo"><svg class="ico"><use href="/static/iconos.svg#pausa"/></svg>
+          Guardadas <span class="suave" x-text="`${guardadas.length} de ${MAXIMO_GUARDADAS}`"></span></span>
+        <template x-for="(g, i) in guardadas" :key="g.id">
+          <button type="button" class="guardada" @click="retomar(g)" :title="'Retomar: ' + textoGuardada(g, i)">
+            <strong x-text="textoGuardada(g, i)"></strong>
+            <span class="suave" x-text="`${horaGuardada(g)} · ${cantidad(g.articulos)} art. · ${dinero(g.total)}`"></span>
+          </button>
+        </template>
       </div>
 
       <div class="mensaje error" x-show="error">
@@ -226,12 +241,39 @@
           <button type="button" class="texto-peligro" x-show="carrito.length" @click="cancelarVenta()">
             Borrar todo y empezar de nuevo
           </button>
-          <div class="atajos" x-show="!modoCobro"><kbd>Esc</kbd> pasar a cobrar · <kbd>F2</kbd> buscar por nombre</div>
+          <div class="atajos" x-show="!modoCobro"><kbd>Esc</kbd> pasar a cobrar · <kbd>F2</kbd> buscar por nombre · <kbd>F4</kbd> guardar</div>
           <div class="atajos" x-show="modoCobro"><kbd>Enter</kbd> cobrar · <kbd>Esc</kbd> seguir escaneando</div>
         </div>
       </div>
     </aside>
   </main>
+
+  <!-- Guardar la venta para después (F4) -->
+  <div class="velo arriba" x-show="ventanaGuardar" x-cloak @click.self="cerrarGuardar()">
+    <form class="panel ventana-guardar" @submit.prevent="guardarVenta()">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#pausa"/></svg></span>
+        <div><h2>Guardar esta venta</h2>
+          <p class="suave">Atiende a otro cliente y retómala después. Total <strong x-text="dinero(totalCentavos / 100)"></strong></p></div>
+      </div>
+      <label for="nota-guardar" style="margin-top: 0">¿De quién es? <span class="ayuda">(opcional, para reconocerla)</span></label>
+      <input id="nota-guardar" x-model="notaGuardar" maxlength="80" placeholder="Ej. señora de lentes" autocomplete="off">
+      <div class="mensaje error" x-show="error && ventanaGuardar">
+        <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+      </div>
+      <div class="fila separado">
+        <button type="button" style="flex: 0 0 auto" @click="cerrarGuardar()">Cancelar <kbd>Esc</kbd></button>
+        <button class="primario grande" :disabled="guardandoVenta">
+          <span x-text="guardandoVenta ? 'Guardando…' : 'Guardar venta'"></span> <kbd>Enter</kbd>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Aviso corto que se quita solo -->
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
 
   <!-- Búsqueda por nombre (F2) -->
   <div class="velo arriba" x-show="buscandoNombre" x-cloak @click.self="cerrarBusqueda()">

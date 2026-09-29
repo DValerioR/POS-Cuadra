@@ -242,6 +242,7 @@ p { margin: 0 0 12px; }
 .mensaje.aviso { background: var(--aviso-suave); color: var(--aviso); }
 .mensaje.ok { background: var(--primario-suave); color: var(--primario-oscuro); }
 .mensaje.info { background: var(--info-suave); color: var(--info); }
+.mensaje a { color: inherit; font-weight: 700; }
 
 .etiqueta {
   display: inline-flex;
@@ -306,6 +307,24 @@ p { margin: 0 0 12px; }
 .escaneo .buscador { flex: 1; transition: opacity 0.15s; }
 .escaneo .buscador.apagado { opacity: 0.55; }
 .escaneo .buscar-nombre { flex: 0 0 auto; border-radius: var(--radio); padding: 0 20px; box-shadow: var(--sombra); }
+
+/* Ventas guardadas (F4): fila de botones para retomarlas */
+.guardadas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.guardadas .rotulo { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; color: var(--aviso); }
+.guardada {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding: 6px 14px;
+  border: 2px solid #f0d58c;
+  background: var(--aviso-suave);
+  text-align: left;
+  line-height: 1.25;
+}
+.guardada:hover { background: #ffeab0; border-color: var(--aviso); }
+.guardada strong { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guardada .suave { font-size: 13px; font-weight: 500; }
+.ventana-guardar { width: min(520px, 100%); box-shadow: var(--sombra-alta); }
 
 /* Ventana de búsqueda por nombre (F2) */
 .velo.arriba { align-items: flex-start; padding-top: 8vh; }
@@ -404,6 +423,7 @@ kbd { font: inherit; font-size: 12px; font-weight: 700; padding: 1px 6px; border
   color: #fff;
 }
 .ventana .palomita svg { width: 40px; height: 40px; }
+.ventana .palomita.alerta { background: var(--aviso); }
 .ventana .cambio-grande { font-size: 64px; font-weight: 800; color: var(--primario); line-height: 1.1; margin-bottom: 12px; }
 
 /* --- Corte de caja ----------------------------------------------------- */

@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Caja, Devolucion, MetodoPago, Pago, RolUsuario, TipoTurno, Turno, Usuario, Venta
+from app.models import Caja, Devolucion, MetodoPago, Pago, RolUsuario, TipoTurno, Turno, Usuario, Venta, VentaEnEspera
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 # Quien cobra abre y cierra turno; bodega no cobra.
@@ -127,6 +127,12 @@ def cerrar_turno(
         raise OperacionInvalida("El turno ya está cerrado")
     if efectivo_contado < 0 or tarjeta_contado < 0:
         raise OperacionInvalida("Lo contado no puede ser negativo")
+    en_espera = db.scalar(select(func.count()).select_from(VentaEnEspera).where(VentaEnEspera.caja_id == turno.caja_id))
+    if en_espera:
+        raise OperacionInvalida(
+            f"Hay {en_espera} {'venta guardada' if en_espera == 1 else 'ventas guardadas'} en esta caja; "
+            "cóbralas o bórralas antes de hacer el corte"
+        )
 
     totales = totales_del_turno(db, turno)
     turno.cerrado_por_id = usuario.id

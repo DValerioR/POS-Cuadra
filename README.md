@@ -161,6 +161,17 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   paga la diferencia, si cuesta menos se le regresa en efectivo. Todo o nada.
 - Corte de turno: fondo + cobrado en el turno − reembolsado en el turno.
 
+### Ventas en espera
+
+- `GET /ventas-en-espera?caja_id=` — ventas guardadas de una caja.
+- `POST /ventas-en-espera` con `{caja_id, nota?, renglones: [{producto_id,
+  cantidad, lote_id?, caducidad_mes?, numero_lote?}]}` — guarda la venta de la
+  pantalla para atender a otro cliente (admin y mostrador). Máximo 5 por caja.
+  No aparta existencia: todo se revisa al cobrar.
+- `POST /ventas-en-espera/{id}/retomar` — la saca de la lista y la regresa
+  para cargarla en la pantalla. `DELETE /ventas-en-espera/{id}` la borra.
+- No se puede cerrar el turno de una caja que tenga ventas guardadas.
+
 ### Tickets e impresión (etapa 2)
 
 - Al cobrar se imprime el ticket y, si hubo efectivo, se abre el cajón. Si
@@ -200,6 +211,10 @@ funcione sin internet.
   FEFO con opción de elegir el lote entregado, caducidad opcional para
   piezas sin caducidad, aviso de receta, cobro en efectivo/tarjeta/mixto con
   cambio en vivo (F12), y reintento de impresión si el ticket falla.
+  F4 guarda la venta para atender a otro cliente (hasta 5 por caja) y la
+  fila "Guardadas" las retoma. Con ventas guardadas, o con una venta sin
+  cobrar en la pantalla, no se puede salir de Vender (barra, Salir o cerrar
+  la ventana) ni hacer el corte.
 - `/turno` — corte de caja: lo esperado, captura de lo contado con la
   diferencia en vivo, y cierre.
 - `/devoluciones` — devoluciones, cancelaciones y cambios de producto (solo admin).
