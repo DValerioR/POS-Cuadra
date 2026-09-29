@@ -13,23 +13,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import AjusteInventario, Categoria, Lote, Producto, RolUsuario, TipoAjuste, Usuario
+from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 # Quién puede hacer cada operación. La captura de caducidad la hace también
 # mostrador, porque ocurre al vender con la caja en la mano.
 ROLES_AJUSTE = {RolUsuario.ADMIN, RolUsuario.BODEGA}
 ROLES_CAPTURA = {RolUsuario.ADMIN, RolUsuario.BODEGA, RolUsuario.MOSTRADOR}
-
-
-class NoEncontrado(Exception):
-    pass
-
-
-class OperacionInvalida(Exception):
-    pass
-
-
-class SinPermiso(Exception):
-    pass
 
 
 # --- Consultas ------------------------------------------------------------

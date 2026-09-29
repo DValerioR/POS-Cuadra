@@ -110,6 +110,22 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     cuya categoría controla lote.
   - La lógica vive en `app/services/inventario.py` (las ventas usarán `lotes_fefo`).
 
+### Cajas y turnos (etapa 2)
+
+- `GET /cajas`, `POST /cajas`, `PUT /cajas/{id}` — puntos de cobro (una por
+  computadora de mostrador). Crear y editar: solo admin.
+- `POST /turnos` con `{caja_id, tipo: "manana"|"tarde", fondo_inicial}` — abre
+  turno (admin y mostrador). Solo un turno abierto por caja (lo garantiza un
+  índice único parcial en la base de datos, aunque dos computadoras lo
+  intenten a la vez).
+- `GET /turnos/abierto?caja_id=` — turno abierto de la caja, o `null`.
+- `GET /turnos/{id}/corte` — lo que se espera en efectivo y tarjeta ahora.
+- `POST /turnos/{id}/cerrar` con lo contado — congela lo esperado y guarda la
+  diferencia (negativa = faltante) y quién cerró.
+- `GET /turnos` — historial de cortes, solo admin.
+- Hoy lo esperado es solo el fondo; al agregar ventas se suman en
+  `totales_del_turno` (`app/services/turnos.py`).
+
 ## Pruebas automáticas
 
 ```

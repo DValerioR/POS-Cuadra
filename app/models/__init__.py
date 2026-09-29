@@ -5,6 +5,8 @@ from app.models.producto import Producto
 from app.models.lote import Lote
 from app.models.ajuste_inventario import AjusteInventario, TipoAjuste
 from app.models.sesion import Sesion
+from app.models.caja import Caja
+from app.models.turno import TipoTurno, Turno
 
 __all__ = [
     "Negocio",
@@ -16,4 +18,7 @@ __all__ = [
     "AjusteInventario",
     "TipoAjuste",
     "Sesion",
+    "Caja",
+    "TipoTurno",
+    "Turno",
 ]

@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,14 +16,9 @@ from app.schemas.inventario import (
     LoteOut,
 )
 from app.services import inventario
-from app.services.inventario import NoEncontrado, OperacionInvalida, SinPermiso
+from app.services.errores import ERRORES_NEGOCIO, NoEncontrado, a_http
 
 router = APIRouter(prefix="/inventario", tags=["inventario"])
-
-
-def _http(error: Exception) -> HTTPException:
-    codigo = {NoEncontrado: 404, SinPermiso: 403, OperacionInvalida: 409}[type(error)]
-    return HTTPException(status_code=codigo, detail=str(error))
 
 
 @router.get("/productos/{producto_id}", response_model=ExistenciaOut)
@@ -32,7 +27,7 @@ def existencia_producto(producto_id: int, usuario: Usuario = Depends(usuario_act
     try:
         producto = inventario.obtener_producto(db, usuario.negocio_id, producto_id)
     except NoEncontrado as e:
-        raise _http(e)
+        raise a_http(e)
     lotes = inventario.lotes_fefo(db, producto.id)
     return ExistenciaOut(
         producto_id=producto.id,
@@ -56,9 +51,9 @@ def capturar_caducidad(
             db, usuario.negocio_id, usuario.id, datos.producto_id,
             datos.caducidad, datos.cantidad, datos.numero_lote,
         )
-    except (NoEncontrado, SinPermiso, OperacionInvalida) as e:
+    except ERRORES_NEGOCIO as e:
         db.rollback()
-        raise _http(e)
+        raise a_http(e)
     db.commit()
     db.refresh(lote)
     return lote
@@ -72,9 +67,9 @@ def registrar_ajuste(datos: AjusteIn, usuario: Usuario = Depends(usuario_actual)
             db, usuario.negocio_id, usuario.id, datos.producto_id,
             TipoAjuste(datos.tipo), datos.cantidad, datos.motivo, datos.lote_id,
         )
-    except (NoEncontrado, SinPermiso, OperacionInvalida) as e:
+    except ERRORES_NEGOCIO as e:
         db.rollback()
-        raise _http(e)
+        raise a_http(e)
     db.commit()
     db.refresh(ajuste)
     return ajuste
