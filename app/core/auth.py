@@ -9,6 +9,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -35,18 +36,18 @@ def crear_sesion(db: Session, usuario: Usuario) -> tuple[str, Sesion]:
     return token, sesion
 
 
-def _token(request: Request) -> str | None:
-    if token := request.cookies.get(COOKIE_SESION):
-        return token
-    # También por encabezado, para probar desde /docs o scripts.
-    encabezado = request.headers.get("Authorization", "")
-    if encabezado.lower().startswith("bearer "):
-        return encabezado[7:].strip() or None
-    return None
+# Declararlo así hace que /docs muestre el botón "Authorize". auto_error=False
+# porque el navegador normalmente manda la cookie, no el encabezado.
+_bearer = HTTPBearer(auto_error=False, description="Token que regresa POST /auth/login")
 
 
-def sesion_actual(request: Request, db: Session = Depends(get_db)) -> Sesion:
-    token = _token(request)
+def sesion_actual(
+    request: Request,
+    credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: Session = Depends(get_db),
+) -> Sesion:
+    # El encabezado (scripts, /docs) tiene prioridad sobre la cookie del navegador.
+    token = credenciales.credentials if credenciales else request.cookies.get(COOKIE_SESION)
     sesion = db.scalar(select(Sesion).where(Sesion.token_hash == _hash(token))) if token else None
     if sesion is None or sesion.cerrada is not None or sesion.expira <= datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Inicia sesión")
