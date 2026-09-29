@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Numeric, func
+from sqlalchemy import DateTime, LargeBinary, Numeric, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -15,7 +15,12 @@ class Negocio(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nombre: Mapped[str] = mapped_column(unique=True)
+    # Imagen de la pantalla de inicio: la sube un administrador desde el núcleo
+    # y se guarda en la base (así entra en los respaldos). logo_url apunta a
+    # /negocio/logo?v=... y cambia con cada imagen nueva.
     logo_url: Mapped[str | None] = mapped_column(default=None)
+    logo_imagen: Mapped[bytes | None] = mapped_column(LargeBinary, default=None, deferred=True)
+    logo_tipo: Mapped[str | None] = mapped_column(default=None)
     # Paso al que se redondean los precios de venta (1.00 = pesos enteros,
     # 0.50 = medios pesos). None = no redondear. Ver services/precios.py.
     redondeo_precio_venta: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)

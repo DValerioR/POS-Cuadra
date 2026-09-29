@@ -2,11 +2,13 @@
 // de esta computadora.
 
 const API = {
+  // cuerpo: un objeto se manda como JSON; un archivo (Blob/File), tal cual.
   async pedir(metodo, ruta, cuerpo) {
+    const archivo = cuerpo instanceof Blob;
     const respuesta = await fetch(ruta, {
       method: metodo,
-      headers: cuerpo === undefined ? {} : { "Content-Type": "application/json" },
-      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+      headers: cuerpo === undefined ? {} : { "Content-Type": archivo ? cuerpo.type || "application/octet-stream" : "application/json" },
+      body: cuerpo === undefined || archivo ? cuerpo : JSON.stringify(cuerpo),
       credentials: "same-origin",
     });
     if (respuesta.status === 401 && ruta !== "/auth/login") {
@@ -28,6 +30,12 @@ const API = {
   },
   post(ruta, cuerpo = {}) {
     return this.pedir("POST", ruta, cuerpo);
+  },
+  put(ruta, cuerpo = {}) {
+    return this.pedir("PUT", ruta, cuerpo);
+  },
+  borrar(ruta) {
+    return this.pedir("DELETE", ruta);
   },
 };
 
@@ -81,6 +89,26 @@ const CajaLocal = {
   },
 };
 
+// Ajuste de esta computadora: al iniciar sesión, entrar directo a Vender en
+// lugar de a la pantalla de inicio (pensado para mostrador).
+const EntradaDirecta = {
+  activa() {
+    try {
+      return localStorage.getItem("pos_entrar_a_venta") === "1";
+    } catch {
+      return false;
+    }
+  },
+  cambiar(activa) {
+    try {
+      if (activa) localStorage.setItem("pos_entrar_a_venta", "1");
+      else localStorage.removeItem("pos_entrar_a_venta");
+    } catch {
+      /* sin almacenamiento: se queda en la pantalla de inicio */
+    }
+  },
+};
+
 async function cerrarSesion() {
   try {
     await API.post("/auth/logout");
@@ -94,40 +122,88 @@ function icono(nombre, clase = "ico") {
   return `<svg class="${clase}"><use href="/static/iconos.svg#${nombre}"/></svg>`;
 }
 
-// Barra superior común: <header class="barra" data-pagina="venta"></header>.
-// Se dibuja sola al cargar la página; así todas las pantallas se ven igual
-// y agregar una sección nueva es cambiar solo esta lista.
-const SECCIONES = [
-  { pagina: "venta", texto: "Vender", icono: "carrito" },
-  { pagina: "turno", texto: "Turno y corte", icono: "caja" },
-  { pagina: "devoluciones", texto: "Devoluciones", icono: "regresar", soloAdmin: true },
-];
-
 function escapar(texto) {
   const div = document.createElement("div");
   div.textContent = texto ?? "";
   return div.innerHTML;
 }
 
+const ROLES = { admin: "Administrador", mostrador: "Mostrador", bodega: "Bodega" };
+
+// --- Secciones del sistema ------------------------------------------------
+// La ÚNICA lista de funciones. De aquí salen los menús y los accesos rápidos
+// de la pantalla de inicio y la barra superior de las demás pantallas.
+//   ruta:    página que abre; sin ruta, es una acción de la pantalla de inicio
+//   existe:  false = aparece como "Próximamente" y no abre nada
+//   roles:   quién la ve; a los demás no les aparece
+//   tecla:   acceso rápido en la pantalla de inicio (F1 a F4)
+const GRUPOS = ["Ventas", "Inventario", "Reportes", "Configuración", "Ayuda"];
+const TODOS = ["admin", "mostrador", "bodega"];
+
+const SECCIONES = [
+  { id: "venta", texto: "Vender", icono: "carrito", grupo: "Ventas", ruta: "/venta", existe: true, roles: ["admin", "mostrador"], tecla: "F1" },
+  { id: "turno", texto: "Turno y corte", icono: "caja", grupo: "Ventas", ruta: "/turno", existe: true, roles: ["admin", "mostrador"], tecla: "F2" },
+  { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin"] },
+
+  { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: false, roles: ["admin", "bodega"], tecla: "F3" },
+  { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/entradas", existe: false, roles: ["admin", "bodega"], tecla: "F4" },
+  { id: "productos", texto: "Productos y precios", icono: "precio", grupo: "Inventario", ruta: "/productos", existe: false, roles: ["admin"] },
+
+  { id: "reporte-ventas", texto: "Ventas del día", icono: "grafica", grupo: "Reportes", ruta: "/reportes/ventas", existe: false, roles: ["admin"] },
+  { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/reportes/caducidades", existe: false, roles: ["admin"] },
+
+  { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: false, roles: ["admin"] },
+  { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas", existe: false, roles: ["admin"] },
+  { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: false, roles: ["admin"] },
+  { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
+  { id: "entrada-directa", texto: "Entrar directo a Vender en esta computadora", icono: "rayo", grupo: "Configuración", accion: "entradaDirecta", existe: true, roles: ["admin", "mostrador"] },
+
+  { id: "teclas", texto: "Teclas del sistema", icono: "teclado", grupo: "Ayuda", accion: "teclas", existe: true, roles: TODOS },
+  { id: "acerca", texto: "Acerca del sistema", icono: "info", grupo: "Ayuda", accion: "acerca", existe: true, roles: TODOS },
+];
+
+function seccionesDe(rol) {
+  return SECCIONES.filter((s) => s.roles.includes(rol));
+}
+
+// A dónde llevar al usuario al iniciar sesión.
+function paginaDeEntrada(rol) {
+  const vender = SECCIONES.find((s) => s.id === "venta");
+  return EntradaDirecta.activa() && vender.roles.includes(rol) ? vender.ruta : "/inicio";
+}
+
+// --- Barra superior de las pantallas ---------------------------------------
+// <header class="barra" data-pagina="venta"></header> se dibuja sola al cargar.
+// Lleva "Inicio" y las pantallas que ya existen y que el rol puede usar; en
+// ventanas angostas los enlaces quedan solo con ícono, y en muy angostas se
+// guardan en un botón "Menú".
+
 async function pintarBarra() {
   const barra = document.querySelector("header.barra[data-pagina]");
   if (!barra) return;
   const actual = barra.dataset.pagina;
-  // Las secciones de administrador aparecen cuando se sabe el rol.
-  const enlaces = SECCIONES.map(
-    (s) =>
-      `<a href="/${s.pagina}" class="${s.pagina === actual ? "activo" : ""}"` +
-      `${s.soloAdmin ? ` data-solo-admin hidden` : ""}>${icono(s.icono)}${s.texto}</a>`
-  ).join("");
   barra.innerHTML = `
-    <span class="marca"><span class="logo">${icono("cruz", "")}</span><span data-negocio>Farmacia</span></span>
-    <nav>${enlaces}</nav>
+    <a class="marca" href="/inicio" title="Ir a la pantalla de inicio"><span class="logo">${icono("cruz", "")}</span><span data-negocio>Farmacia</span></a>
+    <button type="button" class="boton-menu" aria-expanded="false">${icono("menu")}Menú</button>
+    <nav></nav>
     <span class="usuario" data-usuario></span>
-    <button type="button" onclick="cerrarSesion()">${icono("salir")}Salir</button>`;
+    <button type="button" class="salir" onclick="cerrarSesion()" title="Cerrar sesión">${icono("salir")}<span>Salir</span></button>`;
+  const nav = barra.querySelector("nav");
+  const botonMenu = barra.querySelector(".boton-menu");
+  botonMenu.addEventListener("click", () => {
+    const abierta = barra.classList.toggle("menu-abierto");
+    botonMenu.setAttribute("aria-expanded", String(abierta));
+  });
+  const enlace = (ruta, texto, nombreIcono, activo) =>
+    `<a href="${ruta}" class="${activo ? "activo" : ""}" title="${escapar(texto)}">${icono(nombreIcono)}<span>${escapar(texto)}</span></a>`;
+  nav.innerHTML = enlace("/inicio", "Inicio", "casa", actual === "inicio");
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
-    if (usuario.rol === "admin") barra.querySelectorAll("[data-solo-admin]").forEach((a) => (a.hidden = false));
+    nav.innerHTML += seccionesDe(usuario.rol)
+      .filter((s) => s.ruta && s.existe)
+      .map((s) => enlace(s.ruta, s.texto, s.icono, s.id === actual))
+      .join("");
     const nombre = usuario.nombre_completo || usuario.nombre_usuario;
     barra.querySelector("[data-usuario]").innerHTML =
       `<span class="avatar">${escapar(nombre.trim().charAt(0).toUpperCase())}</span>` +
@@ -136,7 +212,5 @@ async function pintarBarra() {
     /* sin sesión: API ya manda al login */
   }
 }
-
-const ROLES = { admin: "Administrador", mostrador: "Mostrador", bodega: "Bodega" };
 
 document.addEventListener("DOMContentLoaded", pintarBarra);

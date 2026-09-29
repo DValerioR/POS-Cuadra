@@ -42,39 +42,48 @@ html, body {
 svg.ico { width: 1.2em; height: 1.2em; flex: 0 0 auto; vertical-align: -0.22em; }
 
 /* --- Barra superior -------------------------------------------------- */
+/* Misma en todas las pantallas (la dibuja pintarBarra() de api.js). Alto fijo:
+   si no caben los nombres, los enlaces quedan solo con ícono y, en ventanas
+   muy angostas, se guardan en el botón "Menú". */
 
 .barra {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
   padding: 0 20px;
   height: 60px;
   background: var(--primario-oscuro);
   color: #fff;
+  z-index: 30;
 }
-.marca { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; white-space: nowrap; }
+.marca { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; white-space: nowrap; color: inherit; text-decoration: none; min-width: 0; }
+.marca > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+a.marca:hover { opacity: 0.9; }
 .marca .logo {
   display: grid; place-items: center;
   width: 34px; height: 34px;
+  flex: 0 0 auto;
   border-radius: 9px;
   background: #fff;
   color: var(--primario);
 }
 .marca .logo svg { width: 22px; height: 22px; }
-.barra nav { display: flex; gap: 6px; height: 100%; }
+.barra nav { display: flex; gap: 4px; height: 100%; min-width: 0; }
 .barra nav a {
   display: flex; align-items: center; gap: 8px;
   color: #fff;
   text-decoration: none;
-  padding: 0 16px;
+  padding: 0 14px;
   font-weight: 600;
+  white-space: nowrap;
   opacity: 0.75;
   border-bottom: 4px solid transparent;
   border-top: 4px solid transparent;
 }
 .barra nav a:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
 .barra nav a.activo { opacity: 1; border-bottom-color: #7ee0c3; }
-.barra .usuario { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.barra .usuario { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 15px; white-space: nowrap; }
 .barra .avatar {
   display: grid; place-items: center;
   width: 34px; height: 34px;
@@ -88,8 +97,35 @@ svg.ico { width: 1.2em; height: 1.2em; flex: 0 0 auto; vertical-align: -0.22em; 
   border: 1px solid rgba(255, 255, 255, 0.45);
   color: #fff;
   padding: 6px 14px;
+  white-space: nowrap;
 }
 .barra button:hover { background: rgba(255, 255, 255, 0.14); }
+.barra .boton-menu { display: none; }
+
+@media (max-width: 1200px) {
+  /* Solo ícono, salvo "Inicio" y la pantalla actual; el nombre sale al pasar el ratón. */
+  .barra { gap: 14px; }
+  .barra nav a:not(.activo):not([href="/inicio"]) span { display: none; }
+  .barra .usuario > span:last-child { display: none; }
+}
+@media (max-width: 760px) {
+  .barra { gap: 10px; padding: 0 12px; }
+  .barra .marca > span:last-child, .barra .salir span { display: none; }
+  .barra .boton-menu { display: inline-flex; }
+  .barra nav {
+    display: none;
+    position: absolute; top: 100%; left: 0; right: 0;
+    height: auto;
+    flex-direction: column;
+    padding: 6px 0;
+    background: var(--primario-oscuro);
+    box-shadow: var(--sombra-alta);
+  }
+  .barra.menu-abierto nav { display: flex; }
+  .barra nav a { padding: 14px 20px; border: 0; border-left: 4px solid transparent; }
+  .barra nav a.activo { border-left-color: #7ee0c3; }
+  .barra nav a span { display: inline !important; }
+}
 
 /* --- Controles ------------------------------------------------------- */
 
@@ -485,11 +521,11 @@ details.desglose table { margin-top: 8px; }
 .resumen-dinero strong { font-size: 30px; font-weight: 800; }
 .resumen-dinero .detalle { opacity: 0.85; font-size: 15px; }
 
+/* PENDIENTE (núcleo en curso): faltan los estilos de la pantalla de inicio
+   (.nucleo, .barra-menus, .accesos, .escenario, .barra-estado) y el ajuste
+   responsivo de venta y devoluciones. Esto es lo que había antes: */
 @media (max-width: 900px) {
   .venta { grid-template-columns: 1fr; height: auto; }
-  .barra { gap: 12px; padding: 0 12px; }
-  .barra nav a { padding: 0 10px; }
-  .barra .usuario span { display: none; }
   .cifras { grid-template-columns: 1fr; }
   .opciones-grandes { grid-template-columns: 1fr; }
   .fila-venta { grid-template-columns: 1fr auto; }

@@ -244,3 +244,48 @@ Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
 ## Pendiente
 
 - Reimportar cuando llegue el catálogo completo A-Z (el actual se cortó en la D).
+
+## Trabajo en curso: pantalla de inicio ("núcleo") — cómo retomar
+
+Se interrumpió a la mitad (29/09/2026). El plan ya lo aprobó el usuario (ver
+`CONTEXTO.md`, "Arranque del programa y pantalla de inicio" y "Pantallas
+responsivas"), con un cambio: **la imagen del centro la elige el administrador
+subiendo cualquier imagen**, guardada en la base por negocio.
+
+Ya hecho (sin probar todavía, ni pytest ni en navegador):
+- Migración `b7e4a1c9d2f3`: columnas `logo_imagen` y `logo_tipo` en `negocios`
+  (hay que correr `alembic upgrade head` en la base real).
+- `app/api/negocios.py`: `GET/PUT/DELETE /negocio/logo`. PUT recibe la imagen
+  cruda (no formulario), máximo 5 MB, PNG/JPG/GIF/WEBP según sus bytes; deja
+  `logo_url = /negocio/logo?v=...`.
+- `app/api/web.py`: `/` y páginas desconocidas van a `/inicio`.
+- `login.html`: después de entrar va a `paginaDeEntrada(rol)` (inicio, o Vender
+  si esa computadora tiene activado "Entrar directo a Vender").
+- `api.js`: lista única `SECCIONES` (grupo, ícono, ruta o acción, roles,
+  existe, tecla F1–F4), `EntradaDirecta`, `API.put`/`API.borrar` y envío de
+  archivos, y barra superior nueva con "Inicio" y marca que lleva al inicio.
+- `iconos.svg`: íconos nuevos (casa, paquete, camion, precio, grafica, reloj,
+  usuarios, ajustes, tienda, imagen, ayuda, teclado, menu, info, rayo,
+  flecha-abajo).
+- `app/web/paginas/inicio.html` y `app/web/static/js/inicio.js`: menús con Alt/F10
+  y flechas, accesos rápidos F1–F4, logo o nombre del negocio, barra de estado
+  (usuario, caja, turno, fecha y hora, conexión cada 15 s con `/health`) y
+  ventanas de imagen de inicio, teclas y acerca de.
+- `pos.css`: barra superior adaptable (solo íconos por debajo de 1200 px y
+  botón "Menú" por debajo de 760 px).
+
+Falta:
+1. Estilos de la pantalla de inicio en `pos.css` (clases `.nucleo`,
+   `.barra-menus`, `.menus`, `.menu-titulo`, `.menu-lista`, `.menu-opcion`,
+   `.accesos`, `.acceso`, `.escenario`, `.logo-negocio`, `.nombre-negocio`,
+   `.barra-estado`, `.conexion`, `.aviso-flotante`, `.ventana-imagen`,
+   `.vista-previa`, `.ventana-texto`). Hoy la página se ve sin estilo.
+2. Responsivo de venta (total y Cobrar siempre a la vista, panel de cobro
+   flexible de 320 a 380 px) y de devoluciones (columnas sin ancho fijo).
+3. Pruebas: actualizar `tests/test_web.py` (hoy esperan `/venta`; ahora
+   `/inicio`, agregar "inicio" a las páginas y `js/inicio.js` a estáticos) y
+   agregar pruebas de `/negocio/logo` (permisos, tipos, tamaño, quitar).
+   Correr `pytest` completo.
+4. Probar con `python -m app.scripts.servidor_demo` a 1920×1080, 1366×768,
+   1200×700, 683 de ancho y 600 de alto.
+5. Actualizar `CONTEXTO.md` ("Estado actual") y esta sección, commit y push.

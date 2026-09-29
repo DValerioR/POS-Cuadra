@@ -26,6 +26,44 @@ Criterio de diseño de las pantallas: atractivas pero muy sencillas, que cualqui
 
 Venta con teclado, para no usar el ratón: el campo visible es solo para código de barras y todo lo que se teclea o escanea cae ahí aunque no tenga el cursor; la búsqueda por nombre está oculta y se abre con F2 (flechas + Enter agregan, Esc cierra); con productos en el carrito, Esc pasa al modo cobro (el cursor va a "¿Con cuánto paga?", Enter cobra y otro Esc regresa a escanear); después de cobrar, Enter empieza la siguiente venta.
 
+## Arranque del programa y pantalla de inicio ("núcleo")
+
+Cómo funciona hoy: al abrir la dirección del servidor (`/`) o al iniciar sesión, el sistema lleva directo a la pantalla de venta (`/venta`); las páginas desconocidas también redirigen ahí (`app/api/web.py`). La barra superior común (`pintarBarra()` en `app/web/static/js/api.js`) muestra el nombre del negocio, enlaces a las secciones que existen (Vender, Turno y corte, y Devoluciones solo para admin), el usuario con su rol y el botón Salir. Las pantallas existentes son `/login`, `/venta`, `/turno` y `/devoluciones`.
+
+Lo que se quiere (decidido, falta hacerlo): que el programa NO empiece en la caja, sino en una pantalla de inicio o "núcleo" desde donde se entra a todas las funciones del sistema. El flujo es: acceso directo de Chrome en modo aplicación → inicio de sesión → núcleo → la función elegida, y desde cualquier pantalla se regresa al núcleo.
+
+Referencia visual: en `docs/referencia/` hay dos fotos de la pantalla principal de PVWin, el sistema que usa hoy la farmacia (una a pantalla completa y otra en ventana sin maximizar, que es como se usa normalmente). Revísalas antes de diseñar. El núcleo nuevo sigue la misma estructura, que el personal ya conoce, pero con el estilo visual actual del proyecto (`pos.css`, `iconos.svg`, barra común de `api.js`).
+
+Diseño decidido del núcleo, de arriba a abajo:
+- Barra de menús con las funciones agrupadas por tema, como los menús de PVWin, con letra grande y textos en español llano. Es la excepción acordada a la regla de "botones en lugar de listas desplegables", porque el personal ya está acostumbrado a esos menús. Agrupación propuesta (se puede mejorar): "Ventas" (Vender, Turno y corte, Devoluciones y cambios), "Inventario" (Inventario y caducidades, Entradas de mercancía, Productos y precios), "Reportes", "Configuración" (usuarios, cajas e impresoras, datos del negocio) y "Ayuda".
+- Barra de accesos rápidos debajo, como la fila de íconos de PVWin, pero con botones más grandes con ícono y nombre visible, solo para las funciones de uso diario: Vender, Turno y corte, Inventario y Entradas de mercancía.
+- Centro: el logo del negocio grande, centrado y ocupando el espacio disponible sin deformarse, igual que en PVWin. El logo es configurable por negocio (guardado con los datos del negocio, no fijo en el código). Todavía no está el archivo original del logo de Farmacia La Fe: dejar preparado dónde se carga y, mientras no haya logo, mostrar el nombre del negocio con buen tamaño.
+- Barra de estado abajo, como la de PVWin: nombre del negocio, usuario y rol, caja de esta computadora, si hay turno abierto, fecha y hora, e indicador de conexión con el servidor.
+
+Reglas del núcleo:
+- Cada rol ve solo lo que puede usar (ver "Usuarios y permisos"); lo que no le toca no aparece.
+- Las funciones que todavía no existen (Productos y precios, Entradas de mercancía, Inventario, Reportes, Configuración) aparecen como "Próximamente" y no abren nada.
+- La lista de secciones (nombre, ícono, grupo, ruta, roles, si existe, si va en accesos rápidos) vive en un solo lugar en `api.js`, y de ahí salen los menús, los accesos rápidos y la barra superior de las demás pantallas.
+- Todo se usa sin ratón: Alt abre los menús con flechas y Enter, y cada acceso rápido tiene una tecla (por ejemplo F1 a F4) visible en el botón.
+- "Inicio" siempre visible en la barra superior de las demás pantallas, y el logo o nombre del negocio también lleva al núcleo.
+- `/`, las páginas desconocidas y el inicio de sesión llevan al núcleo en lugar de a `/venta`; hay que ajustar `app/api/web.py`, `login.html` y las pruebas de `tests/test_web.py` que hoy esperan `/venta`.
+- Ajuste por computadora (guardado en esa computadora, como la caja) para entrar directo a Vender al iniciar sesión, pensado para mostrador. Por defecto se entra al núcleo.
+
+## Pantallas responsivas (hacer junto con el núcleo)
+
+En la farmacia normalmente usan el programa en una ventana sin maximizar, casi del tamaño de la pantalla (ver la segunda foto en `docs/referencia/`), así que ese caso tiene prioridad, aunque todas las pantallas (el núcleo y las existentes) deben verse y usarse bien a distintos tamaños. Hasta ahora solo se probaron a 1366×768 en pantalla completa.
+
+Qué hay hoy (`app/web/static/css/pos.css`): un solo punto de corte a 900 px de ancho. Por debajo, la venta pasa de dos columnas (carrito y cobro) a una, la barra oculta el nombre del usuario, y el corte y las opciones de devoluciones pasan a una columna.
+
+Problemas probables, detectados leyendo el CSS; hay que confirmarlos probando:
+- Venta a menos de 900 px: el panel de cobro queda debajo del carrito y el total y el botón Cobrar quedan fuera de la vista. En mostrador el total y Cobrar deben verse siempre, por ejemplo con el cobro fijo abajo o un panel de cobro más compacto.
+- Venta en ventana baja: el panel de cobro tiene su propio desplazamiento (`.cobro .cuerpo`), y el botón Cobrar puede quedar escondido abajo sin que se note.
+- Entre 900 y ~1200 px: el panel de cobro mide siempre 380 px y el carrito se aprieta (el nombre del producto queda muy angosto).
+- Barra superior: altura fija de 60 px sin salto de línea. Con más secciones (las del núcleo) puede no caber; debe acomodarse, por ejemplo con solo íconos o con un menú.
+- Tablas de devoluciones: columnas de ancho fijo (el contador de 230 px) que pueden salirse por la derecha en ventanas angostas.
+
+Cómo verificarlo: con el servidor de demostración, probar cada pantalla a varios tamaños (al menos 1920×1080, 1366×768, ventana restaurada de unos 1200×700, media pantalla de unos 683 px de ancho, y una ventana baja de unos 600 px de alto) y revisar que no haya desplazamiento horizontal, que la acción principal de cada pantalla (Cobrar, Cerrar turno, Hacer la devolución) siempre esté a la vista y que el texto no se encime.
+
 Importante para producción: `uvicorn --reload` es solo para desarrollo. En la farmacia, el servidor FastAPI debe quedar instalado como servicio de Windows que arranque solo con el equipo y se reinicie si falla, sin depender de que alguien tenga una ventana abierta, porque ese es justo el problema que tienen hoy con PVWin.
 
 ## Catálogo
@@ -132,9 +170,10 @@ La primera etapa es la estructura del proyecto, el modelo de datos, usuarios y p
 
 De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la conexión a PostgreSQL con Alembic, el endpoint `/health`, las tablas `negocios`, `usuarios`, `categorias`, `productos`, `lotes` y `ajustes_inventario` con `negocio_id` en todas, el factor de conversión para productos a granel, el control de lote configurable por categoría, el redondeo de precio de venta por negocio, el CRUD de categorías y productos con búsqueda y borrado lógico, el script para crear usuarios, el importador de PVWin descrito arriba (ya se corrió con los datos reales: 7,790 productos) y el inventario por lote (existencias en orden FEFO, captura de caducidades, ajustes y mermas con motivo, bitácora y avance de la migración). También está el inicio de sesión con permisos por rol: sesiones guardadas en la base de datos con cookie httpOnly de 12 horas (se prefirió sobre JWT para que cerrar sesión o desactivar a un usuario corte el acceso de inmediato), y el negocio y el usuario salen de la sesión en todos los endpoints. Con esto la etapa 1 está completa; lo único pendiente es reimportar cuando llegue el catálogo completo de PVWin.
 
-De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja (un solo turno abierto por caja; ya existen "Mostrador 1" y "Mostrador 2" en la base real); ventas con cobro en efectivo, tarjeta y mixto, descuento de lotes por FEFO o por el lote que indica el vendedor, captura de caducidad al vender, desglose de IVA e IEPS y folios consecutivos; cancelaciones, devoluciones y cambios de producto (solo admin); tickets en ESC/POS con impresión por red o por agente USB y apertura del cajón solo con efectivo (encabezado y pie de Farmacia La Fe ya configurados); y las primeras pantallas en HTML + Alpine.js: inicio de sesión, venta en mostrador y corte de turno, revisadas y aprobadas por el usuario con el servidor de demostración. Hay más de 200 pruebas automáticas (`pytest`) que corren contra una base aparte.
+De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja (un solo turno abierto por caja; ya existen "Mostrador 1" y "Mostrador 2" en la base real); ventas con cobro en efectivo, tarjeta y mixto, descuento de lotes por FEFO o por el lote que indica el vendedor, captura de caducidad al vender, desglose de IVA e IEPS y folios consecutivos; cancelaciones, devoluciones y cambios de producto (solo admin); tickets en ESC/POS con impresión por red o por agente USB y apertura del cajón solo con efectivo (encabezado y pie de Farmacia La Fe ya configurados); y las pantallas en HTML + Alpine.js: inicio de sesión, venta en mostrador (con escaneo, búsqueda por nombre con F2 y modo cobro con Esc), turno y corte, y devoluciones, cancelaciones y cambios de producto (solo admin). Hay más de 200 pruebas automáticas (`pytest`) que corren contra una base aparte.
 
 Para retomar, lo pendiente es:
+- Lo siguiente a construir: la pantalla de inicio o "núcleo" con el diseño decidido en "Arranque del programa y pantalla de inicio" (referencia en `docs/referencia/`), y en el mismo trabajo hacer responsivas todas las pantallas (ver "Pantallas responsivas"). Antes de programar, mostrar al usuario un plan corto (agrupación de menús, teclas y cómo se resuelve lo responsivo) para que lo apruebe; al terminar, correr todas las pruebas, agregar las del núcleo y actualizar este archivo y README.md.
 - Conseguir de PVWin el reporte con precios de venta (hoy ningún producto real tiene precio, así que no se puede vender con datos reales) y el catálogo completo de la A a la Z, y reimportar.
 - Probar la impresión en la farmacia: instalar el agente en una computadora de mostrador (`agente_impresion/LEEME.md`), configurar la caja y usar la prueba de impresión para revisar acentos, corte y cajón.
 - Pantallas que faltan: inventario (captura de caducidades, ajustes, mermas, avance), catálogo y precios para el administrador, y la vista sencilla para la tableta. La de devoluciones y cancelaciones ya está (`/devoluciones`, solo admin): se busca la venta por folio o de la lista de hoy, se elige devolver piezas o cancelar todo, se pide motivo y se confirma diciendo cuánto entregar en efectivo y cuánto regresar a tarjeta. Ahí mismo está el cambio de producto: se marca lo que regresa, se escanea o busca lo que se lleva, y la pantalla dice si el cliente paga la diferencia (efectivo, tarjeta o las dos) o si se le regresa en efectivo; imprime el ticket de la venta nueva.
@@ -149,4 +188,4 @@ Decisiones del importador ya tomadas: cada departamento de PVWin se vuelve una c
 
 ## Datos pendientes
 
-Falta el reporte "Catálogo de artículos" completo de la A a la Z y, sobre todo, un reporte de PVWin que traiga el precio de venta: hoy ningún producto importado tiene precio, y sin eso no se puede vender. Se decidió tomar los precios reales de PVWin en lugar de calcularlos con márgenes. Falta el RFC del negocio para agregarlo al encabezado del ticket (hoy lleva dirección y teléfono), y con qué PAC está contratada la facturación actual.
+Falta el reporte "Catálogo de artículos" completo de la A a la Z y, sobre todo, un reporte de PVWin que traiga el precio de venta: hoy ningún producto importado tiene precio, y sin eso no se puede vender. Se decidió tomar los precios reales de PVWin en lugar de calcularlos con márgenes. Falta el archivo original del logo de Farmacia La Fe (PNG o JPG, no foto de pantalla). Falta el RFC del negocio para agregarlo al encabezado del ticket (hoy lleva dirección y teléfono), y con qué PAC está contratada la facturación actual.

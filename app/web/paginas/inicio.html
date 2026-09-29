@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inicio · POS</title>
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/inicio.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body class="nucleo" x-data="pantallaInicio()" @click="cerrarMenuSiAfuera($event)">
+
+  <!-- Menús por tema, como los de PVWin -->
+  <header class="barra-menus">
+    <span class="marca"><span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span><span x-text="negocio ? negocio.nombre : ''"></span></span>
+    <nav class="menus" role="menubar" x-cloak>
+      <template x-for="(g, i) in grupos" :key="g.nombre">
+        <div class="menu">
+          <button type="button" class="menu-titulo" role="menuitem" :class="{ abierto: menuAbierto === i }"
+                  :aria-expanded="menuAbierto === i" @click="alternarMenu(i)" @mouseenter="if (menuAbierto !== null) abrirMenu(i)">
+            <span x-text="g.nombre"></span><svg class="ico flecha"><use href="/static/iconos.svg#flecha-abajo"/></svg>
+          </button>
+          <div class="menu-lista panel" role="menu" x-show="menuAbierto === i">
+            <template x-for="(s, j) in g.secciones" :key="s.id">
+              <button type="button" class="menu-opcion" role="menuitem" :class="{ elegida: opcionElegida === j, proximamente: !s.existe }"
+                      @click="usar(s)" @mouseenter="opcionElegida = j">
+                <svg class="ico"><use :href="'/static/iconos.svg#' + s.icono"/></svg>
+                <span class="texto" x-text="s.texto"></span>
+                <span class="etiqueta" x-show="!s.existe">Próximamente</span>
+                <span class="etiqueta verde" x-show="s.accion === 'entradaDirecta' && entradaDirecta">Activado</span>
+                <kbd x-show="s.tecla && s.existe" x-text="s.tecla"></kbd>
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+    </nav>
+    <button type="button" class="salir" onclick="cerrarSesion()" title="Cerrar sesión">
+      <svg class="ico"><use href="/static/iconos.svg#salir"/></svg><span>Salir</span>
+    </button>
+  </header>
+
+  <!-- Accesos rápidos de uso diario -->
+  <div class="accesos" x-cloak x-show="rapidos.length">
+    <template x-for="s in rapidos" :key="s.id">
+      <button type="button" class="acceso" :class="{ proximamente: !s.existe }" @click="usar(s)">
+        <kbd x-text="s.tecla"></kbd>
+        <svg><use :href="'/static/iconos.svg#' + s.icono"/></svg>
+        <span class="texto">
+          <strong x-text="s.texto"></strong>
+          <span class="etiqueta" x-show="!s.existe">Próximamente</span>
+        </span>
+      </button>
+    </template>
+  </div>
+
+  <!-- Logo del negocio (o su nombre mientras no haya imagen) -->
+  <main class="escenario">
+    <template x-if="negocio && negocio.logo_url">
+      <img class="logo-negocio" :src="negocio.logo_url" :alt="negocio.nombre" @error="negocio.logo_url = null">
+    </template>
+    <template x-if="negocio && !negocio.logo_url">
+      <div class="nombre-negocio">
+        <span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span>
+        <span x-text="negocio.nombre"></span>
+      </div>
+    </template>
+  </main>
+
+  <!-- Barra de estado -->
+  <footer class="barra-estado" x-cloak>
+    <span x-show="usuario"><svg class="ico"><use href="/static/iconos.svg#usuarios"/></svg>
+      <span x-text="usuario ? (usuario.nombre_completo || usuario.nombre_usuario) : ''"></span>
+      <span class="suave" x-text="usuario ? '· ' + (ROLES[usuario.rol] || usuario.rol) : ''"></span></span>
+    <span><svg class="ico"><use href="/static/iconos.svg#caja"/></svg><span x-text="textoCaja"></span></span>
+    <span x-show="cajaId"><svg class="ico"><use :href="turno && turno.tipo === 'tarde' ? '/static/iconos.svg#atardecer' : '/static/iconos.svg#sol'"/></svg><span x-text="textoTurno"></span></span>
+    <span class="empuja"><svg class="ico"><use href="/static/iconos.svg#reloj"/></svg><span x-text="fechaHora"></span></span>
+    <span class="conexion" :class="{ caida: !conectado }">
+      <span class="punto"></span><span x-text="conectado ? 'Conectado' : 'Sin conexión con el servidor'"></span>
+    </span>
+  </footer>
+
+  <!-- Aviso corto (Próximamente, ajustes guardados) -->
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#info"/></svg><span x-text="aviso"></span>
+  </div>
+
+  <!-- Imagen de inicio (solo administrador) -->
+  <div class="velo" x-show="ventana === 'imagen'" x-cloak @click.self="cerrarVentana()">
+    <div class="panel ventana-imagen">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#imagen"/></svg></span>
+        <div><h2>Imagen de inicio</h2><p class="suave">La imagen que se ve en el centro de esta pantalla, en todas las computadoras.</p></div>
+      </div>
+      <div class="vista-previa">
+        <template x-if="vistaPrevia || (negocio && negocio.logo_url)">
+          <img :src="vistaPrevia || negocio.logo_url" alt="Vista previa">
+        </template>
+        <span class="suave" x-show="!vistaPrevia && !(negocio && negocio.logo_url)">Todavía no hay imagen: se muestra el nombre del negocio.</span>
+      </div>
+      <button type="button" class="grande" @click="$refs.archivo.click()">
+        <svg class="ico"><use href="/static/iconos.svg#imagen"/></svg>
+        <span x-text="archivo ? archivo.name : 'Elegir una imagen de la computadora'"></span>
+      </button>
+      <input type="file" x-ref="archivo" accept="image/png,image/jpeg,image/gif,image/webp" hidden @change="elegirArchivo($event)">
+      <p class="ayuda">Puede ser PNG, JPG, GIF o WEBP, de hasta 5 MB. Se muestra completa, sin recortarse ni deformarse.</p>
+      <div class="mensaje error" x-show="error">
+        <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+      </div>
+      <button class="primario grande" :disabled="!archivo || guardando" @click="guardarImagen()">
+        <span x-text="guardando ? 'Guardando…' : 'Guardar imagen'"></span>
+      </button>
+      <div class="fila separado">
+        <button type="button" class="texto-peligro" x-show="negocio && negocio.logo_url && !archivo" @click="quitarImagen()">Quitar la imagen</button>
+        <button type="button" @click="cerrarVentana()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teclas del sistema -->
+  <div class="velo" x-show="ventana === 'teclas'" x-cloak @click.self="cerrarVentana()">
+    <div class="panel ventana-texto">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#teclado"/></svg></span>
+        <div><h2>Teclas del sistema</h2><p class="suave">Todo se puede hacer sin ratón.</p></div>
+      </div>
+      <table class="tabla teclas">
+        <tr><th colspan="2">En esta pantalla</th></tr>
+        <tr><td><kbd>Alt</kbd> o <kbd>F10</kbd></td><td>Abrir los menús</td></tr>
+        <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Moverse por los menús</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Abrir la opción elegida</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Cerrar el menú o la ventana</td></tr>
+        <template x-for="s in rapidos" :key="s.id">
+          <tr><td><kbd x-text="s.tecla"></kbd></td><td x-text="s.texto + (s.existe ? '' : ' (próximamente)')"></td></tr>
+        </template>
+        <tr><th colspan="2">Al vender</th></tr>
+        <tr><td>Escanear o teclear</td><td>El código cae en el campo aunque no tenga el cursor</td></tr>
+        <tr><td><kbd>F2</kbd></td><td>Buscar un producto por nombre</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Pasar a cobrar / regresar a escanear</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Cobrar, y después empezar la siguiente venta</td></tr>
+      </table>
+      <button class="primario grande separado" @click="cerrarVentana()">Entendido</button>
+    </div>
+  </div>
+
+  <!-- Acerca del sistema -->
+  <div class="velo" x-show="ventana === 'acerca'" x-cloak @click.self="cerrarVentana()">
+    <div class="panel ventana-texto">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#cruz"/></svg></span>
+        <div><h2>Punto de venta</h2><p class="suave" x-text="negocio ? negocio.nombre : ''"></p></div>
+      </div>
+      <table class="tabla">
+        <tr><td>Servidor</td><td x-text="location.host"></td></tr>
+        <tr><td>Caja de esta computadora</td><td x-text="textoCaja"></td></tr>
+        <tr><td>Conexión</td><td x-text="conectado ? 'Conectado' : 'Sin conexión con el servidor'"></td></tr>
+      </table>
+      <p class="suave separado">Si algo no funciona, avisa al administrador del sistema.</p>
+      <button class="primario grande" @click="cerrarVentana()">Cerrar</button>
+    </div>
+  </div>
+</body>
+</html>
