@@ -62,5 +62,7 @@ class CorteOut(BaseModel):
     fondo_inicial: Decimal
     ventas_efectivo: Decimal
     ventas_tarjeta: Decimal
+    reembolsos_efectivo: Decimal
+    reembolsos_tarjeta: Decimal
     efectivo_esperado: Decimal
     tarjeta_esperado: Decimal

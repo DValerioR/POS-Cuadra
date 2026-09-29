@@ -87,6 +87,8 @@ def ver_corte(turno_id: int, usuario: Usuario = Depends(usuario_actual), db: Ses
         fondo_inicial=t.fondo_inicial,
         ventas_efectivo=t.ventas_efectivo,
         ventas_tarjeta=t.ventas_tarjeta,
+        reembolsos_efectivo=t.reembolsos_efectivo,
+        reembolsos_tarjeta=t.reembolsos_tarjeta,
         efectivo_esperado=t.efectivo_esperado,
         tarjeta_esperado=t.tarjeta_esperado,
     )

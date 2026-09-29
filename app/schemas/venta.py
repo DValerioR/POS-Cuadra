@@ -1,8 +1,9 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.devolucion import TipoDevolucion
 from app.models.venta import EstadoVenta, MetodoPago
 
 
@@ -24,11 +25,13 @@ class VentaIn(BaseModel):
 class LoteVendidoOut(BaseModel):
     lote_id: int
     cantidad: Decimal
+    cantidad_devuelta: Decimal
     numero_lote: str | None
     caducidad: date | None
 
 
 class RenglonOut(BaseModel):
+    id: int
     producto_id: int
     nombre: str
     cantidad: Decimal
@@ -37,6 +40,7 @@ class RenglonOut(BaseModel):
     subtotal: Decimal
     ieps: Decimal
     iva: Decimal
+    cantidad_devuelta: Decimal
     lotes: list[LoteVendidoOut]
 
 
@@ -62,6 +66,7 @@ class VentaOut(BaseModel):
     created_at: datetime
     renglones: list[RenglonOut]
     pagos: list[PagoOut]
+    devoluciones: list["DevolucionOut"] = []
     avisos: list[str] = []  # ej. "requiere receta"; solo al registrar
 
 
@@ -74,3 +79,39 @@ class VentaResumenOut(BaseModel):
     estado: EstadoVenta
     total: Decimal
     created_at: datetime
+
+
+class CancelarIn(BaseModel):
+    caja_id: int  # caja (con turno abierto) de donde sale el dinero
+    motivo: str = Field(min_length=1)
+
+
+class PiezaDevueltaIn(BaseModel):
+    renglon_id: int
+    cantidad: Decimal = Field(gt=0)
+    lote_id: int | None = None  # lote de la caja devuelta, si se sabe
+
+
+class DevolverIn(BaseModel):
+    caja_id: int
+    motivo: str = Field(min_length=1)
+    piezas: list[PiezaDevueltaIn] = Field(min_length=1)
+
+
+class DevolucionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    venta_id: int
+    turno_id: int
+    usuario_id: int
+    tipo: TipoDevolucion
+    motivo: str
+    total: Decimal
+    efectivo: Decimal
+    tarjeta: Decimal
+    created_at: datetime
+
+
+# VentaOut menciona DevolucionOut antes de que exista; se resuelve aquí.
+VentaOut.model_rebuild()

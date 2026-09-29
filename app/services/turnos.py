@@ -1,7 +1,9 @@
 """Reglas de turnos y corte de caja.
 
-Lo esperado en caja se calcula en `totales_del_turno`: fondo más lo cobrado
-en ventas completadas del turno (las canceladas no cuentan).
+Lo esperado en caja se calcula en `totales_del_turno`: fondo + lo cobrado en
+ventas del turno − lo reembolsado en el turno (cancelaciones y devoluciones).
+Una venta cancelada en su mismo turno se compensa sola; si es de un turno ya
+cerrado, el dinero sale del turno en que se regresó.
 """
 
 from dataclasses import dataclass
@@ -12,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import Caja, EstadoVenta, MetodoPago, Pago, RolUsuario, TipoTurno, Turno, Usuario, Venta
+from app.models import Caja, Devolucion, MetodoPago, Pago, RolUsuario, TipoTurno, Turno, Usuario, Venta
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 # Quien cobra abre y cierra turno; bodega no cobra.
@@ -24,14 +26,16 @@ class TotalesTurno:
     fondo_inicial: Decimal
     ventas_efectivo: Decimal
     ventas_tarjeta: Decimal
+    reembolsos_efectivo: Decimal = Decimal(0)
+    reembolsos_tarjeta: Decimal = Decimal(0)
 
     @property
     def efectivo_esperado(self) -> Decimal:
-        return self.fondo_inicial + self.ventas_efectivo
+        return self.fondo_inicial + self.ventas_efectivo - self.reembolsos_efectivo
 
     @property
     def tarjeta_esperado(self) -> Decimal:
-        return self.ventas_tarjeta
+        return self.ventas_tarjeta - self.reembolsos_tarjeta
 
 
 def _validar_rol(usuario: Usuario) -> None:
@@ -61,13 +65,19 @@ def totales_del_turno(db: Session, turno: Turno) -> TotalesTurno:
     cobrado = dict(db.execute(
         select(Pago.metodo, func.sum(Pago.monto))
         .join(Venta, Venta.id == Pago.venta_id)
-        .where(Venta.turno_id == turno.id, Venta.estado == EstadoVenta.COMPLETADA)
+        .where(Venta.turno_id == turno.id)
         .group_by(Pago.metodo)
     ).all())
+    reembolsado_efectivo, reembolsado_tarjeta = db.execute(
+        select(func.coalesce(func.sum(Devolucion.efectivo), 0), func.coalesce(func.sum(Devolucion.tarjeta), 0))
+        .where(Devolucion.turno_id == turno.id)
+    ).one()
     return TotalesTurno(
         fondo_inicial=turno.fondo_inicial,
         ventas_efectivo=cobrado.get(MetodoPago.EFECTIVO, Decimal(0)),
         ventas_tarjeta=cobrado.get(MetodoPago.TARJETA, Decimal(0)),
+        reembolsos_efectivo=reembolsado_efectivo,
+        reembolsos_tarjeta=reembolsado_tarjeta,
     )
 
 

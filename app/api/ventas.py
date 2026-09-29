@@ -9,9 +9,10 @@ from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Usuario, Venta
 from app.schemas.venta import (
-    LoteVendidoOut, PagoOut, RenglonOut, VentaIn, VentaOut, VentaResumenOut,
+    CancelarIn, DevolucionOut, DevolverIn, LoteVendidoOut, PagoOut, RenglonOut, VentaIn, VentaOut, VentaResumenOut,
 )
-from app.services import ventas
+from app.services import devoluciones, ventas
+from app.services.devoluciones import PiezaDevuelta
 from app.services.errores import ERRORES_NEGOCIO, a_http
 from app.services.ventas import RenglonSolicitado
 
@@ -27,12 +28,13 @@ def _venta_out(venta: Venta, avisos: list[str] | None = None) -> VentaOut:
         created_at=venta.created_at,
         renglones=[
             RenglonOut(
-                producto_id=r.producto_id, nombre=r.nombre, cantidad=r.cantidad,
+                id=r.id, producto_id=r.producto_id, nombre=r.nombre, cantidad=r.cantidad,
                 precio_unitario=r.precio_unitario, importe=r.importe,
                 subtotal=r.subtotal, ieps=r.ieps, iva=r.iva,
+                cantidad_devuelta=sum((l.cantidad_devuelta for l in r.lotes), Decimal(0)),
                 lotes=[
                     LoteVendidoOut(
-                        lote_id=l.lote_id, cantidad=l.cantidad,
+                        lote_id=l.lote_id, cantidad=l.cantidad, cantidad_devuelta=l.cantidad_devuelta,
                         numero_lote=l.lote.numero_lote, caducidad=l.lote.caducidad,
                     )
                     for l in r.lotes
@@ -41,6 +43,7 @@ def _venta_out(venta: Venta, avisos: list[str] | None = None) -> VentaOut:
             for r in venta.renglones
         ],
         pagos=[PagoOut(metodo=p.metodo, monto=p.monto, recibido=p.recibido, cambio=p.cambio) for p in venta.pagos],
+        devoluciones=[DevolucionOut.model_validate(d) for d in venta.devoluciones],
         avisos=avisos or [],
     )
 
@@ -88,3 +91,34 @@ def listar_ventas(
     if desde is not None:
         stmt = stmt.where(Venta.created_at >= desde)
     return db.scalars(stmt.order_by(Venta.id.desc()).limit(limite).offset(desplazamiento)).all()
+
+
+@router.post("/{venta_id}/cancelar", response_model=DevolucionOut, status_code=201)
+def cancelar_venta(venta_id: int, datos: CancelarIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Cancela toda la venta (solo admin, con motivo): las piezas regresan a su
+    lote y el dinero sale del turno abierto de `caja_id`."""
+    try:
+        devolucion = devoluciones.cancelar_venta(db, usuario, venta_id, datos.caja_id, datos.motivo)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    db.refresh(devolucion)
+    return devolucion
+
+
+@router.post("/{venta_id}/devoluciones", response_model=DevolucionOut, status_code=201)
+def devolver_piezas(venta_id: int, datos: DevolverIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Devuelve algunas piezas (solo admin, con motivo). Regresan a su lote
+    original; el dinero se regresa por el método con que se pagó."""
+    try:
+        devolucion = devoluciones.devolver_piezas(
+            db, usuario, venta_id, datos.caja_id, datos.motivo,
+            [PiezaDevuelta(**p.model_dump()) for p in datos.piezas],
+        )
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    db.refresh(devolucion)
+    return devolucion

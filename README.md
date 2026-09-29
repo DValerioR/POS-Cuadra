@@ -143,7 +143,16 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   - Responde `avisos` (ej. producto que requiere receta) y de qué lote salió
     cada pieza (`renglones[].lotes`).
 - `GET /ventas/{id}` — detalle (para reimprimir). `GET /ventas` — historial, solo admin.
-- El corte de turno ya suma lo cobrado en efectivo y tarjeta.
+- `POST /ventas/{id}/cancelar` con `{caja_id, motivo}` — cancela toda la venta.
+- `POST /ventas/{id}/devoluciones` con `{caja_id, motivo, piezas: [{renglon_id,
+  cantidad, lote_id?}]}` — devuelve algunas piezas.
+  - Solo admin, motivo obligatorio. Las piezas regresan siempre al lote del
+    que salieron (con `lote_id` se indica cuál, si la venta salió de varios).
+  - El dinero se regresa por el método con que se pagó (mixto: primero
+    tarjeta) y sale del turno abierto de `caja_id`: si la venta es de un turno
+    ya cerrado, ese corte no cambia.
+  - Nunca se devuelve más de lo vendido ni más dinero del cobrado.
+- Corte de turno: fondo + cobrado en el turno − reembolsado en el turno.
 
 ## Pruebas automáticas
 
@@ -151,7 +160,7 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 pytest
 ```
 
-Corre todas las pruebas (~140, unos 5 segundos). Antes de cada commit
+Corre todas las pruebas (~160, unos 5 segundos). Antes de cada commit
 deben pasar todas.
 
 - Usan una base de datos aparte: la de `.env` con `_test` al final (`pos_test`).

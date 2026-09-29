@@ -44,6 +44,7 @@ class Venta(Base):
 
     renglones: Mapped[list["VentaRenglon"]] = relationship(back_populates="venta", order_by="VentaRenglon.id")
     pagos: Mapped[list["Pago"]] = relationship(back_populates="venta", order_by="Pago.id")
+    devoluciones: Mapped[list["Devolucion"]] = relationship(order_by="Devolucion.id")  # noqa: F821
 
 
 class VentaRenglon(Base):
@@ -79,6 +80,8 @@ class VentaRenglonLote(Base):
     renglon_id: Mapped[int] = mapped_column(ForeignKey("venta_renglones.id"), index=True)
     lote_id: Mapped[int] = mapped_column(ForeignKey("lotes.id"), index=True)
     cantidad: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    # Piezas de este lote que ya se devolvieron (nunca más que `cantidad`).
+    cantidad_devuelta: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, server_default="0")
 
     lote: Mapped["Lote"] = relationship()  # noqa: F821  (para el ticket: "entregar lote A")
 

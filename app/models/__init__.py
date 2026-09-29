@@ -8,6 +8,7 @@ from app.models.sesion import Sesion
 from app.models.caja import Caja
 from app.models.turno import TipoTurno, Turno
 from app.models.venta import EstadoVenta, MetodoPago, Pago, Venta, VentaRenglon, VentaRenglonLote
+from app.models.devolucion import Devolucion, DevolucionRenglon, TipoDevolucion
 
 __all__ = [
     "Negocio",
@@ -28,4 +29,7 @@ __all__ = [
     "Venta",
     "VentaRenglon",
     "VentaRenglonLote",
+    "Devolucion",
+    "DevolucionRenglon",
+    "TipoDevolucion",
 ]
