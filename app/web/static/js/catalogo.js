@@ -18,13 +18,6 @@ const FILTROS = [
 ];
 const POR_PAGINA = 50;
 
-function redondearPrecio(precio, paso, maximo) {
-  if (!paso) return precio;
-  const arriba = Math.ceil(Math.round(precio * 100) / Math.round(paso * 100)) * paso;
-  if (maximo && precio <= maximo && maximo < arriba) return Math.floor(precio / paso) * paso;
-  return Math.round(arriba * 100) / 100;
-}
-
 function pantallaCatalogo() {
   return {
     usuario: null,

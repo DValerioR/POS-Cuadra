@@ -59,6 +59,21 @@ function centavos(valor) {
   return Math.round(Number(valor || 0) * 100);
 }
 
+// Redondeo del precio de venta, igual que el servidor (services/precios.py):
+// hacia arriba al múltiplo de `paso`, salvo que eso pase el precio máximo.
+function redondearPrecio(precio, paso, maximo) {
+  if (!paso) return precio;
+  const arriba = Math.ceil(Math.round(precio * 100) / Math.round(paso * 100)) * paso;
+  if (maximo && precio <= maximo && maximo < arriba) return Math.floor(precio / paso) * paso;
+  return Math.round(arriba * 100) / 100;
+}
+
+// Precio con impuestos: IEPS sobre la base e IVA sobre base + IEPS.
+function precioConImpuestos(base, ivaPct, iepsPct, paso, maximo) {
+  const bruto = Math.round(base * (1 + Number(iepsPct) / 100) * (1 + Number(ivaPct) / 100) * 100) / 100;
+  return redondearPrecio(bruto, paso, maximo);
+}
+
 // 2.00 -> "2", 1.50 -> "1.5"
 function cantidad(valor) {
   return String(Number(valor));
@@ -205,7 +220,7 @@ const SECCIONES = [
   { id: "notificaciones", texto: "Notificaciones", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
   { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: true, roles: ["admin", "bodega"], tecla: "F3" },
-  { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/entradas", existe: false, roles: ["admin", "bodega"], tecla: "F4" },
+  { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/mercancia", existe: true, roles: ["admin", "bodega"], tecla: "F4" },
   { id: "productos", texto: "Productos y precios", icono: "precio", grupo: "Inventario", ruta: "/catalogo", existe: true, roles: ["admin"] },
 
   { id: "reporte-ventas", texto: "Ventas del día", icono: "grafica", grupo: "Reportes", ruta: "/reportes/ventas", existe: false, roles: ["admin"] },

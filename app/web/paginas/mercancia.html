@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entradas de mercancía · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/entradas.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaEntradas()">
+
+  <header class="barra" data-pagina="entradas"></header>
+
+  <main class="contenido entradas" x-cloak x-show="!cargando">
+
+    <template x-if="usuario && !puedeUsar">
+      <div class="panel">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+          <div><h2>Sin acceso</h2><p class="suave">Las entradas de mercancía las registran bodega y los administradores.</p></div>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="puedeUsar">
+      <div class="pila" style="gap: 16px">
+        <div class="mensaje error" x-show="error" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+        </div>
+
+        <!-- ============ Lista ============ -->
+        <template x-if="vista === 'lista'">
+          <div class="pila" style="gap: 16px">
+            <div class="fila" style="justify-content: space-between; flex-wrap: wrap">
+              <div class="encabezado" style="margin: 0; flex: 1 1 320px">
+                <span class="circulo"><svg><use href="/static/iconos.svg#camion"/></svg></span>
+                <div><h1>Entradas de mercancía</h1><p class="suave">Registra lo que llega de los proveedores: crea los lotes con su caducidad y actualiza los costos.</p></div>
+              </div>
+              <button type="button" class="primario grande" style="flex: 0 0 auto; width: auto" @click="nueva()">+ Nueva entrada</button>
+            </div>
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <div class="paso" style="padding: 16px 18px 0">Últimas entradas</div>
+              <table class="tabla" x-show="recientes.length">
+                <thead><tr><th>Factura</th><th class="ajustado">Recibida</th><th class="derecha ajustado">Piezas</th><th class="derecha ajustado">Subtotal</th></tr></thead>
+                <tbody>
+                  <template x-for="x in recientes" :key="x.id">
+                    <tr>
+                      <td>
+                        <strong x-text="`${x.proveedor} · ${x.folio}`"></strong>
+                        <div class="suave" style="font-size: 14px">
+                          <span x-text="`${x.productos} productos · ${textoOrigen(x.origen)}`"></span>
+                          <span x-show="x.precios_cambiados" x-text="` · ${x.precios_cambiados} precios cambiados`"></span>
+                          <a x-show="x.archivo_id" :href="`/entradas/archivos/${x.archivo_id}`" target="_blank"> · ver factura</a>
+                        </div>
+                      </td>
+                      <td x-text="fecha(x.fecha_recepcion)"></td>
+                      <td class="derecha" x-text="cantidad(x.piezas)"></td>
+                      <td class="derecha" x-text="dinero(x.subtotal)"></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+              <p class="suave" style="padding: 12px 18px 18px; margin: 0" x-show="!recientes.length">Todavía no hay entradas registradas.</p>
+            </div>
+          </div>
+        </template>
+
+        <!-- ============ Cómo empezar ============ -->
+        <template x-if="vista === 'nueva'">
+          <div class="pila" style="gap: 16px">
+            <a href="#" class="volver" @click.prevent="volverALista()">← Volver</a>
+            <h1 style="margin: 0">¿Cómo quieres dar entrada?</h1>
+            <div class="opciones-entrada">
+              <button type="button" class="opcion-grande" :disabled="leyendo" @click="elegirArchivo('xml')">
+                <svg><use href="/static/iconos.svg#ticket"/></svg>
+                <strong>Subir el XML de la factura</strong>
+                <span>Lo más rápido y exacto. Se leen proveedor, folio, productos, cantidades y costos. Sin costo.</span>
+              </button>
+              <button type="button" class="opcion-grande" :disabled="leyendo || !(ia && ia.configurada)" @click="elegirArchivo('ia')">
+                <svg><use href="/static/iconos.svg#chispa"/></svg>
+                <strong>Leer PDF o foto con IA</strong>
+                <span x-show="ia && ia.configurada">Para facturas sin XML o notas de remisión. La IA propone los datos y marca lo dudoso para que lo revises.</span>
+                <span x-show="!(ia && ia.configurada)">Desactivado: falta la clave de la API de Claude<span x-show="esAdmin"> (Inicio → Configuración → Asistente de IA)</span>.</span>
+              </button>
+              <button type="button" class="opcion-grande" :disabled="leyendo" @click="empezarManual()">
+                <svg><use href="/static/iconos.svg#codigo"/></svg>
+                <strong>Capturar a mano</strong>
+                <span>Escaneas cada producto y escribes cantidad, costo, lote y caducidad.</span>
+              </button>
+            </div>
+            <input type="file" id="archivo-xml" accept=".xml,text/xml,application/xml" hidden @change="subir('xml', $event)">
+            <input type="file" id="archivo-ia" accept="application/pdf,image/png,image/jpeg,image/webp,image/gif" hidden @change="subir('ia', $event)">
+            <div class="panel leyendo" x-show="leyendo">
+              <span class="girando"></span>
+              <span x-text="leyendo === 'ia' ? 'Leyendo la factura con IA… puede tardar hasta un minuto.' : 'Leyendo el XML…'"></span>
+            </div>
+          </div>
+        </template>
+
+        <!-- ============ Revisión ============ -->
+        <template x-if="vista === 'revision' && e">
+          <div class="pila" style="gap: 16px">
+            <div class="fila" style="justify-content: space-between; flex-wrap: wrap">
+              <a href="#" class="volver" @click.prevent="vista = 'nueva'">← Empezar de otra forma</a>
+              <span class="etiqueta" :class="{ verde: e.origen === 'xml' }" x-text="textoOrigen(e.origen)"></span>
+            </div>
+
+            <div class="mensaje aviso" x-show="e.origen === 'ia'" style="margin: 0">
+              <svg class="ico"><use href="/static/iconos.svg#chispa"/></svg>
+              <span>Estos datos los leyó la IA: compáralos con la factura antes de confirmar<span x-show="dudosos" x-text="`, sobre todo los ${dudosos} renglones en amarillo`"></span>.
+                <a x-show="e.archivo_id" :href="`/entradas/archivos/${e.archivo_id}`" target="_blank">Abrir la factura</a></span>
+            </div>
+            <template x-for="d in e.dudas" :key="d">
+              <div class="mensaje aviso" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="d"></span></div>
+            </template>
+
+            <!-- Encabezado de la factura -->
+            <div class="panel">
+              <div class="paso">Factura</div>
+              <div class="rejilla-2">
+                <div>
+                  <label style="margin-top: 0">Proveedor</label>
+                  <div class="fila" style="gap: 8px">
+                    <select x-model="e.proveedor_id">
+                      <option value="">Elige el proveedor…</option>
+                      <template x-for="p in proveedores" :key="p.id"><option :value="p.id" x-text="p.nombre + (p.rfc ? ` (${p.rfc})` : '')" :selected="String(p.id) === String(e.proveedor_id)"></option></template>
+                    </select>
+                    <button type="button" style="flex: 0 0 auto" @click="abrirNuevoProveedor()">+ Nuevo</button>
+                  </div>
+                </div>
+                <div><label style="margin-top: 0">Folio de la factura</label><input x-model="e.folio" placeholder="Ej. FA-12345"></div>
+                <div><label>Fecha de la factura</label><input type="date" x-model="e.fecha_factura"></div>
+                <div><label>Fecha de recepción</label><input type="date" x-model="e.fecha_recepcion"></div>
+              </div>
+              <div class="mensaje info" x-show="e.proveedor_leido && !e.proveedor_id && !nuevoProveedor">
+                <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+                <span>La factura es de <strong x-text="e.proveedor_leido && e.proveedor_leido.nombre"></strong>
+                  <span x-show="e.proveedor_leido && e.proveedor_leido.rfc" x-text="`(${e.proveedor_leido && e.proveedor_leido.rfc})`"></span>, que no está dado de alta.</span>
+                <button type="button" @click="abrirNuevoProveedor()">Darlo de alta</button>
+              </div>
+              <form class="nuevo-proveedor" x-show="nuevoProveedor" @submit.prevent="guardarProveedor()">
+                <template x-if="nuevoProveedor">
+                  <div class="fila" style="flex-wrap: wrap; align-items: flex-end">
+                    <div style="flex: 2 1 240px"><label style="margin-top: 0">Nombre del proveedor</label><input id="proveedor-nombre" x-model="nuevoProveedor.nombre"></div>
+                    <div style="flex: 1 1 160px"><label style="margin-top: 0">RFC <span class="ayuda">(opcional)</span></label><input x-model="nuevoProveedor.rfc" maxlength="13"></div>
+                    <button type="button" style="flex: 0 0 auto" @click="nuevoProveedor = null">Cancelar</button>
+                    <button class="primario" style="flex: 0 0 auto" :disabled="!nuevoProveedor.nombre.trim()">Guardar proveedor</button>
+                  </div>
+                </template>
+              </form>
+            </div>
+
+            <!-- Renglones -->
+            <template x-for="(r, i) in e.renglones" :key="r.clave_ui">
+              <div class="panel renglon-entrada" :class="{ dudoso: r.dudoso, 'sin-producto': !r.producto }">
+                <div class="cabeza">
+                  <div style="flex: 1; min-width: 0">
+                    <div class="descripcion" x-show="r.descripcion">
+                      <span class="suave">En la factura:</span> <strong x-text="r.descripcion"></strong>
+                      <span class="suave" x-show="r.clave" x-text="` · ${r.clave}`"></span>
+                    </div>
+                    <div class="duda" x-show="r.dudoso"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="r.nota || 'Revisa este renglón contra la factura.'"></span></div>
+                  </div>
+                  <button type="button" class="texto-peligro" style="flex: 0 0 auto" @click="quitar(i)" title="Quitar este renglón">
+                    <svg class="ico"><use href="/static/iconos.svg#basura"/></svg>
+                  </button>
+                </div>
+
+                <div class="producto-elegido">
+                  <template x-if="r.producto">
+                    <div class="fila" style="gap: 10px; flex-wrap: wrap">
+                      <svg class="ico" style="color: var(--primario)"><use href="/static/iconos.svg#paquete"/></svg>
+                      <strong x-text="r.producto.nombre"></strong>
+                      <span class="etiqueta verde" x-show="r.reconocido === 'equivalencia'">Reconocido (ya se había relacionado)</span>
+                      <span class="etiqueta verde" x-show="r.reconocido === 'codigo'">Reconocido por el código</span>
+                      <button type="button" class="texto-suave" style="flex: 0 0 auto" @click="abrirBuscador(i)">Cambiar</button>
+                    </div>
+                  </template>
+                  <template x-if="!r.producto">
+                    <div class="fila" style="gap: 8px; flex-wrap: wrap">
+                      <button type="button" class="primario" style="flex: 0 0 auto" @click="abrirBuscador(i)">
+                        <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg>¿Qué producto es? Elegirlo
+                      </button>
+                      <button type="button" style="flex: 0 0 auto" x-show="esAdmin && r.descripcion" @click="darDeAlta(i)">
+                        + Es nuevo: darlo de alta con estos datos
+                      </button>
+                    </div>
+                  </template>
+                </div>
+
+                <div class="campos-renglon">
+                  <div><label>Cantidad <span class="ayuda" x-text="r.unidad ? `(${r.unidad})` : '(en la factura)'"></span></label><input type="number" min="0" step="1" x-model="r.cantidad"></div>
+                  <div><label>Piezas por unidad</label><input type="number" min="1" step="1" x-model="r.factor"></div>
+                  <div class="calculado"><label>Entran</label><strong x-text="`${cantidad(piezas(r))} pzas`"></strong></div>
+                  <div><label>Costo por unidad <span class="ayuda">(sin IVA)</span></label><div class="campo-dinero"><input type="number" min="0" step="0.01" x-model="r.costo_unitario"></div></div>
+                  <div><label>Lote</label><input x-model="r.numero_lote" placeholder="Opcional"></div>
+                  <div><label>Caducidad</label><input type="month" x-model="r.caducidad_mes"></div>
+                </div>
+
+                <div class="notas-renglon">
+                  <div class="nota aviso" x-show="sinCaducidad(r)"><svg class="ico"><use href="/static/iconos.svg#reloj"/></svg>Sin caducidad: entrará como "sin caducidad registrada".</div>
+                  <div class="nota aviso" x-show="ivaDistinto(r)"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+                    <span x-text="`La factura trae IVA ${r.iva_factura}% y el producto tiene ${r.producto && Number(r.producto.iva_porcentaje)}%. Revísalo en Productos y precios.`"></span></div>
+                  <template x-if="cambioCosto(r)">
+                    <div class="nota" :class="cambioCosto(r).nuevo > cambioCosto(r).antes ? 'sube' : 'baja'">
+                      <svg class="ico"><use href="/static/iconos.svg#precio"/></svg>
+                      <span x-text="`Costo por pieza: ${dinero(cambioCosto(r).antes)} → ${dinero(cambioCosto(r).nuevo)}` + (cambioCosto(r).porcentaje !== null ? ` (${cambioCosto(r).porcentaje > 0 ? '+' : ''}${cambioCosto(r).porcentaje}%)` : '')"></span>
+                    </div>
+                  </template>
+                  <template x-if="esAdmin && r.producto && cambioCosto(r)">
+                    <div class="precio-sugerido">
+                      <template x-if="sugerido(r) !== null">
+                        <label class="casilla">
+                          <input type="checkbox" x-model="r.aplicar_precio">
+                          <span x-text="`Cambiar el precio de ${r.producto.precio_venta !== null ? dinero(r.producto.precio_venta) : 'sin precio'} a ${dinero(sugerido(r))} (margen ${Number(r.producto.margen)}%)`"></span>
+                        </label>
+                      </template>
+                      <span class="suave" x-show="sugerido(r) === null">Su categoría no tiene margen, así que no hay precio sugerido; el precio se queda igual.</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+
+            <button type="button" class="agregar-renglon" @click="abrirBuscador(null)">
+              <svg class="ico"><use href="/static/iconos.svg#codigo"/></svg>Agregar un producto (escanear o buscar)
+            </button>
+
+            <!-- Totales y confirmar -->
+            <div class="panel totales-entrada acciones-pegadas">
+              <div class="fila" style="flex-wrap: wrap; gap: 16px">
+                <div style="flex: 1 1 260px">
+                  <div><span class="suave">Suma de renglones (sin IVA):</span> <strong x-text="dinero(suma)"></strong>
+                    <span class="suave" x-show="e.subtotal_factura !== null" x-text="` · factura: ${dinero(e.subtotal_factura)}`"></span></div>
+                  <div class="diferencia-negativa" x-show="diferencia !== null" x-text="`No cuadra con la factura por ${dinero(Math.abs(diferencia))}: revisa cantidades y costos.`"></div>
+                  <div class="suave" style="font-size: 14px" x-show="faltantes.length" x-text="`Falta: ${faltantes.join(', ')}.`"></div>
+                </div>
+                <button type="button" class="primario grande" style="flex: 0 0 auto; width: auto; min-width: 240px" :disabled="faltantes.length > 0 || guardando" @click="confirmar()"
+                        x-text="guardando ? 'Guardando…' : 'Confirmar entrada'"></button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- ============ Hecha ============ -->
+        <template x-if="vista === 'hecha' && resultado">
+          <div class="panel ventana" style="margin: 24px auto">
+            <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
+            <h2>Entrada registrada</h2>
+            <p class="suave" x-text="`${resultado.proveedor} · factura ${resultado.folio}`"></p>
+            <p><strong x-text="`${cantidad(resultado.piezas)} piezas`"></strong> de <span x-text="resultado.productos"></span> productos ya están en el inventario.
+              <span x-show="resultado.precios_cambiados" x-text="resultado.precios_cambiados === 1 ? 'Se cambió el precio de venta de 1 producto.' : `Se cambiaron los precios de venta de ${resultado.precios_cambiados} productos.`"></span></p>
+            <div class="fila separado">
+              <button type="button" class="grande" @click="volverALista()">Ver entradas</button>
+              <button type="button" class="primario grande" @click="nueva()">Otra entrada</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <!-- Buscar producto -->
+  <div class="velo arriba" x-show="buscador" x-cloak @click.self="cerrarBuscador()">
+    <div class="panel busqueda-nombre">
+      <div class="buscador">
+        <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
+        <input id="buscar-producto" x-model="buscar" @input="alBuscar" autocomplete="off"
+               @keydown.enter.prevent="alPresionarEnter()" @keydown.arrow-down.prevent="moverLista(1)" @keydown.arrow-up.prevent="moverLista(-1)"
+               placeholder="Escanea el código o escribe el nombre">
+      </div>
+      <div class="lista-resultados">
+        <template x-for="(p, i) in encontrados" :key="p.id">
+          <div class="resultado" :class="{ elegido: i === elegido }" @click="elegirProducto(p)" @mouseenter="elegido = i">
+            <div><div class="nombre" x-text="p.nombre"></div><div class="suave" style="font-size: 14px" x-text="p.clave || 'sin clave'"></div></div>
+          </div>
+        </template>
+        <div class="suave vacio-busqueda" x-show="buscar.trim().length < 2">Escanea el código de barras o escribe al menos 2 letras.</div>
+        <div class="suave vacio-busqueda" x-show="buscar.trim().length >= 2 && !encontrados.length">
+          No se encontró. Si es un producto nuevo, primero dalo de alta en Productos y precios.
+        </div>
+      </div>
+      <div class="atajos pie-busqueda"><kbd>↑</kbd> <kbd>↓</kbd> elegir · <kbd>Enter</kbd> usar · <kbd>Esc</kbd> cerrar</div>
+    </div>
+  </div>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

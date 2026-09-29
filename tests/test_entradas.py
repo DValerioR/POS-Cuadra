@@ -218,3 +218,14 @@ def test_validaciones(como_bodega, catalogo, proveedor, otro_negocio, db):
     db.commit()
     assert entrada(como_bodega, ajeno, [base]).status_code == 404
     assert db.query(ProveedorEquivalencia).count() == 0
+
+
+def test_iva_desconocido_si_el_cfdi_no_lo_dice():
+    sin_impuestos = CFDI.replace(b"""
+      <cfdi:Impuestos><cfdi:Traslados>
+        <cfdi:Traslado Base="600.00" Impuesto="002" TipoFactor="Tasa" TasaOCuota="0.160000" Importe="96.00"/>
+      </cfdi:Traslados></cfdi:Impuestos>
+""", b"")
+    no_objeto = sin_impuestos.replace(b'NoIdentificacion="PROV-99"', b'NoIdentificacion="PROV-99" ObjetoImp="01"')
+    assert leer_cfdi(sin_impuestos).renglones[1].iva is None
+    assert leer_cfdi(no_objeto).renglones[1].iva == D(0)

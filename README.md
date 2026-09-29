@@ -197,6 +197,29 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   respuestas sin ver; `POST /solicitudes/{id}/vista` las marca como vistas.
 - No se puede cerrar el turno de una caja con solicitudes pendientes.
 
+### Proveedores y entradas de mercancía
+
+- `GET/POST /proveedores` — admin y bodega (nombre y RFC opcional).
+- `POST /entradas/leer-xml` — el cuerpo es el XML del CFDI tal cual (nombre en
+  `X-Nombre-Archivo`); se lee exacto, sin IA (`app/importador/cfdi.py`, con
+  defusedxml). Regresa un borrador para la revisión: proveedor reconocido por
+  RFC, cada renglón con su producto si ya se conoce (equivalencia del
+  proveedor o código de barras), costos sin impuestos, IVA, lote y caducidad
+  si vienen en la descripción.
+- `POST /entradas/leer-ia` — igual, para PDF o foto (PNG, JPG, WEBP, GIF; fotos
+  hasta 5 MB), leídos con la API de Claude (`app/importador/ia_facturas.py`,
+  modelo `claude-opus-5-5`, salida estructurada con esquema JSON). La IA solo
+  lee: marca lo dudoso y el código revisa que cantidad × costo dé el importe.
+- `GET /entradas/producto/{id}` — costo, precio, impuestos y margen de un
+  producto para la revisión.
+- `POST /entradas` — confirma: crea o suma lotes (con caducidad, o al lote sin
+  caducidad), actualiza el costo por pieza (costo ÷ piezas por unidad),
+  aplica el precio sugerido si lo pide un admin (queda en el historial),
+  guarda la equivalencia y liga el archivo. Una factura (proveedor + folio)
+  entra una sola vez.
+- `GET /entradas`, `GET /entradas/{id}`, `GET /entradas/archivos/{id}` (el
+  archivo original).
+
 ### Asistente de IA (clave de la API de Claude)
 
 - La clave se captura desde el programa: inicio → Configuración → Asistente
@@ -294,6 +317,13 @@ funcione sin internet.
   producto con precio sugerido por el margen de la categoría, aviso si pasa
   del precio máximo, margen real, historial de precios y desactivar. Pestaña
   Categorías: nombre, margen y si maneja caducidad.
+- `/mercancia` — entradas de mercancía (admin y bodega; F4 en el inicio):
+  subir el XML, leer un PDF o foto con IA (desactivado sin clave) o capturar a
+  mano; todo termina en la revisión (proveedor, folio, fechas, cada renglón
+  con su producto, cantidad, piezas por unidad, costo, lote y caducidad; lo
+  dudoso en amarillo; suma contra la factura; cambio de costo y casilla para
+  aplicar el precio sugerido, solo admin; dar de alta productos nuevos con
+  los datos leídos, solo admin). La ruta no es `/entradas` porque esa es del API.
 - `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
   autorizar (autorizar o rechazar con motivo) y ventas sin existencia
   registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una

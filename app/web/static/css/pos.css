@@ -256,6 +256,7 @@ p { margin: 0 0 12px; }
 .derecha { text-align: right; }
 .fila { display: flex; gap: 10px; align-items: center; }
 .fila > * { flex: 1; }
+.fila > .etiqueta, .fila > kbd { flex: 0 0 auto; }
 .pila { display: flex; flex-direction: column; gap: 10px; }
 .separado { margin-top: 20px; }
 
@@ -667,6 +668,48 @@ details.desglose table { margin-top: 8px; }
 @media (max-width: 760px) {
   .rejilla-2 { grid-template-columns: 1fr; }
   .col-categoria { display: none; }
+}
+
+/* --- Entradas de mercancía ---------------------------------------------- */
+
+.entradas { max-width: 1000px; margin: 0 auto; }
+.opciones-entrada { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.opciones-entrada .opcion-grande { min-height: 160px; }
+.leyendo { display: flex; align-items: center; gap: 14px; font-weight: 600; }
+.girando { width: 26px; height: 26px; border-radius: 50%; border: 3px solid var(--primario-suave); border-top-color: var(--primario); animation: girar 0.9s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .girando { animation-duration: 3s; } }
+
+.renglon-entrada { display: flex; flex-direction: column; gap: 10px; border-left: 6px solid var(--primario); }
+.renglon-entrada.sin-producto { border-left-color: var(--borde); }
+.renglon-entrada.dudoso { border-left-color: var(--aviso); background: #fffbef; }
+.renglon-entrada .cabeza { display: flex; align-items: flex-start; gap: 10px; }
+.renglon-entrada .descripcion { font-size: 15px; }
+.renglon-entrada .duda { display: flex; align-items: center; gap: 6px; color: var(--aviso); font-weight: 600; font-size: 15px; margin-top: 4px; }
+.producto-elegido { font-size: 17px; }
+.campos-renglon { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0 12px; }
+.campos-renglon label { margin-top: 0; font-size: 14px; }
+.campos-renglon input { padding: 9px 10px; }
+.campos-renglon .campo-dinero input { font-size: 17px; padding-left: 26px; }
+.campos-renglon .calculado strong { display: block; padding: 10px 0; font-size: 18px; color: var(--primario-oscuro); }
+.notas-renglon { display: flex; flex-direction: column; gap: 4px; }
+.notas-renglon .nota { display: flex; align-items: center; gap: 6px; font-size: 15px; color: var(--texto-suave); }
+.notas-renglon .nota.aviso { color: var(--aviso); }
+.notas-renglon .nota.sube { color: var(--peligro); font-weight: 600; }
+.notas-renglon .nota.baja { color: var(--primario); font-weight: 600; }
+.precio-sugerido { padding: 8px 12px; border-radius: var(--radio-chico); background: var(--primario-suave); }
+.precio-sugerido .casilla { margin: 0; }
+.agregar-renglon { width: 100%; padding: 16px; border: 2px dashed var(--borde); background: transparent; color: var(--texto-suave); border-radius: var(--radio); }
+.agregar-renglon:hover { border-color: var(--primario); color: var(--primario); background: var(--primario-suave); }
+.totales-entrada { bottom: 12px; border: 2px solid var(--primario); box-shadow: var(--sombra-alta); }
+@media (max-width: 760px) { .totales-entrada { position: static; box-shadow: var(--sombra); } }
+.nuevo-proveedor { margin-top: 12px; }
+
+@media (max-width: 900px) {
+  .campos-renglon { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .campos-renglon { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* --- Centro de notificaciones ------------------------------------------ */

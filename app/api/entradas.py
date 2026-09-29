@@ -3,12 +3,14 @@ from decimal import Decimal
 from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, undefer
 
 from app.core.auth import usuario_actual
 from app.core.database import get_db
+from app.importador import ia_facturas
 from app.importador.cfdi import XmlInvalido, leer_cfdi
 from app.models import ArchivoFactura, Entrada, Producto, Proveedor, Usuario
 from app.services import entradas
@@ -79,6 +81,23 @@ async def leer_xml(request: Request, usuario: Usuario = Depends(usuario_actual),
     except XmlInvalido as e:
         db.rollback()
         raise a_http(OperacionInvalida(str(e)))
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return _exacto(resultado)
+
+
+@router.post("/entradas/leer-ia")
+async def leer_con_ia(request: Request, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Lee un PDF o una foto de la factura con la API de Claude y regresa el
+    borrador para revisar (lo dudoso va marcado). Tarda unos segundos."""
+    try:
+        archivo = await _archivo(request, usuario, db)
+        if archivo.tipo == "application/xml":
+            raise OperacionInvalida("Es un XML: usa \"Subir XML\", que lo lee exacto y sin costo")
+        leida = await run_in_threadpool(ia_facturas.leer_con_ia, archivo.datos, archivo.tipo)
+        resultado = entradas.borrador(db, usuario, leida, archivo)
     except ERRORES_NEGOCIO as e:
         db.rollback()
         raise a_http(e)

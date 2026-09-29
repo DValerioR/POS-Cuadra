@@ -101,7 +101,10 @@ def leer_cfdi(datos: bytes) -> FacturaLeida:
         costo = None
         if cantidad and importe is not None:
             costo = ((importe - desc_concepto) / cantidad).quantize(Decimal("0.0001"))
+        # IVA: el de los traslados; 0 si el concepto no es objeto de impuesto
+        # (ObjetoImp="01"); sin ninguno de los dos, no se sabe (None).
         tasas = {}
+        con_impuestos = _hijo(c, "Impuestos", ns) is not None
         for traslado in c.iter(f"{{{ns}}}Traslado"):
             tipo = IMPUESTO.get(traslado.get("Impuesto"))
             tasa = _decimal(traslado.get("TasaOCuota"))
@@ -115,8 +118,8 @@ def leer_cfdi(datos: bytes) -> FacturaLeida:
             unidad=c.get("Unidad") or c.get("ClaveUnidad"),
             costo_unitario=costo,
             importe=(importe - desc_concepto) if importe is not None else None,
-            iva=tasas.get("iva", Decimal(0)),
-            ieps=tasas.get("ieps", Decimal(0)),
+            iva=tasas.get("iva", Decimal(0)) if con_impuestos or c.get("ObjetoImp") == "01" else None,
+            ieps=tasas.get("ieps", Decimal(0)) if con_impuestos else None,
             numero_lote=lote.group(1).upper() if lote else None,
             caducidad=_caducidad(descripcion),
         ))
