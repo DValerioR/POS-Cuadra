@@ -160,6 +160,8 @@ Se guarda una tabla de equivalencias por proveedor que relaciona cómo nombra el
 
 Se usa la API de Claude, no un modelo local, por costo y precisión. La IA se usa solo donde hay texto libre: leer facturas en PDF o imagen y responder preguntas en lenguaje natural sobre el negocio. La IA nunca calcula totales ni cobros, eso lo hace el código de forma exacta, y cualquier acción que modifique datos requiere confirmación.
 
+Chat del asistente (hecho el 29/09/2026): solo para administradores, botón flotante en todas las pantallas, solo consulta (no cambia datos) y las conversaciones se guardan por usuario. Responde usando consultas exactas a la base (ventas, más vendidos, existencias, caducidades, cortes, devoluciones, entradas, pendientes); la IA solo elige la consulta y explica el resultado. Falta probarlo con la clave real.
+
 Todo lo que se pueda resolver con consultas a la base de datos se hace sin IA: productos próximos a caducar, más vendidos, sugerencias de resurtido y detección de productos que se caducan seguido porque se compran de más.
 
 ## Facturación a clientes

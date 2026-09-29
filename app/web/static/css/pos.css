@@ -712,6 +712,54 @@ details.desglose table { margin-top: 8px; }
   .campos-renglon { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+/* --- Asistente de IA (chat, solo administradores) ---------------------- */
+
+.asistente-boton {
+  position: fixed; left: 16px; bottom: 16px; z-index: 45;
+  gap: 8px; padding: 10px 16px 10px 12px;
+  border: 0; border-radius: 999px;
+  background: var(--primario-oscuro); color: #fff;
+  box-shadow: var(--sombra-alta);
+}
+.asistente-boton:hover { background: var(--primario); }
+.asistente-boton svg { width: 22px; height: 22px; }
+.asistente-panel {
+  position: fixed; left: 16px; bottom: 16px; z-index: 55;
+  display: flex; flex-direction: column;
+  width: min(440px, calc(100vw - 32px)); height: min(640px, calc(100vh - 92px));
+  background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio);
+  box-shadow: var(--sombra-alta); overflow: hidden;
+}
+.asistente-panel header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; background: var(--primario-oscuro); color: #fff; }
+.asistente-panel header strong { flex: 1; display: flex; align-items: center; gap: 8px; }
+.asistente-panel header button { padding: 6px 10px; font-size: 14px; background: transparent; border-color: rgba(255, 255, 255, 0.4); color: #fff; }
+.asistente-panel header button:hover { background: rgba(255, 255, 255, 0.14); }
+.asistente-panel header .cerrar { border-color: transparent; padding: 6px; }
+.asistente-mensajes { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: var(--fondo); }
+.asistente-msg { max-width: 88%; padding: 10px 14px; border-radius: 14px; font-size: 16px; line-height: 1.45; box-shadow: var(--sombra); }
+.asistente-msg p { margin: 0 0 6px; }
+.asistente-msg p:last-child { margin-bottom: 0; }
+.asistente-msg ul, .asistente-msg ol { margin: 4px 0 6px; padding-left: 20px; }
+.asistente-msg.usuario { align-self: flex-end; background: var(--primario); color: #fff; border-bottom-right-radius: 4px; }
+.asistente-msg.asistente { align-self: flex-start; background: var(--panel); border-bottom-left-radius: 4px; }
+.asistente-msg.aviso { align-self: stretch; max-width: none; background: var(--aviso-suave); color: var(--aviso); box-shadow: none; }
+.asistente-msg.pensando { display: flex; align-items: center; gap: 10px; color: var(--texto-suave); }
+.asistente-msg.pensando .girando { width: 18px; height: 18px; border-width: 2px; }
+.asistente-consultas { margin-top: 6px; font-size: 12px; color: var(--texto-suave); }
+.asistente-sugerencias { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.asistente-sugerencias button { padding: 8px 12px; font-size: 15px; font-weight: 500; border-radius: 999px; background: var(--panel); color: var(--primario-oscuro); border-color: var(--primario-suave); }
+.asistente-historial { display: flex; flex-direction: column; gap: 6px; }
+.fila-historial { display: flex; gap: 6px; }
+.fila-historial .abrir { flex: 1; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; font-weight: 400; }
+.fila-historial .abrir strong { font-weight: 600; }
+.fila-historial .abrir span { font-size: 13px; color: var(--texto-suave); }
+.fila-historial .borrar { flex: 0 0 auto; color: var(--peligro); }
+.asistente-escribir { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--borde); }
+.asistente-escribir textarea { resize: none; font-size: 16px; }
+.asistente-escribir button { flex: 0 0 auto; padding: 0 14px; }
+.asistente-pie { margin: 0; padding: 0 12px 8px; font-size: 12px; color: var(--texto-suave); }
+@media (max-width: 760px) { .asistente-boton span { display: none; } .asistente-boton { padding: 12px; } }
+
 /* --- Centro de notificaciones ------------------------------------------ */
 
 .notificaciones { max-width: 860px; margin: 0 auto; }

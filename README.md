@@ -220,6 +220,19 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - `GET /entradas`, `GET /entradas/{id}`, `GET /entradas/archivos/{id}` (el
   archivo original).
 
+### Asistente de IA: chat para administradores
+
+- Botón "Asistente" abajo a la izquierda en todas las pantallas (solo admin).
+  Solo consulta: responde con las consultas de `app/asistente/consultas.py`
+  (ventas, más vendidos, sin movimiento, productos, existencias, por caducar,
+  catálogo, cortes, devoluciones, entradas, pendientes); los números salen de
+  la base, no de la IA. No cambia nada. Explica también cómo usar el sistema.
+- `POST /asistente/preguntar` con `{texto, conversacion_id?}`;
+  `GET /asistente/conversaciones`, `GET/DELETE /asistente/conversaciones/{id}`.
+  Las conversaciones se guardan por usuario (cada mensaje tal cual, solo se
+  agregan al final) y se pueden retomar o borrar.
+- Para probarlo sin clave: `python -m app.scripts.servidor_demo --ia-simulada`.
+
 ### Asistente de IA (clave de la API de Claude)
 
 - La clave se captura desde el programa: inicio → Configuración → Asistente

@@ -1,12 +1,15 @@
 """Servidor de demostración para ver las pantallas sin tocar datos reales.
 
-Uso:  python -m app.scripts.servidor_demo
+Uso:  python -m app.scripts.servidor_demo [--ia-simulada]
 Abre: http://127.0.0.1:8001/login  (admin: demo / demo1234; mostrador: cajero / cajero1234)
 
 Usa la base de pruebas (la de .env con "_test" al final), la BORRA y la llena
 con 60 productos tomados de la base real (solo nombres, claves e IVA; se
 leen, nunca se modifican) con precios inventados y algunos lotes. Las
 pruebas automáticas vuelven a borrar esa base al correr, así que no importa.
+
+--ia-simulada: el asistente de IA responde con una IA de mentira (ver
+app/scripts/ia_simulada.py) para probar el chat sin clave ni costo.
 """
 import random
 import sys
@@ -97,5 +100,11 @@ with SessionLocal() as db:
     db.commit()
     settings.negocio_predeterminado = negocio.id
     print(f"Demo lista: {len(nombres)} productos. Abre http://127.0.0.1:8001/login (demo / demo1234, cajero / cajero1234)")
+
+if "--ia-simulada" in sys.argv:
+    from app.scripts import ia_simulada  # noqa: E402  (después del candado de la base)
+
+    ia_simulada.activar()
+    print("Asistente de IA: simulado (sin clave ni costo).")
 
 uvicorn.run("app.main:app", host="127.0.0.1", port=8001)

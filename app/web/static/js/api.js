@@ -279,7 +279,10 @@ async function pintarBarra() {
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
-    if (usuario.rol === "admin") vigilarSolicitudes(barra.querySelector(".campana"));
+    if (usuario.rol === "admin") {
+      vigilarSolicitudes(barra.querySelector(".campana"));
+      montarAsistente();
+    }
     nav.innerHTML += seccionesDe(usuario.rol)
       // Notificaciones va en la campana; las rutas con "?" son vistas de otra pantalla.
       .filter((s) => s.ruta && s.existe && s.id !== "notificaciones" && !s.ruta.includes("?"))
@@ -320,3 +323,234 @@ function vigilarSolicitudes(campana) {
 }
 
 document.addEventListener("DOMContentLoaded", pintarBarra);
+
+// --- Asistente de IA (solo administradores) --------------------------------
+// Botón flotante abajo a la izquierda (a la derecha está Cobrar) que abre un
+// chat en un panel lateral. El asistente solo consulta: los números salen de
+// consultas exactas a la base de datos (app/asistente/). Las conversaciones
+// se guardan por usuario y se pueden retomar.
+
+const NOMBRES_CONSULTA = {
+  resumen_ventas: "ventas",
+  productos_mas_vendidos: "más vendidos",
+  productos_sin_movimiento: "sin movimiento",
+  buscar_productos: "productos",
+  existencia_producto: "existencia",
+  por_caducar: "por caducar",
+  estado_del_catalogo: "catálogo",
+  cortes_de_caja: "cortes de caja",
+  devoluciones: "devoluciones",
+  entradas_de_mercancia: "entradas",
+  pendientes: "pendientes",
+};
+const SUGERENCIAS = [
+  "¿Cuánto vendimos hoy?",
+  "¿Qué es lo más vendido de esta semana?",
+  "¿Qué productos caducan en los próximos 3 meses?",
+  "¿Qué tengo pendiente?",
+];
+
+// Texto de la IA a HTML seguro: se escapa todo y solo se da formato a
+// **negritas**, listas con "- " o "1. " y párrafos.
+function formatoAsistente(texto) {
+  const lineas = escapar(texto).split("\n");
+  let html = "";
+  let lista = null;
+  const cerrar = () => {
+    if (lista) html += `</${lista}>`;
+    lista = null;
+  };
+  for (const cruda of lineas) {
+    const linea = cruda.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    const vineta = linea.match(/^\s*[-•]\s+(.*)$/);
+    const numero = linea.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (vineta || numero) {
+      const tipo = vineta ? "ul" : "ol";
+      if (lista !== tipo) {
+        cerrar();
+        html += `<${tipo}>`;
+        lista = tipo;
+      }
+      html += `<li>${(vineta || numero)[1]}</li>`;
+    } else if (linea.trim()) {
+      cerrar();
+      html += `<p>${linea}</p>`;
+    } else {
+      cerrar();
+    }
+  }
+  cerrar();
+  return html;
+}
+
+function montarAsistente() {
+  if (document.getElementById("asistente")) return;
+  const raiz = document.createElement("div");
+  raiz.id = "asistente";
+  raiz.innerHTML = `
+    <button type="button" class="asistente-boton" title="Asistente (pregúntale sobre el negocio)">${icono("chispa", "")}<span>Asistente</span></button>
+    <aside class="asistente-panel" hidden aria-label="Asistente de IA">
+      <header>
+        <strong>${icono("chispa")} Asistente</strong>
+        <button type="button" data-accion="historial" title="Conversaciones anteriores">Historial</button>
+        <button type="button" data-accion="nueva" title="Empezar otra conversación">Nueva</button>
+        <button type="button" data-accion="cerrar" class="cerrar" title="Cerrar">${icono("tache")}</button>
+      </header>
+      <div class="asistente-mensajes"></div>
+      <form class="asistente-escribir">
+        <textarea rows="2" placeholder="Pregunta sobre ventas, productos, caducidades, cortes…" maxlength="4000"></textarea>
+        <button class="primario" title="Enviar (Enter)">${icono("enviar")}</button>
+      </form>
+      <p class="asistente-pie">Solo consulta; no cambia nada. Cada pregunta usa la API de Claude.</p>
+    </aside>`;
+  document.body.append(raiz);
+
+  const boton = raiz.querySelector(".asistente-boton");
+  const panel = raiz.querySelector(".asistente-panel");
+  const zona = raiz.querySelector(".asistente-mensajes");
+  const form = raiz.querySelector("form");
+  const campo = form.querySelector("textarea");
+  let conversacion = null;
+  let ocupado = false;
+  let configurada = null;
+
+  // Lo que se escribe en el chat no debe llegar a los atajos de la pantalla (ej. Vender).
+  panel.addEventListener("keydown", (ev) => {
+    ev.stopPropagation();
+    if (ev.key === "Escape") cerrarPanel();
+  });
+
+  const burbuja = (rol, html, extra = "") => {
+    const div = document.createElement("div");
+    div.className = `asistente-msg ${rol}`;
+    div.innerHTML = html + extra;
+    zona.append(div);
+    zona.scrollTop = zona.scrollHeight;
+    return div;
+  };
+  const etiquetas = (lista) => {
+    const unicas = [...new Set(lista || [])];
+    return unicas.length
+      ? `<div class="asistente-consultas">Consultó: ${unicas.map((c) => escapar(NOMBRES_CONSULTA[c] || c)).join(", ")}</div>`
+      : "";
+  };
+
+  const bienvenida = () => {
+    zona.innerHTML = "";
+    if (configurada === false) {
+      burbuja("aviso", "<p>Falta la clave de la API de Claude. Ponla en <strong>Inicio → Configuración → Asistente de IA</strong>.</p>");
+      return;
+    }
+    burbuja("asistente", "<p>Hola. Pregúntame sobre ventas, productos, existencias, caducidades, cortes, devoluciones, entradas o cómo usar el sistema.</p>");
+    const sug = document.createElement("div");
+    sug.className = "asistente-sugerencias";
+    for (const s of SUGERENCIAS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = s;
+      b.addEventListener("click", () => enviar(s));
+      sug.append(b);
+    }
+    zona.append(sug);
+  };
+
+  const abrirPanel = async () => {
+    panel.hidden = false;
+    boton.hidden = true;
+    if (configurada === null) {
+      try {
+        configurada = (await API.get("/ia/estado")).configurada;
+      } catch {
+        configurada = false;
+      }
+    }
+    if (!zona.childElementCount) bienvenida();
+    campo.focus();
+  };
+  const cerrarPanel = () => {
+    panel.hidden = true;
+    boton.hidden = false;
+  };
+
+  const enviar = async (texto) => {
+    texto = (texto || "").trim();
+    if (!texto || ocupado) return;
+    if (configurada === false) return bienvenida();
+    const sugerencias = zona.querySelector(".asistente-sugerencias");
+    if (sugerencias) sugerencias.remove();
+    burbuja("usuario", `<p>${escapar(texto)}</p>`);
+    campo.value = "";
+    ocupado = true;
+    const pensando = burbuja("asistente pensando", '<span class="girando"></span><span>Consultando…</span>');
+    try {
+      const r = await API.post("/asistente/preguntar", { texto, conversacion_id: conversacion });
+      conversacion = r.conversacion_id;
+      pensando.remove();
+      burbuja("asistente", formatoAsistente(r.respuesta), etiquetas(r.consultas));
+    } catch (e) {
+      pensando.remove();
+      burbuja("aviso", `<p>${escapar(e.message)}</p>`);
+    } finally {
+      ocupado = false;
+      campo.focus();
+    }
+  };
+
+  const historial = async () => {
+    zona.innerHTML = "";
+    const lista = await API.get("/asistente/conversaciones");
+    if (!lista.length) {
+      burbuja("aviso", "<p>Todavía no hay conversaciones.</p>");
+      return;
+    }
+    const cont = document.createElement("div");
+    cont.className = "asistente-historial";
+    for (const c of lista) {
+      const fila = document.createElement("div");
+      fila.className = "fila-historial";
+      fila.innerHTML = `<button type="button" class="abrir"><strong>${escapar(c.titulo)}</strong>
+        <span>${new Date(c.updated_at).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}</span></button>
+        <button type="button" class="borrar" title="Borrar">${icono("basura")}</button>`;
+      fila.querySelector(".abrir").addEventListener("click", () => abrirConversacion(c.id));
+      fila.querySelector(".borrar").addEventListener("click", async () => {
+        await API.borrar(`/asistente/conversaciones/${c.id}`);
+        if (conversacion === c.id) conversacion = null;
+        historial();
+      });
+      cont.append(fila);
+    }
+    zona.append(cont);
+  };
+
+  const abrirConversacion = async (id) => {
+    const mensajes = await API.get(`/asistente/conversaciones/${id}`);
+    conversacion = id;
+    zona.innerHTML = "";
+    for (const m of mensajes) {
+      if (m.rol === "usuario") burbuja("usuario", `<p>${escapar(m.texto)}</p>`);
+      else burbuja("asistente", formatoAsistente(m.texto), etiquetas(m.consultas));
+    }
+    campo.focus();
+  };
+
+  boton.addEventListener("click", abrirPanel);
+  raiz.querySelector('[data-accion="cerrar"]').addEventListener("click", cerrarPanel);
+  raiz.querySelector('[data-accion="nueva"]').addEventListener("click", () => {
+    conversacion = null;
+    bienvenida();
+    campo.focus();
+  });
+  raiz.querySelector('[data-accion="historial"]').addEventListener("click", () =>
+    historial().catch((e) => burbuja("aviso", `<p>${escapar(e.message)}</p>`))
+  );
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    enviar(campo.value);
+  });
+  campo.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey) {
+      ev.preventDefault();
+      enviar(campo.value);
+    }
+  });
+}
