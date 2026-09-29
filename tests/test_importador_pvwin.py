@@ -140,9 +140,10 @@ def test_negativo_entra_en_cero_y_va_a_conteo(lectura):
     assert [(n.nombre, n.detalle) for n in lectura.negativos] == [("A GRANEL BRONCORUB LATA", "-4")]
 
 
-def test_iva_deducido_por_grupo_si_no_viene_en_catalogo(lectura):
+def test_sin_iva_marcado_en_catalogo_queda_en_cero(lectura):
+    # Solo lleva IVA lo que PVWin marca; el grupo no basta (hay medicamentos en el 2).
     assert por_nombre(lectura, "SOLO EN INVENTARIO MEDICAMENTO").iva == D(0)
-    assert por_nombre(lectura, "SOLO EN INVENTARIO PERFUMERIA").iva == D(16)
+    assert por_nombre(lectura, "SOLO EN INVENTARIO PERFUMERIA").iva == D(0)
     assert por_nombre(lectura, "SOLO EN INVENTARIO MEDICAMENTO").costo is None
     assert por_nombre(lectura, "SOLO EN INVENTARIO MEDICAMENTO").laboratorio == "LIOMONT"
 

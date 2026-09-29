@@ -146,7 +146,7 @@ def escribir_reporte(ruta: Path, lectura: ResultadoLectura, totales: dict, simul
         ("Productos creados", totales["productos_creados"]),
         ("  que venían en catálogo e inventario", sum(1 for p in lectura.productos if p.en_catalogo and p.en_inventario)),
         ("  solo en catálogo (existencia cero)", sum(1 for p in lectura.productos if p.en_catalogo and not p.en_inventario)),
-        ("  solo en inventario (sin costo; IVA deducido del grupo)", sum(1 for p in lectura.productos if not p.en_catalogo)),
+        ("  solo en inventario (sin costo; IVA 0% porque no viene marcado)", sum(1 for p in lectura.productos if not p.en_catalogo)),
         ("Categorías creadas (Depto N)", totales["categorias_creadas"]),
         ("Lotes 'sin caducidad' creados", totales["lotes_creados"]),
         ("Piezas importadas", totales["piezas"]),

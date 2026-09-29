@@ -7,6 +7,11 @@ app/scripts/importar_pvwin.py). Las reglas están en CONTEXTO.md, sección
 Se usan dos reportes, tal como salen de PVWin, que se unen por Clave:
 - "Catálogo de artículos": costo, impuestos, mínimo/máximo. Sin existencias.
 - "Reporte de inventarios - Detallado - Sin mostrar ceros": existencias.
+Y para los precios (app/scripts/importar_precios_pvwin.py):
+- "Reporte de lista de precios - Impuestos No Incluidos": precio sin impuestos.
+
+IVA e IEPS: solo lo que PVWin marca explícitamente en el catálogo. Si no
+viene marcado, es 0% (medicamentos, higiene femenina y otros no lo llevan).
 """
 
 import re
@@ -25,13 +30,12 @@ FILA_DATOS = 6
 CAT = dict(clave=1, prodserv=3, descripcion=4, localiza=8, gpo=9, dpto=10, costo=12,
            minimo=13, maximo=14, ieps=16, iva=17)
 INV = dict(clave=1, descripcion=2, localizacion=3, grupo=4, depto=5, existencia=6)
+PRECIOS = dict(clave=1, descripcion=2, precio1=5, precio2=6, precio3=7, precio4=8)
 
 # Productos que no se importan.
 OMITIR = {"ARTICULO DE PRUEBA"}
 # Existencias por encima de esto se marcan como sospechosas (ej. 1,250 esterilizadores).
 EXISTENCIA_SOSPECHOSA = Decimal(500)
-# IVA por grupo de PVWin, para productos que no vienen en el catálogo.
-IVA_POR_GRUPO = {1: Decimal(0), 2: Decimal(16)}
 # IVA capturado mal en PVWin -> valor correcto.
 CORRECCIONES_IVA = {Decimal(20): Decimal(16)}
 
@@ -250,11 +254,11 @@ def _limpiar(
         p.clave = None
 
     if p.grupo is None:
-        p.revision.append("sin grupo en PVWin; revisar IVA y categoría")
+        p.revision.append("sin grupo en PVWin; revisar categoría")
 
     if p.iva is None:
-        # No viene en el catálogo: se deduce del grupo (1 = medicamento 0%, 2 = 16%).
-        p.iva = IVA_POR_GRUPO.get(p.grupo, Decimal(0))
+        # No viene en el catálogo: sin IVA marcado no se le cobra IVA.
+        p.iva = Decimal(0)
     elif p.iva in CORRECCIONES_IVA:
         corregido = CORRECCIONES_IVA[p.iva]
         corregidos.append(Incidencia(p.clave, p.nombre, f"IVA {p.iva}% corregido a {corregido}%"))
@@ -270,3 +274,40 @@ def _limpiar(
         p.existencia = Decimal(0)
     elif p.existencia > EXISTENCIA_SOSPECHOSA:
         p.revision.append(f"existencia muy alta ({p.existencia}); verificar")
+
+
+# --- Lista de precios -------------------------------------------------------
+
+@dataclass
+class PrecioPVWin:
+    clave: str | None
+    nombre: str
+    precio: Decimal  # "Precio Venta 1", sin impuestos
+    otros_precios: list[Decimal]  # Precio Venta 2 a 4 que no vengan en cero
+
+
+def leer_lista_precios(ruta: Path) -> list[PrecioPVWin]:
+    """Lee el "Reporte de lista de precios" tal como sale de PVWin. Los
+    renglones repetidos (misma clave y nombre) se dejan: quien los usa decide."""
+    precios = []
+    for fila in _renglones(ruta, PRECIOS, {"clave": "Clave", "precio1": "$Precio Venta 1"}):
+        otros = [_decimal(fila[PRECIOS[k]]) for k in ("precio2", "precio3", "precio4")]
+        precios.append(PrecioPVWin(
+            clave=_clave(fila[PRECIOS["clave"]]),
+            nombre=_texto(fila[PRECIOS["descripcion"]]),
+            precio=_decimal(fila[PRECIOS["precio1"]]) or Decimal(0),
+            otros_precios=[o for o in otros if o],
+        ))
+    return precios
+
+
+def impuestos_del_catalogo(ruta_catalogo: Path) -> dict[tuple[str | None, str], tuple[Decimal, Decimal]]:
+    """{(clave, nombre comparable): (IVA, IEPS)} marcados explícitamente en el
+    catálogo de artículos, con las mismas correcciones que al importar."""
+    impuestos = {}
+    for fila in _renglones(ruta_catalogo, CAT, {"clave": "Clave", "costo": "$Pcio Compra", "iva": "%IVA"}):
+        iva = _decimal(fila[CAT["iva"]]) or Decimal(0)
+        iva = CORRECCIONES_IVA.get(iva, iva)
+        ieps = _decimal(fila[CAT["ieps"]]) or Decimal(0)
+        impuestos[(_clave(fila[CAT["clave"]]), _comparable(_texto(fila[CAT["descripcion"]])))] = (iva, ieps)
+    return impuestos

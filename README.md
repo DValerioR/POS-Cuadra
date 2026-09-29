@@ -291,6 +291,12 @@ deben pasar todas.
 
 Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
 
+- Poner precios desde la lista de precios de PVWin (y crear los productos que falten):
+  ```
+  python -m app.scripts.importar_precios_pvwin --negocio 1 --lista "datos/Catalogo completo con precios.xlsx" --catalogo "datos/Catalogo de articulos.xlsx" --simular
+  ```
+  Precio = precio sin impuestos + IEPS + IVA marcados en el catálogo, con el
+  redondeo del negocio. Sin `--simular` guarda. Deja un reporte en `datos/`.
 - Crear un usuario (pide la contraseña sin mostrarla):
   ```
   python -m app.scripts.crear_usuario --negocio 1 --usuario diego --nombre "Diego Valerio" --rol admin
