@@ -25,8 +25,9 @@ function pantallaVenta() {
 
     // Carrito y cobro
     carrito: [],
+    formaPago: "efectivo", // efectivo | tarjeta | mixto
     efectivo: "",
-    tarjeta: "",
+    tarjeta: "", // solo se captura en pago mixto
     cobrando: false,
     ultimaVenta: null,
 
@@ -178,6 +179,10 @@ function pantallaVenta() {
       this.limpiarBusqueda();
     },
 
+    cambiarCantidad(renglon, paso) {
+      renglon.cantidad = Math.max(1, Number(renglon.cantidad || 0) + paso);
+    },
+
     quitar(renglon) {
       this.carrito = this.carrito.filter((r) => r !== renglon);
       this.enfocarBusqueda();
@@ -220,21 +225,33 @@ function pantallaVenta() {
     get totalCentavos() {
       return this.carrito.reduce((suma, r) => suma + Math.round(this.importe(r) * 100), 0);
     },
+    get articulos() {
+      return this.carrito.reduce((suma, r) => suma + Number(r.cantidad || 0), 0);
+    },
+    // Con "Tarjeta" todo va a tarjeta aunque el total cambie después de elegirla.
+    get tarjetaCentavos() {
+      if (this.formaPago === "tarjeta") return this.totalCentavos;
+      if (this.formaPago === "mixto") return centavos(this.tarjeta);
+      return 0;
+    },
+    get efectivoCentavos() {
+      return this.formaPago === "tarjeta" ? 0 : centavos(this.efectivo);
+    },
     get efectivoNecesarioCentavos() {
-      return Math.max(0, this.totalCentavos - centavos(this.tarjeta));
+      return Math.max(0, this.totalCentavos - this.tarjetaCentavos);
     },
     get faltaCentavos() {
-      return Math.max(0, this.efectivoNecesarioCentavos - centavos(this.efectivo));
+      return Math.max(0, this.efectivoNecesarioCentavos - this.efectivoCentavos);
     },
     get cambioCentavos() {
-      return Math.max(0, centavos(this.efectivo) - this.efectivoNecesarioCentavos);
+      return Math.max(0, this.efectivoCentavos - this.efectivoNecesarioCentavos);
     },
     get listoParaCobrar() {
       return (
         this.carrito.length > 0 &&
         !this.cobrando &&
         this.faltaCentavos === 0 &&
-        centavos(this.tarjeta) <= this.totalCentavos &&
+        this.tarjetaCentavos <= this.totalCentavos &&
         this.carrito.every((r) => Number(r.cantidad) > 0)
       );
     },
@@ -242,9 +259,12 @@ function pantallaVenta() {
     efectivoExacto() {
       this.efectivo = (this.efectivoNecesarioCentavos / 100).toFixed(2);
     },
-    todoConTarjeta() {
-      this.tarjeta = (this.totalCentavos / 100).toFixed(2);
+    elegirFormaPago(forma) {
+      this.formaPago = forma;
       this.efectivo = "";
+      this.tarjeta = "";
+      const campo = { efectivo: "campo-efectivo", mixto: "campo-tarjeta" }[forma];
+      if (campo) this.$nextTick(() => document.getElementById(campo).focus());
     },
 
     // "2027-03" -> "2027-03-31": las cajas traen mes/año; se toma el último día.
@@ -268,8 +288,8 @@ function pantallaVenta() {
             caducidad: !r.loteId && r.caducidadMes ? this.ultimoDiaDelMes(r.caducidadMes) : null,
             numero_lote: !r.loteId && r.caducidadMes && r.numeroLote ? r.numeroLote : null,
           })),
-          tarjeta: this.tarjeta || "0",
-          efectivo_recibido: this.efectivo || "0",
+          tarjeta: (this.tarjetaCentavos / 100).toFixed(2),
+          efectivo_recibido: (this.efectivoCentavos / 100).toFixed(2),
         });
         this.ultimaVenta = venta;
       } catch (e) {
@@ -291,10 +311,16 @@ function pantallaVenta() {
     nuevaVenta() {
       this.ultimaVenta = null;
       this.carrito = [];
+      this.formaPago = "efectivo";
       this.efectivo = "";
       this.tarjeta = "";
       this.error = "";
       this.limpiarBusqueda();
+    },
+
+    cancelarVenta() {
+      if (!confirm("¿Borrar todos los productos de esta venta?")) return;
+      this.nuevaVenta();
     },
 
     // --- Teclado --------------------------------------------------------

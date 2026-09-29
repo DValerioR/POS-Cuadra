@@ -10,85 +10,130 @@
 </head>
 <body x-data="pantallaTurno()">
 
-  <header class="barra">
-    <span class="marca">Farmacia</span>
-    <nav>
-      <a href="/venta">Venta</a>
-      <a href="/turno" class="activo">Turno y corte</a>
-    </nav>
-    <span class="usuario" x-show="usuario" x-cloak x-text="usuario?.nombre_completo"></span>
-    <button onclick="cerrarSesion()">Salir</button>
-  </header>
+  <header class="barra" data-pagina="turno"></header>
 
   <main class="contenido corte" x-cloak x-show="!cargando">
-    <div class="mensaje error" x-show="error" x-text="error"></div>
+    <div class="mensaje error" x-show="error">
+      <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+    </div>
 
     <template x-if="!cajaId">
       <div class="panel">
-        <p>Esta computadora todavía no tiene caja asignada. Entra a <a href="/venta">Venta</a> para elegirla.</p>
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#caja"/></svg></span>
+          <div><h2>Esta computadora no tiene caja</h2><p class="suave">Entra a Vender para elegir qué caja es.</p></div>
+        </div>
+        <a class="boton primario grande" href="/venta">Ir a Vender</a>
       </div>
     </template>
 
     <!-- Turno cerrado: resultado del corte -->
     <template x-if="cerrado">
       <div class="panel">
-        <h2>Turno cerrado</h2>
-        <table>
-          <tr><td>Efectivo esperado</td><td x-text="dinero(cerrado.efectivo_esperado)"></td></tr>
-          <tr><td>Efectivo contado</td><td x-text="dinero(cerrado.efectivo_contado)"></td></tr>
-          <tr class="total-fila"><td>Diferencia en efectivo</td><td :class="claseDiferencia(cerrado.diferencia_efectivo)" x-text="textoDiferencia(cerrado.diferencia_efectivo)"></td></tr>
-          <tr><td>Tarjeta esperada</td><td x-text="dinero(cerrado.tarjeta_esperado)"></td></tr>
-          <tr><td>Tarjeta contada</td><td x-text="dinero(cerrado.tarjeta_contado)"></td></tr>
-          <tr class="total-fila"><td>Diferencia en tarjeta</td><td :class="claseDiferencia(cerrado.diferencia_tarjeta)" x-text="textoDiferencia(cerrado.diferencia_tarjeta)"></td></tr>
-        </table>
-        <p><a href="/venta"><button class="primario grande">Abrir el siguiente turno</button></a></p>
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#palomita"/></svg></span>
+          <div><h2>Turno cerrado</h2><p class="suave" x-text="cajaNombre"></p></div>
+        </div>
+        <div class="pila">
+          <div class="veredicto" :class="claseDiferencia(cerrado.diferencia_efectivo)">
+            <svg class="ico"><use href="/static/iconos.svg#billete"/></svg>
+            <span x-text="'Efectivo: ' + textoDiferencia(cerrado.diferencia_efectivo)"></span>
+          </div>
+          <div class="veredicto" :class="claseDiferencia(cerrado.diferencia_tarjeta)">
+            <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
+            <span x-text="'Tarjeta: ' + textoDiferencia(cerrado.diferencia_tarjeta)"></span>
+          </div>
+        </div>
+        <details class="desglose">
+          <summary>Ver cifras</summary>
+          <table>
+            <tr><td>Efectivo que debía haber</td><td x-text="dinero(cerrado.efectivo_esperado)"></td></tr>
+            <tr><td>Efectivo contado</td><td x-text="dinero(cerrado.efectivo_contado)"></td></tr>
+            <tr><td>Tarjeta que debía haber</td><td x-text="dinero(cerrado.tarjeta_esperado)"></td></tr>
+            <tr><td>Tarjeta contada</td><td x-text="dinero(cerrado.tarjeta_contado)"></td></tr>
+          </table>
+        </details>
+        <a class="boton primario grande separado" href="/venta">Abrir el siguiente turno</a>
       </div>
     </template>
 
     <template x-if="cajaId && !turno && !cerrado">
       <div class="panel">
-        <p>La caja <strong x-text="cajaNombre"></strong> no tiene turno abierto.</p>
-        <p><a href="/venta"><button class="primario">Ir a abrir turno</button></a></p>
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#caja"/></svg></span>
+          <div><h2>No hay turno abierto</h2><p class="suave" x-text="cajaNombre"></p></div>
+        </div>
+        <a class="boton primario grande" href="/venta">Abrir turno</a>
       </div>
     </template>
 
     <!-- Turno abierto: corte -->
     <template x-if="turno && corte">
       <div class="panel">
-        <h2>Corte de caja · <span x-text="cajaNombre"></span></h2>
-        <p class="suave">
-          Turno de la <span x-text="turno.tipo === 'manana' ? 'mañana' : 'tarde'"></span>,
-          abierto el <span x-text="new Date(turno.abierto_en).toLocaleString('es-MX')"></span>
-        </p>
-        <table>
-          <tr><td>Fondo inicial</td><td x-text="dinero(corte.fondo_inicial)"></td></tr>
-          <tr><td>Ventas en efectivo</td><td x-text="dinero(corte.ventas_efectivo)"></td></tr>
-          <tr x-show="Number(corte.reembolsos_efectivo)"><td>Devoluciones en efectivo</td><td x-text="'−' + dinero(corte.reembolsos_efectivo)"></td></tr>
-          <tr class="total-fila"><td>Efectivo esperado en caja</td><td x-text="dinero(corte.efectivo_esperado)"></td></tr>
-          <tr><td>Ventas con tarjeta</td><td x-text="dinero(corte.ventas_tarjeta)"></td></tr>
-          <tr x-show="Number(corte.reembolsos_tarjeta)"><td>Devoluciones a tarjeta</td><td x-text="'−' + dinero(corte.reembolsos_tarjeta)"></td></tr>
-          <tr class="total-fila"><td>Tarjeta esperada</td><td x-text="dinero(corte.tarjeta_esperado)"></td></tr>
-        </table>
+        <div class="encabezado">
+          <span class="circulo"><svg><use :href="turno.tipo === 'manana' ? '/static/iconos.svg#sol' : '/static/iconos.svg#atardecer'"/></svg></span>
+          <div>
+            <h2>Corte de caja</h2>
+            <p class="suave">
+              <span x-text="cajaNombre"></span> · turno de la <span x-text="turno.tipo === 'manana' ? 'mañana' : 'tarde'"></span>,
+              desde las <span x-text="new Date(turno.abierto_en).toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' })"></span>
+            </p>
+          </div>
+        </div>
+
+        <div class="paso">1. Lo que debe haber</div>
+        <div class="cifras">
+          <div class="cifra">
+            <div class="rotulo"><svg class="ico"><use href="/static/iconos.svg#billete"/></svg>Efectivo en caja</div>
+            <div class="valor" x-text="dinero(corte.efectivo_esperado)"></div>
+          </div>
+          <div class="cifra">
+            <div class="rotulo"><svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>Tarjeta</div>
+            <div class="valor" x-text="dinero(corte.tarjeta_esperado)"></div>
+          </div>
+        </div>
+        <details class="desglose">
+          <summary>¿De dónde salen estas cifras?</summary>
+          <table>
+            <tr><td>Fondo inicial</td><td x-text="dinero(corte.fondo_inicial)"></td></tr>
+            <tr><td>Ventas en efectivo</td><td x-text="'+ ' + dinero(corte.ventas_efectivo)"></td></tr>
+            <tr x-show="Number(corte.reembolsos_efectivo)"><td>Devoluciones en efectivo</td><td x-text="'− ' + dinero(corte.reembolsos_efectivo)"></td></tr>
+            <tr class="total-fila"><td>Efectivo esperado</td><td x-text="dinero(corte.efectivo_esperado)"></td></tr>
+            <tr><td>Ventas con tarjeta</td><td x-text="dinero(corte.ventas_tarjeta)"></td></tr>
+            <tr x-show="Number(corte.reembolsos_tarjeta)"><td>Devoluciones a tarjeta</td><td x-text="'− ' + dinero(corte.reembolsos_tarjeta)"></td></tr>
+            <tr class="total-fila"><td>Tarjeta esperada</td><td x-text="dinero(corte.tarjeta_esperado)"></td></tr>
+          </table>
+        </details>
 
         <form @submit.prevent="cerrar">
-          <h3 style="margin-top: 20px">Lo que contaste</h3>
-          <div class="fila">
+          <div class="paso separado">2. Cuenta lo que hay</div>
+          <div class="fila" style="align-items: flex-start">
             <div>
-              <label>Efectivo en caja</label>
-              <input type="number" min="0" step="0.50" x-model="contado.efectivo" required>
+              <label style="margin-top: 0">Efectivo en el cajón</label>
+              <div class="campo-dinero"><input type="number" min="0" step="0.50" x-model="contado.efectivo" placeholder="0.00" required></div>
             </div>
             <div>
-              <label>Total de vouchers de tarjeta</label>
-              <input type="number" min="0" step="0.01" x-model="contado.tarjeta" required>
+              <label style="margin-top: 0">Suma de los vouchers de tarjeta</label>
+              <div class="campo-dinero"><input type="number" min="0" step="0.01" x-model="contado.tarjeta" placeholder="0.00" required></div>
             </div>
           </div>
-          <label>Notas (opcional)</label>
+
+          <div class="pila separado" x-show="contado.efectivo !== '' || contado.tarjeta !== ''">
+            <div class="veredicto" x-show="contado.efectivo !== ''" :class="claseDiferencia(diferenciaPrevia)">
+              <svg class="ico"><use href="/static/iconos.svg#billete"/></svg>
+              <span x-text="'Efectivo: ' + textoDiferencia(diferenciaPrevia)"></span>
+            </div>
+            <div class="veredicto" x-show="contado.tarjeta !== ''" :class="claseDiferencia(diferenciaTarjetaPrevia)">
+              <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
+              <span x-text="'Tarjeta: ' + textoDiferencia(diferenciaTarjetaPrevia)"></span>
+            </div>
+          </div>
+
+          <label>Notas <span class="ayuda">(opcional)</span></label>
           <textarea rows="2" x-model="contado.notas" placeholder="Ej. faltó un billete de $20"></textarea>
-          <p x-show="contado.efectivo !== ''">
-            Diferencia en efectivo:
-            <strong :class="claseDiferencia(diferenciaPrevia)" x-text="textoDiferencia(diferenciaPrevia)"></strong>
-          </p>
-          <p><button class="primario grande" :disabled="cerrando">Cerrar turno</button></p>
+          <button class="primario grande separado" :disabled="cerrando">
+            <span x-text="cerrando ? 'Cerrando…' : 'Cerrar turno'"></span>
+          </button>
         </form>
       </div>
     </template>
@@ -130,6 +175,9 @@
         get diferenciaPrevia() {
           return (centavos(this.contado.efectivo) - centavos(this.corte.efectivo_esperado)) / 100;
         },
+        get diferenciaTarjetaPrevia() {
+          return (centavos(this.contado.tarjeta) - centavos(this.corte.tarjeta_esperado)) / 100;
+        },
 
         claseDiferencia(valor) {
           const n = Number(valor);
@@ -137,8 +185,8 @@
         },
         textoDiferencia(valor) {
           const n = Number(valor);
-          if (n === 0) return "Cuadra exacto";
-          return n < 0 ? `Faltan ${dinero(-n)}` : `Sobran ${dinero(n)}`;
+          if (n === 0) return "cuadra exacto";
+          return n < 0 ? `faltan ${dinero(-n)}` : `sobran ${dinero(n)}`;
         },
 
         async cerrar() {

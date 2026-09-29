@@ -11,50 +11,63 @@
 </head>
 <body x-data="pantallaVenta()">
 
-  <header class="barra">
-    <span class="marca">Farmacia</span>
-    <nav>
-      <a href="/venta" class="activo">Venta</a>
-      <a href="/turno">Turno y corte</a>
-    </nav>
-    <span class="usuario" x-show="usuario" x-cloak>
-      <span x-text="usuario?.nombre_completo"></span>
-      <template x-if="cajaNombre"><span> · <span x-text="cajaNombre"></span></span></template>
-    </span>
-    <button onclick="cerrarSesion()">Salir</button>
-  </header>
+  <header class="barra" data-pagina="venta"></header>
 
   <!-- Estados previos a vender -->
   <template x-if="!cargando && usuario && !puedeVender">
-    <div class="centrado panel"><h2>Sin acceso a ventas</h2><p class="suave">El rol de bodega no cobra.</p></div>
+    <div class="centrado panel">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso a ventas</h2><p class="suave">Tu usuario es de bodega y no cobra.</p></div>
+      </div>
+    </div>
   </template>
 
   <template x-if="!cargando && puedeVender && !cajaId">
     <div class="centrado panel">
-      <h2>¿Qué caja es esta computadora?</h2>
-      <p class="suave">Se elige una sola vez; esta computadora lo recordará.</p>
-      <template x-for="caja in cajas" :key="caja.id">
-        <p><button class="grande" @click="elegirCaja(caja.id)" x-text="caja.nombre"></button></p>
-      </template>
-      <p class="suave" x-show="!cajas.length">No hay cajas dadas de alta; pide al administrador que las cree.</p>
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#caja"/></svg></span>
+        <div><h2>¿Qué caja es esta computadora?</h2><p class="suave">Solo se pregunta una vez.</p></div>
+      </div>
+      <div class="pila">
+        <template x-for="caja in cajas" :key="caja.id">
+          <button class="grande" @click="elegirCaja(caja.id)">
+            <svg class="ico"><use href="/static/iconos.svg#caja"/></svg><span x-text="caja.nombre"></span>
+          </button>
+        </template>
+      </div>
+      <div class="mensaje aviso" x-show="!cajas.length">No hay cajas dadas de alta; pide al administrador que las cree.</div>
     </div>
   </template>
 
   <template x-if="!cargando && puedeVender && cajaId && !turno">
     <div class="centrado panel">
-      <h2>Abrir turno · <span x-text="cajaNombre"></span></h2>
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#caja"/></svg></span>
+        <div><h2>Abrir turno</h2><p class="suave" x-text="cajaNombre"></p></div>
+      </div>
       <form @submit.prevent="abrirTurno">
-        <label>Turno</label>
-        <select x-model="nuevoTurno.tipo">
-          <option value="manana">Mañana</option>
-          <option value="tarde">Tarde</option>
-        </select>
-        <label>Fondo de caja (efectivo con el que empiezas)</label>
-        <input type="number" min="0" step="0.50" x-model="nuevoTurno.fondo" placeholder="0.00" required>
-        <div class="mensaje error" x-show="error" x-text="error"></div>
-        <p><button class="primario grande">Abrir turno</button></p>
+        <label>¿Qué turno es?</label>
+        <div class="opciones">
+          <button type="button" class="opcion" :class="{ activa: nuevoTurno.tipo === 'manana' }" @click="nuevoTurno.tipo = 'manana'">
+            <svg><use href="/static/iconos.svg#sol"/></svg>Mañana
+          </button>
+          <button type="button" class="opcion" :class="{ activa: nuevoTurno.tipo === 'tarde' }" @click="nuevoTurno.tipo = 'tarde'">
+            <svg><use href="/static/iconos.svg#atardecer"/></svg>Tarde
+          </button>
+        </div>
+        <label>¿Con cuánto efectivo empiezas? <span class="ayuda">(fondo de caja)</span></label>
+        <div class="campo-dinero">
+          <input type="number" min="0" step="0.50" x-model="nuevoTurno.fondo" placeholder="0.00" required>
+        </div>
+        <div class="mensaje error" x-show="error">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+        </div>
+        <button class="primario grande separado">Abrir turno y empezar a vender</button>
       </form>
-      <p class="suave"><a href="#" @click.prevent="cajaId = null">Cambiar de caja</a></p>
+      <p class="suave separado" style="text-align: center; margin-bottom: 0">
+        ¿No es esta caja? <a href="#" @click.prevent="cajaId = null">Cambiar de caja</a>
+      </p>
     </div>
   </template>
 
@@ -62,32 +75,42 @@
   <main class="venta" x-show="!cargando && puedeVender && cajaId && turno" x-cloak>
     <section class="izquierda">
       <div class="buscador">
+        <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
         <input id="busqueda" x-model="busqueda" @input="alEscribir"
                @keydown.enter.prevent="alPresionarEnter" @keydown.arrow-down.prevent="mover(1)"
                @keydown.arrow-up.prevent="mover(-1)"
-               placeholder="Escanea o escribe el nombre del producto (F2)" autocomplete="off">
+               placeholder="Escanea el código o escribe el nombre del producto" autocomplete="off">
         <div class="resultados" x-show="resultados.length" @click.outside="resultados = []">
           <template x-for="(p, i) in resultados" :key="p.id">
             <div class="resultado" :class="{ elegido: i === elegido }" @click="agregar(p)" @mouseenter="elegido = i">
               <div>
-                <div x-text="p.nombre"></div>
-                <div class="suave" style="font-size: 13px">
+                <div class="nombre" x-text="p.nombre"></div>
+                <div class="suave" style="font-size: 14px">
                   <span x-text="p.clave || 'sin clave'"></span>
                   <template x-if="p.requiere_receta"><span class="etiqueta">Receta</span></template>
                 </div>
               </div>
-              <div class="precio" x-text="p.precio_venta === null ? 'Sin precio' : dinero(p.precio_venta)"></div>
+              <div class="precio" x-show="p.precio_venta !== null" x-text="dinero(p.precio_venta)"></div>
+              <div class="sin-precio" x-show="p.precio_venta === null">Sin precio</div>
             </div>
           </template>
         </div>
       </div>
 
-      <div class="mensaje error" x-show="error" x-text="error"></div>
+      <div class="mensaje error" x-show="error">
+        <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+      </div>
 
       <div class="panel carrito">
-        <table>
+        <table x-show="carrito.length">
           <thead>
-            <tr><th>Producto</th><th style="width: 90px">Cant.</th><th class="derecha" style="width: 110px">Precio</th><th class="derecha" style="width: 120px">Importe</th><th style="width: 40px"></th></tr>
+            <tr>
+              <th>Producto</th>
+              <th style="width: 150px">Cantidad</th>
+              <th class="derecha" style="width: 110px">Precio</th>
+              <th class="derecha" style="width: 120px">Importe</th>
+              <th style="width: 60px"></th>
+            </tr>
           </thead>
           <tbody>
             <template x-for="r in carrito" :key="r.clave">
@@ -95,14 +118,16 @@
                 <td>
                   <div class="nombre">
                     <span x-text="r.producto.nombre"></span>
-                    <template x-if="r.producto.requiere_receta"><span class="etiqueta">Requiere receta</span></template>
+                    <template x-if="r.producto.requiere_receta">
+                      <span class="etiqueta"><svg class="ico"><use href="/static/iconos.svg#receta"/></svg>Pide receta</span>
+                    </template>
                   </div>
                   <!-- Qué lote entregar; si se entregó otro, se elige aquí. -->
                   <div class="lote" x-show="r.existencia.lotes.length">
-                    Entregar: <strong x-text="textoLote(loteAEntregar(r))"></strong>
+                    <span>Entrega: <strong x-text="textoLote(loteAEntregar(r))"></strong></span>
                     <template x-if="r.existencia.lotes.length > 1">
-                      <select x-model="r.loteId" title="Si entregaste otro lote, elígelo">
-                        <option value="">Sugerido (caduca antes)</option>
+                      <select x-model="r.loteId" title="Si entregaste otra caja, elige su lote">
+                        <option value="">La que caduca antes</option>
                         <template x-for="l in r.existencia.lotes" :key="l.id">
                           <option :value="l.id" x-text="`${textoLote(l)} (${cantidad(l.cantidad)} pzas)`"></option>
                         </template>
@@ -110,62 +135,108 @@
                     </template>
                   </div>
                   <div class="lote" x-show="puedeCapturarCaducidad(r)">
-                    Caducidad de la caja (opcional):
+                    <span>Caducidad de la caja <span class="ayuda">(si la ves)</span>:</span>
                     <input type="month" x-model="r.caducidadMes">
                     <input x-show="r.caducidadMes" x-model="r.numeroLote" placeholder="Lote (opcional)" style="width: 130px">
                   </div>
-                  <div class="etiqueta peligro" x-show="faltaExistencia(r) !== null"
-                       x-text="`Solo hay ${faltaExistencia(r)} en inventario`"></div>
+                  <div class="lote" x-show="faltaExistencia(r) !== null">
+                    <span class="etiqueta peligro" x-text="`Solo hay ${faltaExistencia(r)} en inventario`"></span>
+                  </div>
                 </td>
-                <td><input class="cant" type="number" min="1" step="1" x-model="r.cantidad"></td>
-                <td class="derecha" x-text="dinero(r.producto.precio_venta)"></td>
-                <td class="derecha"><strong x-text="dinero(importe(r))"></strong></td>
-                <td><button class="icono" @click="quitar(r)" title="Quitar">✕</button></td>
+                <td>
+                  <div class="contador">
+                    <button type="button" @click="cambiarCantidad(r, -1)" title="Una menos">−</button>
+                    <input type="number" min="1" step="1" x-model="r.cantidad" aria-label="Cantidad">
+                    <button type="button" @click="cambiarCantidad(r, 1)" title="Una más">+</button>
+                  </div>
+                </td>
+                <td class="derecha suave" x-text="dinero(r.producto.precio_venta)"></td>
+                <td class="derecha importe" x-text="dinero(importe(r))"></td>
+                <td class="derecha">
+                  <button class="texto-peligro" @click="quitar(r)" title="Quitar de la venta">
+                    <svg class="ico"><use href="/static/iconos.svg#basura"/></svg>
+                  </button>
+                </td>
               </tr>
             </template>
-            <tr x-show="!carrito.length">
-              <td colspan="5" class="vacio">Escanea un producto o escribe su nombre para empezar.</td>
-            </tr>
           </tbody>
         </table>
+        <div class="vacio" x-show="!carrito.length">
+          <svg><use href="/static/iconos.svg#codigo"/></svg>
+          <strong>Escanea un producto para empezar</strong>
+          <span>o escribe su nombre en el buscador de arriba</span>
+        </div>
       </div>
     </section>
 
     <aside class="panel cobro">
-      <div class="suave">Total</div>
-      <div class="total" x-text="dinero(totalCentavos / 100)"></div>
-
-      <div>
-        <label>Tarjeta</label>
-        <div class="fila">
-          <input type="number" min="0" step="0.01" x-model="tarjeta" placeholder="0.00">
-          <button @click="todoConTarjeta()" style="flex: 0 0 auto">Todo</button>
+      <div class="caja-total">
+        <div class="rotulo">
+          <span>Total a cobrar</span>
+          <span x-text="articulos === 1 ? '1 artículo' : `${articulos} artículos`"></span>
         </div>
-        <label>Efectivo recibido</label>
-        <div class="fila">
-          <input type="number" min="0" step="0.50" x-model="efectivo" placeholder="0.00" @keydown.enter.prevent="cobrar()">
-          <button @click="efectivoExacto()" style="flex: 0 0 auto">Exacto</button>
-        </div>
-        <div class="fila" style="margin-top: 8px">
-          <template x-for="billete in [50, 100, 200, 500]">
-            <button @click="efectivo = String(billete)" x-text="'$' + billete"></button>
-          </template>
-        </div>
+        <div class="total" x-text="dinero(totalCentavos / 100)"></div>
       </div>
 
-      <div>
-        <div class="renglon-dinero falta grande" x-show="faltaCentavos > 0">
-          <span>Falta</span><span x-text="dinero(faltaCentavos / 100)"></span>
+      <div class="cuerpo">
+        <div>
+          <div class="paso">¿Cómo paga?</div>
+          <div class="opciones">
+            <button type="button" class="opcion" :class="{ activa: formaPago === 'efectivo' }" @click="elegirFormaPago('efectivo')">
+              <svg><use href="/static/iconos.svg#billete"/></svg>Efectivo
+            </button>
+            <button type="button" class="opcion" :class="{ activa: formaPago === 'tarjeta' }" @click="elegirFormaPago('tarjeta')">
+              <svg><use href="/static/iconos.svg#tarjeta"/></svg>Tarjeta
+            </button>
+            <button type="button" class="opcion" :class="{ activa: formaPago === 'mixto' }" @click="elegirFormaPago('mixto')">
+              <svg><use href="/static/iconos.svg#mixto"/></svg>Las dos
+            </button>
+          </div>
         </div>
-        <div class="renglon-dinero cambio grande" x-show="faltaCentavos === 0 && carrito.length">
-          <span>Cambio</span><span x-text="dinero(cambioCentavos / 100)"></span>
+
+        <div x-show="formaPago === 'tarjeta'" class="mensaje info" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
+          <span>Cobra <strong x-text="dinero(totalCentavos / 100)"></strong> en la terminal y, cuando pase, presiona Cobrar.</span>
+        </div>
+
+        <div x-show="formaPago === 'mixto'">
+          <div class="paso">Parte con tarjeta</div>
+          <div class="campo-dinero">
+            <input id="campo-tarjeta" type="number" min="0" step="0.01" x-model="tarjeta" placeholder="0.00">
+          </div>
+        </div>
+
+        <div x-show="formaPago !== 'tarjeta'">
+          <div class="paso" x-text="formaPago === 'mixto' ? 'Efectivo que te dan' : '¿Con cuánto paga?'"></div>
+          <div class="campo-dinero">
+            <input id="campo-efectivo" type="number" min="0" step="0.50" x-model="efectivo" placeholder="0.00" @keydown.enter.prevent="cobrar()">
+          </div>
+          <div class="billetes">
+            <button type="button" @click="efectivoExacto()">Exacto</button>
+            <template x-for="billete in [50, 100, 200, 500]">
+              <button type="button" @click="efectivo = String(billete)" x-text="'$' + billete"></button>
+            </template>
+          </div>
+        </div>
+
+        <div class="resultado-cobro falta" x-show="carrito.length && faltaCentavos > 0">
+          <span>Falta</span><strong x-text="dinero(faltaCentavos / 100)"></strong>
+        </div>
+        <div class="resultado-cobro cambio" x-show="carrito.length && faltaCentavos === 0 && formaPago !== 'tarjeta'">
+          <span>Cambio</span><strong x-text="dinero(cambioCentavos / 100)"></strong>
+        </div>
+
+        <div style="margin-top: auto" class="pila">
+          <button class="primario enorme" :disabled="!listoParaCobrar" @click="cobrar()">
+            <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
+            <span x-text="cobrando ? 'Cobrando…' : 'Cobrar'"></span>
+          </button>
+          <button type="button" class="texto-peligro" x-show="carrito.length" @click="cancelarVenta()">
+            Borrar todo y empezar de nuevo
+          </button>
+          <div class="atajos"><kbd>F2</kbd> buscar · <kbd>F12</kbd> cobrar · <kbd>Esc</kbd> limpiar búsqueda</div>
         </div>
       </div>
-
-      <button class="primario grande" :disabled="!listoParaCobrar" @click="cobrar()">
-        <span x-text="cobrando ? 'Cobrando…' : 'Cobrar (F12)'"></span>
-      </button>
-      <div class="atajos">F2 buscar · ↑↓ elegir · Enter agregar · F12 cobrar · Esc limpiar</div>
     </aside>
   </main>
 
@@ -174,20 +245,30 @@
     <div class="panel ventana" x-show="ultimaVenta">
       <template x-if="ultimaVenta">
         <div>
-          <p class="suave">Venta <strong x-text="'folio ' + ultimaVenta.folio"></strong> · Total <strong x-text="dinero(ultimaVenta.total)"></strong></p>
-          <div class="suave">Cambio</div>
-          <div class="cambio-grande" x-text="dinero(ultimaVenta.cambio)"></div>
-          <template x-for="aviso in ultimaVenta.avisos">
-            <div class="mensaje aviso" x-text="aviso"></div>
-          </template>
-          <template x-if="ultimaVenta.impresion && !ultimaVenta.impresion.impreso">
-            <div class="mensaje error">
-              La venta se guardó, pero no se imprimió el ticket:
-              <span x-text="ultimaVenta.impresion.error"></span>
-              <p><button @click="reimprimir()">Reintentar impresión</button></p>
+          <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
+          <h2>¡Venta cobrada!</h2>
+          <p class="suave">Folio <strong x-text="ultimaVenta.folio"></strong> · Total <strong x-text="dinero(ultimaVenta.total)"></strong></p>
+          <template x-if="Number(ultimaVenta.cambio) > 0">
+            <div>
+              <div class="paso" style="margin: 16px 0 0">Entrega de cambio</div>
+              <div class="cambio-grande" x-text="dinero(ultimaVenta.cambio)"></div>
             </div>
           </template>
-          <p><button class="primario grande" @click="nuevaVenta()">Nueva venta (Enter)</button></p>
+          <template x-if="Number(ultimaVenta.cambio) === 0">
+            <p class="suave">No hay cambio que entregar.</p>
+          </template>
+          <template x-for="aviso in ultimaVenta.avisos">
+            <div class="mensaje aviso" style="text-align: left">
+              <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="aviso"></span>
+            </div>
+          </template>
+          <template x-if="ultimaVenta.impresion && !ultimaVenta.impresion.impreso">
+            <div class="mensaje error" style="flex-direction: column; text-align: left">
+              <span>La venta se guardó, pero el ticket no se imprimió: <span x-text="ultimaVenta.impresion.error"></span></span>
+              <button @click="reimprimir()"><svg class="ico"><use href="/static/iconos.svg#impresora"/></svg>Intentar imprimir otra vez</button>
+            </div>
+          </template>
+          <button class="primario grande separado" @click="nuevaVenta()">Siguiente venta <kbd>Enter</kbd></button>
         </div>
       </template>
     </div>

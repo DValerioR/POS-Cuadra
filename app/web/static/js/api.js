@@ -88,3 +88,50 @@ async function cerrarSesion() {
     location.href = "/login";
   }
 }
+
+// Ícono de /static/iconos.svg como texto HTML (para x-html o innerHTML).
+function icono(nombre, clase = "ico") {
+  return `<svg class="${clase}"><use href="/static/iconos.svg#${nombre}"/></svg>`;
+}
+
+// Barra superior común: <header class="barra" data-pagina="venta"></header>.
+// Se dibuja sola al cargar la página; así todas las pantallas se ven igual
+// y agregar una sección nueva es cambiar solo esta lista.
+const SECCIONES = [
+  { pagina: "venta", texto: "Vender", icono: "carrito" },
+  { pagina: "turno", texto: "Turno y corte", icono: "caja" },
+];
+
+function escapar(texto) {
+  const div = document.createElement("div");
+  div.textContent = texto ?? "";
+  return div.innerHTML;
+}
+
+async function pintarBarra() {
+  const barra = document.querySelector("header.barra[data-pagina]");
+  if (!barra) return;
+  const actual = barra.dataset.pagina;
+  const enlaces = SECCIONES.map(
+    (s) => `<a href="/${s.pagina}" class="${s.pagina === actual ? "activo" : ""}">${icono(s.icono)}${s.texto}</a>`
+  ).join("");
+  barra.innerHTML = `
+    <span class="marca"><span class="logo">${icono("cruz", "")}</span><span data-negocio>Farmacia</span></span>
+    <nav>${enlaces}</nav>
+    <span class="usuario" data-usuario></span>
+    <button type="button" onclick="cerrarSesion()">${icono("salir")}Salir</button>`;
+  try {
+    const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
+    barra.querySelector("[data-negocio]").textContent = negocio.nombre;
+    const nombre = usuario.nombre_completo || usuario.nombre_usuario;
+    barra.querySelector("[data-usuario]").innerHTML =
+      `<span class="avatar">${escapar(nombre.trim().charAt(0).toUpperCase())}</span>` +
+      `<span>${escapar(nombre)}<small>${escapar(ROLES[usuario.rol] || usuario.rol)}</small></span>`;
+  } catch {
+    /* sin sesión: API ya manda al login */
+  }
+}
+
+const ROLES = { admin: "Administrador", mostrador: "Mostrador", bodega: "Bodega" };
+
+document.addEventListener("DOMContentLoaded", pintarBarra);

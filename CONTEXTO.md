@@ -22,6 +22,8 @@ La arquitectura acordada es una aplicación web en red local que en las computad
 
 Stack decidido e implementado (ver README.md): FastAPI, SQLAlchemy 2.0, Alembic para migraciones y PostgreSQL 17 instalado de forma nativa en Windows (servicio `postgresql-x64-17` con arranque automático). Se probó PostgreSQL dentro de WSL2 y se descartó por cortes intermitentes de red. La "app de escritorio" es un acceso directo con `chrome.exe --app=http://IP-SERVIDOR:PUERTO` en cada computadora, sin empaquetado aparte. Las pantallas se hacen con HTML y JavaScript sencillo servidos por el mismo FastAPI, con Alpine.js para lo interactivo: sin Node.js ni paso de compilación, y con las librerías guardadas dentro del proyecto para que funcione sin internet. Se descartó React por la complejidad extra. MongoDB queda descartado.
 
+Criterio de diseño de las pantallas: atractivas pero muy sencillas, que cualquier persona las entienda sin explicación. Letra y botones grandes, una acción principal clara por pantalla, opciones como botones grandes en lugar de listas desplegables, textos en español llano y la misma barra superior, colores e íconos en todas (estilos en `app/web/static/css/pos.css`, íconos en `app/web/static/iconos.svg`, barra común en `api.js`). Las pantallas nuevas siguen este mismo estilo.
+
 Importante para producción: `uvicorn --reload` es solo para desarrollo. En la farmacia, el servidor FastAPI debe quedar instalado como servicio de Windows que arranque solo con el equipo y se reinicie si falla, sin depender de que alguien tenga una ventana abierta, porque ese es justo el problema que tienen hoy con PVWin.
 
 ## Catálogo

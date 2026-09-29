@@ -9,17 +9,26 @@
   <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
 </head>
 <body>
-  <div class="centrado panel" x-data="pantallaLogin()">
-    <h1>Farmacia</h1>
-    <p class="suave">Inicia sesión con tu usuario.</p>
-    <form @submit.prevent="entrar">
-      <label for="usuario">Usuario</label>
-      <input id="usuario" x-model="usuario" autocomplete="username" autofocus required>
-      <label for="password">Contraseña</label>
-      <input id="password" type="password" x-model="password" autocomplete="current-password" required>
-      <div class="mensaje error" x-show="error" x-text="error" x-cloak></div>
-      <p><button class="primario grande" :disabled="enviando">Entrar</button></p>
-    </form>
+  <div class="login-fondo">
+    <div class="panel login" x-data="pantallaLogin()">
+      <div class="marca">
+        <span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span>
+        <span>Punto de venta</span>
+      </div>
+      <p class="subtitulo">Escribe tu usuario y contraseña para empezar.</p>
+      <form @submit.prevent="entrar">
+        <label for="usuario">Usuario</label>
+        <input id="usuario" x-model="usuario" autocomplete="username" autofocus required>
+        <label for="password">Contraseña</label>
+        <input id="password" type="password" x-model="password" autocomplete="current-password" required>
+        <div class="mensaje error" x-show="error" x-cloak>
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
+        </div>
+        <button class="primario grande" :disabled="enviando">
+          <span x-text="enviando ? 'Entrando…' : 'Entrar'"></span>
+        </button>
+      </form>
+    </div>
   </div>
 
   <script>
