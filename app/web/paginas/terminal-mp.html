@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terminal Mercado Pago · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Terminal Mercado Pago Point (solo administradores): el token de la
+    // cuenta, poner la terminal en modo PDV (cobra lo que manda el sistema) y
+    // qué caja usa cada terminal. Ver services/terminal.py.
+    function pantallaTerminal() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        token: null, // { configurado, termina_en, prueba, simulado }
+        tokenNuevo: "",
+        guardando: false,
+        buscando: false,
+        terminales: null,
+        cajas: [],
+        vinculando: null,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) {
+              [this.token, this.cajas] = await Promise.all([API.get("/terminal/token"), API.get("/cajas")]);
+              if (this.token.configurado || this.token.simulado) await this.buscar();
+            }
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        async guardarToken() {
+          this.error = "";
+          this.guardando = true;
+          try {
+            this.token = await API.put("/terminal/token", { token: this.tokenNuevo });
+            this.tokenNuevo = "";
+            this.avisar("Token guardado. Buscando las terminales de la cuenta…");
+            await this.buscar();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.guardando = false;
+          }
+        },
+        async quitarToken() {
+          this.token = await API.borrar("/terminal/token");
+          this.terminales = null;
+          this.avisar("Se quitó el token. El pago con tarjeta se registra a mano.");
+        },
+        async buscar() {
+          this.error = "";
+          this.buscando = true;
+          try {
+            this.terminales = await API.get("/terminal/terminales");
+          } catch (e) {
+            this.error = e.message;
+            this.terminales = null;
+          } finally {
+            this.buscando = false;
+          }
+        },
+        async vincular(t) {
+          this.error = "";
+          this.vinculando = t.id;
+          try {
+            await API.post("/terminal/modo-pdv", { terminal_id: t.id });
+            await this.buscar();
+            this.avisar("Listo. Ahora apaga y vuelve a prender la terminal para que tome el cambio.");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.vinculando = null;
+          }
+        },
+        async asignar(t, cajaId) {
+          this.error = "";
+          try {
+            if (t.caja_id) await API.put("/terminal/caja", { caja_id: t.caja_id, terminal_id: null });
+            if (cajaId) await API.put("/terminal/caja", { caja_id: Number(cajaId), terminal_id: t.id });
+            [this.terminales, this.cajas] = await Promise.all([API.get("/terminal/terminales"), API.get("/cajas")]);
+            this.avisar(cajaId ? `Listo: ${this.cajas.find((c) => c.id === Number(cajaId)).nombre} cobra con esta terminal.` : "Listo: la terminal ya no es de ninguna caja.");
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 5000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaTerminal()">
+
+  <header class="barra" data-pagina="terminal"></header>
+
+  <main class="contenido cajas-pantalla" x-cloak x-show="!cargando">
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">La terminal la configura un administrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#tarjeta"/></svg></span>
+          <div><h1>Terminal Mercado Pago</h1>
+            <p class="suave">Al cobrar con tarjeta, el sistema manda el monto a la terminal: el cajero ya no lo teclea.</p></div>
+        </div>
+
+        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+        <div class="mensaje info" x-show="token && token.simulado"><svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+          <span>Modo de prueba: la terminal es simulada y no cobra nada.</span></div>
+
+        <!-- 1. Token -->
+        <div class="panel">
+          <h2 style="margin-top: 0">1. Cuenta de Mercado Pago</h2>
+          <template x-if="token && token.configurado">
+            <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 8px">
+              <span><span class="etiqueta verde">Token guardado</span>
+                <span class="suave" x-text="`termina en …${token.termina_en}`"></span>
+                <span class="etiqueta" x-show="token.prueba">De prueba</span></span>
+              <button type="button" class="texto-peligro" style="flex: 0 0 auto" @click="quitarToken()">Quitar</button>
+            </div>
+          </template>
+          <form @submit.prevent="guardarToken()" x-show="token && !token.configurado">
+            <label>Access Token de producción</label>
+            <div class="fila" style="gap: 8px">
+              <input x-model="tokenNuevo" placeholder="APP_USR-…" autocomplete="off" spellcheck="false">
+              <button class="primario" style="flex: 0 0 auto" :disabled="!tokenNuevo.trim() || guardando" x-text="guardando ? 'Guardando…' : 'Guardar'"></button>
+            </div>
+            <p class="ayuda">Se obtiene en <strong>mercadopago.com.mx/developers</strong> → Tus integraciones → crea una aplicación
+              (producto: "Pagos presenciales / Point") → Credenciales de producción → <strong>Access Token</strong>. Entra con la cuenta
+              de Mercado Pago de la farmacia (la misma de la terminal).</p>
+          </form>
+        </div>
+
+        <!-- 2. Terminales -->
+        <div class="panel" x-show="token && (token.configurado || token.simulado)">
+          <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 8px">
+            <h2 style="margin: 0">2. Terminales y cajas</h2>
+            <button type="button" style="flex: 0 0 auto" :disabled="buscando" @click="buscar()" x-text="buscando ? 'Buscando…' : 'Volver a buscar'"></button>
+          </div>
+          <p class="suave" x-show="terminales && !terminales.length">
+            La cuenta no tiene terminales. La terminal debe estar dada de alta en la app de Mercado Pago (en una sucursal y caja).</p>
+          <template x-for="t in terminales || []" :key="t.id">
+            <div class="fila-caja" style="cursor: default; flex-wrap: wrap">
+              <svg class="ico-grande"><use href="/static/iconos.svg#tarjeta"/></svg>
+              <span class="datos">
+                <strong x-text="t.nombre"></strong>
+                <span x-show="t.modo === 'PDV'" class="suave">Vinculada al sistema (modo PDV)</span>
+                <span x-show="t.modo !== 'PDV'" class="suave">Todavía no está vinculada: cobra sola, sin el sistema.</span>
+              </span>
+              <button type="button" class="primario" style="flex: 0 0 auto" x-show="t.modo !== 'PDV'" :disabled="vinculando === t.id"
+                      @click="vincular(t)" x-text="vinculando === t.id ? 'Vinculando…' : 'Vincular al sistema'"></button>
+              <label style="margin: 0; display: flex; align-items: center; gap: 8px">
+                <span class="suave">Caja:</span>
+                <select @change="asignar(t, $event.target.value)">
+                  <option value="" :selected="!t.caja_id">Ninguna</option>
+                  <template x-for="c in cajas.filter((x) => x.activa)" :key="c.id">
+                    <option :value="c.id" x-text="c.nombre" :selected="c.id === t.caja_id"></option>
+                  </template>
+                </select>
+              </label>
+            </div>
+          </template>
+          <p class="ayuda" x-show="terminales && terminales.length">Después de vincularla, apaga y vuelve a prender la terminal. En la terminal
+            se revisa en Más opciones → Ajustes → Modo de vinculación. Cada caja usa una sola terminal; sin terminal, el pago con
+            tarjeta se registra a mano como hasta ahora.</p>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

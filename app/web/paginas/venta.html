@@ -142,6 +142,14 @@
         <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
       </div>
 
+      <template x-for="c in cobrosSinVenta" :key="c.id">
+        <div class="mensaje aviso">
+          <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
+          <span>La terminal cobró <strong x-text="dinero(c.monto)"></strong> con tarjeta y la venta no se registró.
+            Arma la venta otra vez y cóbrala con tarjeta: se usará ese pago, sin cobrarle de nuevo al cliente.</span>
+        </div>
+      </template>
+
       <div class="panel carrito">
         <table x-show="carrito.length">
           <thead>
@@ -244,7 +252,8 @@
 
         <div x-show="formaPago === 'tarjeta'" class="mensaje info" style="margin: 0">
           <svg class="ico"><use href="/static/iconos.svg#tarjeta"/></svg>
-          <span>Cobra <strong x-text="dinero(totalCentavos / 100)"></strong> en la terminal y, cuando pase, presiona Cobrar.</span>
+          <span x-show="conTerminal">Al presionar Cobrar, <strong x-text="dinero(totalCentavos / 100)"></strong> se manda solo a la terminal.</span>
+          <span x-show="!conTerminal">Cobra <strong x-text="dinero(totalCentavos / 100)"></strong> en la terminal y, cuando pase, presiona Cobrar.</span>
         </div>
 
         <div x-show="formaPago === 'mixto'">
@@ -352,6 +361,30 @@
         <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span>
       </div>
       <div class="atajos pie-busqueda"><kbd>↑</kbd> <kbd>↓</kbd> elegir · <kbd>Enter</kbd> agregar · <kbd>Esc</kbd> cerrar</div>
+    </div>
+  </div>
+
+  <!-- Cobro en la terminal Mercado Pago -->
+  <div class="velo" x-show="enTerminal" x-cloak>
+    <div class="panel ventana" x-show="enTerminal">
+      <template x-if="enTerminal">
+        <div>
+          <div class="palomita" :class="{ esperando: !enTerminal.error }"><svg><use href="/static/iconos.svg#tarjeta"/></svg></div>
+          <h2 x-text="enTerminal.error ? 'No se cobró' : 'Cobrando en la terminal'"></h2>
+          <div class="cambio-grande" x-show="enTerminal.cobro" x-text="enTerminal.cobro && dinero(enTerminal.cobro.monto)"></div>
+          <p x-show="!enTerminal.error && enTerminal.cobro" x-text="enTerminal.cobro && enTerminal.cobro.mensaje"></p>
+          <div class="mensaje error" x-show="enTerminal.error" style="text-align: left">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="enTerminal.error"></span></div>
+          <div class="pila separado" x-show="!enTerminal.error">
+            <button type="button" @click="cancelarEnTerminal()">Cancelar el cobro</button>
+          </div>
+          <div class="pila separado" x-show="enTerminal.error">
+            <button type="button" class="primario grande" @click="enTerminal = null; cobrar()">Intentar otra vez</button>
+            <button type="button" @click="enTerminal = null">Cambiar forma de pago</button>
+            <button type="button" class="texto-peligro" @click="registrarTarjetaAMano()">La terminal no funciona: registrar la tarjeta a mano</button>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 

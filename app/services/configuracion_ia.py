@@ -6,10 +6,7 @@ actualiza al momento: no hace falta reiniciar el servidor. Nunca se regresa
 completa por el API; solo si está configurada y sus últimos 4 caracteres.
 """
 
-import os
 import re
-import tempfile
-from pathlib import Path
 
 import anthropic
 
@@ -28,39 +25,19 @@ def estado() -> dict:
     return {"configurada": bool(clave), "termina_en": clave[-4:] if clave else None, "modelo": settings.modelo_ia}
 
 
-def _escribir_env(valor: str | None) -> None:
-    """Pone, reemplaza o quita la línea ANTHROPIC_API_KEY del .env sin tocar
-    las demás. Escribe a un archivo temporal y lo cambia de golpe, para que un
-    corte a la mitad no deje el .env incompleto."""
-    ruta: Path = config.ENV_PATH
-    lineas = ruta.read_text(encoding="utf-8").splitlines() if ruta.exists() else []
-    nuevas = [l for l in lineas if not re.match(rf"^\s*{VARIABLE}\s*=", l)]
-    if valor is not None:
-        nuevas.append(f"{VARIABLE}={valor}")
-    contenido = "\n".join(nuevas) + "\n"
-    fd, temporal = tempfile.mkstemp(dir=ruta.parent, prefix=".env.", text=True)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            f.write(contenido)
-        os.replace(temporal, ruta)
-    except BaseException:
-        Path(temporal).unlink(missing_ok=True)
-        raise
-
-
 def guardar(clave: str) -> dict:
     clave = (clave or "").strip()
     if not FORMATO.match(clave):
         raise OperacionInvalida(
             "Esa no parece una clave de la API de Claude: debe empezar con sk-ant- y no llevar espacios"
         )
-    _escribir_env(clave)
+    config.escribir_variable(VARIABLE, clave)
     settings.anthropic_api_key = clave
     return estado()
 
 
 def quitar() -> dict:
-    _escribir_env(None)
+    config.escribir_variable(VARIABLE, None)
     settings.anthropic_api_key = None
     return estado()
 

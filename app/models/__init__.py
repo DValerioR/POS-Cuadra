@@ -18,6 +18,7 @@ from app.models.asistente import ConversacionAsistente, MensajeAsistente
 from app.models.pedido import EstadoPedido, Pedido, PedidoEntrada, PedidoRenglon
 from app.models.factura import ClienteFiscal, EstadoFactura, Factura
 from app.models.oferta import Oferta
+from app.models.cobro_terminal import CobroTerminal
 
 __all__ = [
     "Negocio",
@@ -63,4 +64,5 @@ __all__ = [
     "EstadoFactura",
     "Factura",
     "Oferta",
+    "CobroTerminal",
 ]

@@ -31,6 +31,8 @@ class CajaOut(BaseModel):
     impresora_columnas: int
     # El token no se regresa nunca; solo si ya hay uno.
     impresora_tiene_token: bool = False
+    # Terminal Mercado Pago Point de la caja (se asigna en /terminal/caja).
+    terminal_mp: str | None = None
     # Solo en la lista: quién tiene abierto un turno en esta caja y desde cuándo.
     turno_abierto_por: str | None = None
     turno_abierto_desde: datetime | None = None

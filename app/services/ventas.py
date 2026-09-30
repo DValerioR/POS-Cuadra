@@ -25,7 +25,7 @@ from app.models import (
     AvisoInventario, Lote, MetodoPago, Negocio, Pago, Producto, RolUsuario, Usuario, Venta,
     VentaRenglon, VentaRenglonLote,
 )
-from app.services import inventario, ofertas_venta, turnos
+from app.services import inventario, ofertas_venta, terminal, turnos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 CENTAVO = Decimal("0.01")
@@ -168,10 +168,12 @@ def registrar_venta(
     tarjeta: Decimal = Decimal(0),
     efectivo_recibido: Decimal = Decimal(0),
     saldo_a_favor: Decimal = Decimal(0),
+    cobro_terminal_id: int | None = None,
 ) -> tuple[Venta, list[str]]:
     """Registra la venta y regresa (venta, avisos). `saldo_a_favor` es el valor
     de piezas devueltas en un cambio de producto: se aplica primero y el resto
-    se cobra. No hace commit."""
+    se cobra. `cobro_terminal_id`: la tarjeta ya se cobró en la terminal
+    Mercado Pago de la caja; el cobro queda ligado a la venta. No hace commit."""
     if usuario.rol not in ROLES_VENTA:
         raise SinPermiso(f"El rol {usuario.rol.value} no puede vender")
     if not renglones:
@@ -232,7 +234,10 @@ def registrar_venta(
     venta.pagos = ([Pago(metodo=MetodoPago.SALDO_A_FAVOR, monto=saldo_aplicado)] if saldo_aplicado > 0 else []) + _pagos(
         venta.total - saldo_aplicado, tarjeta, efectivo_recibido
     )
+    cobro = terminal.usar_en_venta(db, usuario.negocio_id, caja.id, cobro_terminal_id, tarjeta) if cobro_terminal_id else None
     db.flush()
+    if cobro is not None:
+        cobro.venta_id = venta.id
     for producto, vendidas, faltantes in sin_existencia:
         db.add(AvisoInventario(
             negocio_id=venta.negocio_id, producto_id=producto.id, venta_id=venta.id, caja_id=venta.caja_id,

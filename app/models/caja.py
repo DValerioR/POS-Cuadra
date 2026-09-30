@@ -32,4 +32,7 @@ class Caja(Base):
     impresora_token: Mapped[str | None] = mapped_column(default=None)
     # 48 = papel de 80 mm con fuente normal; 32 = papel de 58 mm.
     impresora_columnas: Mapped[int] = mapped_column(default=48, server_default="48")
+    # Terminal Mercado Pago Point de esta caja (su id en Mercado Pago). Sin
+    # ella, el pago con tarjeta se registra a mano.
+    terminal_mp: Mapped[str | None] = mapped_column(default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

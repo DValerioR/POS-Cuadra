@@ -69,7 +69,7 @@ def registrar_venta(datos: VentaIn, usuario: Usuario = Depends(usuario_actual), 
         venta, avisos = ventas.registrar_venta(
             db, usuario, datos.caja_id,
             [RenglonSolicitado(**r.model_dump()) for r in datos.renglones],
-            datos.tarjeta, datos.efectivo_recibido,
+            datos.tarjeta, datos.efectivo_recibido, cobro_terminal_id=datos.cobro_terminal_id,
         )
     except ERRORES_NEGOCIO as e:
         db.rollback()

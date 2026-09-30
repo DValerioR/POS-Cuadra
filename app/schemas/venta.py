@@ -20,6 +20,8 @@ class VentaIn(BaseModel):
     renglones: list[RenglonIn] = Field(min_length=1)
     tarjeta: Decimal = Field(default=Decimal(0), ge=0)
     efectivo_recibido: Decimal = Field(default=Decimal(0), ge=0)
+    # Cobro ya pagado en la terminal Mercado Pago de la caja (por el monto de `tarjeta`).
+    cobro_terminal_id: int | None = None
 
 
 class CotizarIn(BaseModel):

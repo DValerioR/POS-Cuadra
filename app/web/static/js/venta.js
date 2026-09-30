@@ -51,6 +51,11 @@ function pantallaVenta() {
     tarjeta: "", // solo se captura en pago mixto
     cobrando: false,
     ultimaVenta: null,
+    // Terminal Mercado Pago de la caja: el cobro que se está esperando
+    // ({ cobro, error }) y, si la terminal falla, registrar la tarjeta a mano.
+    enTerminal: null,
+    tarjetaAMano: false,
+    cobrosSinVenta: [],
     // Ofertas: el servidor calcula los descuentos del carrito (el mismo
     // cálculo que al cobrar). Solo vale si su firma es la del carrito actual.
     cotizacion: null, // { firma, renglones: [{ descuento, oferta }] }
@@ -99,6 +104,13 @@ function pantallaVenta() {
     get puedeVender() {
       return this.usuario && this.usuario.rol !== "bodega";
     },
+    get cajaTerminal() {
+      const caja = this.cajas.find((c) => c.id === this.cajaId);
+      return caja ? caja.terminal_mp : null;
+    },
+    get conTerminal() {
+      return Boolean(this.cajaTerminal) && !this.tarjetaAMano;
+    },
     get cajaNombre() {
       const caja = this.cajas.find((c) => c.id === this.cajaId);
       return caja ? caja.nombre : "";
@@ -114,7 +126,7 @@ function pantallaVenta() {
 
     async cargarTurno() {
       this.turno = await API.get(`/turnos/abierto?caja_id=${this.cajaId}`);
-      await Promise.all([this.cargarGuardadas(), this.cargarSolicitudes()]);
+      await Promise.all([this.cargarGuardadas(), this.cargarSolicitudes(), this.cargarCobrosSinVenta()]);
     },
 
     async abrirTurno() {
@@ -413,8 +425,14 @@ function pantallaVenta() {
             return;
           }
         }
+        let cobroTerminal = null;
+        if (this.tarjetaCentavos > 0 && this.conTerminal) {
+          cobroTerminal = await this.cobrarEnTerminal(this.tarjetaCentavos);
+          if (!cobroTerminal) return;
+        }
         const venta = await API.post("/ventas", {
           caja_id: this.cajaId,
+          cobro_terminal_id: cobroTerminal ? cobroTerminal.id : null,
           renglones: this.carrito.map((r) => ({
             producto_id: r.producto.id,
             cantidad: String(r.cantidad),
@@ -426,12 +444,65 @@ function pantallaVenta() {
           efectivo_recibido: (this.efectivoCentavos / 100).toFixed(2),
         });
         this.ultimaVenta = venta;
+        this.enTerminal = null;
+        this.cobrosSinVenta = [];
         // Que el cursor no se quede en "¿Con cuánto paga?": su Enter cobraría de nuevo.
         if (document.activeElement) document.activeElement.blur();
       } catch (e) {
         this.error = e.message;
       } finally {
         this.cobrando = false;
+      }
+    },
+
+    // Manda el monto a la terminal y espera a que el cliente pague. Regresa el
+    // cobro pagado, o null si no se pagó (el motivo queda en la ventana).
+    async cobrarEnTerminal(montoCentavos) {
+      let cobro;
+      try {
+        cobro = await API.post("/terminal/cobros", { caja_id: this.cajaId, monto: (montoCentavos / 100).toFixed(2) });
+      } catch (e) {
+        this.enTerminal = { cobro: null, error: e.message };
+        return null;
+      }
+      this.enTerminal = { cobro, error: "" };
+      while (!cobro.terminado) {
+        await new Promise((listo) => setTimeout(listo, 2000));
+        if (!this.enTerminal) return null; // se cerró la ventana
+        try {
+          cobro = await API.get(`/terminal/cobros/${cobro.id}`);
+          this.enTerminal.cobro = cobro;
+        } catch (e) {
+          this.enTerminal.error = "Sin respuesta de Mercado Pago; se sigue intentando…";
+        }
+      }
+      if (cobro.pagado) return cobro;
+      this.enTerminal.error = cobro.mensaje;
+      return null;
+    },
+    async cancelarEnTerminal() {
+      const cobro = this.enTerminal && this.enTerminal.cobro;
+      if (!cobro || cobro.terminado) {
+        this.enTerminal = null;
+        return;
+      }
+      try {
+        this.enTerminal.cobro = await API.post(`/terminal/cobros/${cobro.id}/cancelar`, {});
+      } catch (e) {
+        this.enTerminal.error = e.message;
+      }
+    },
+    // La terminal no responde o no hay internet: la tarjeta se cobra por fuera y se registra a mano.
+    registrarTarjetaAMano() {
+      this.enTerminal = null;
+      this.tarjetaAMano = true;
+    },
+    async cargarCobrosSinVenta() {
+      if (!this.cajaTerminal) return;
+      try {
+        this.cobrosSinVenta = await API.get(`/terminal/cobros/sin-venta?caja_id=${this.cajaId}`);
+      } catch (e) {
+        this.cobrosSinVenta = [];
       }
     },
 
@@ -446,6 +517,7 @@ function pantallaVenta() {
 
     nuevaVenta() {
       this.ultimaVenta = null;
+      this.tarjetaAMano = false;
       this.carrito = [];
       this.formaPago = "efectivo";
       this.efectivo = "";
@@ -607,6 +679,7 @@ function pantallaVenta() {
         return;
       }
       if (!this.turno) return;
+      if (this.enTerminal) return; // la ventana de la terminal se maneja con sus botones
       if (this.ventanaGuardar) {
         if (ev.key === "Escape") {
           ev.preventDefault();

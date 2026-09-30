@@ -494,6 +494,8 @@ kbd { font: inherit; font-size: 12px; font-weight: 700; padding: 1px 6px; border
 }
 .ventana .palomita svg { width: 40px; height: 40px; }
 .ventana .palomita.alerta { background: var(--aviso); }
+.ventana .palomita.esperando { animation: latido 1.4s ease-in-out infinite; }
+@keyframes latido { 50% { transform: scale(1.08); opacity: .75; } }
 .ventana .cambio-grande { font-size: 64px; font-weight: 800; color: var(--primario); line-height: 1.1; margin-bottom: 12px; }
 
 /* --- Corte de caja ----------------------------------------------------- */

@@ -10,6 +10,8 @@ pruebas automáticas vuelven a borrar esa base al correr, así que no importa.
 
 --ia-simulada: el asistente de IA responde con una IA de mentira (ver
 app/scripts/ia_simulada.py) para probar el chat sin clave ni costo.
+
+La terminal Mercado Pago siempre es simulada (Mostrador 2 ya la tiene).
 """
 import random
 import sys
@@ -27,6 +29,7 @@ from app.core.config import settings
 # El demo nunca escribe en el .env real (ej. al guardar la clave de IA).
 config.ENV_PATH = Path(tempfile.gettempdir()) / "pos_demo.env"
 settings.anthropic_api_key = None
+settings.mercadopago_token = None
 
 real = make_url(settings.database_url)
 prueba = real.set(database=real.database + "_test")
@@ -83,7 +86,7 @@ with SessionLocal() as db:
         Usuario(negocio_id=negocio.id, nombre_usuario="cajero", nombre_completo="Cajero Demo",
                 password_hash=hashear_password("cajero1234"), rol=RolUsuario.MOSTRADOR),
         Caja(negocio_id=negocio.id, nombre="Mostrador 1"),
-        Caja(negocio_id=negocio.id, nombre="Mostrador 2"),
+        Caja(negocio_id=negocio.id, nombre="Mostrador 2", terminal_mp="SIMULADA__TERMINAL1"),
     ])
     for i, (clave, nombre, iva) in enumerate(nombres):
         precio = D(random.randint(25, 450))
@@ -109,5 +112,11 @@ if "--ia-simulada" in sys.argv:
 
     ia_simulada.activar()
     print("Asistente de IA: simulado (sin clave ni costo).")
+
+# La terminal Mercado Pago siempre es simulada en el demo: nunca cobra de verdad.
+from app.pagos import mercadopago  # noqa: E402  (después del candado de la base)
+
+mercadopago.activar_simulado()
+print("Terminal Mercado Pago: simulada (Mostrador 2 la tiene; no cobra nada).")
 
 uvicorn.run("app.main:app", host="127.0.0.1", port=8001)
