@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 WEB = Path(__file__).resolve().parent.parent / "web"
-PAGINAS = {"login", "inicio", "venta", "turno", "devoluciones", "notificaciones", "inventario", "catalogo", "mercancia", "faltantes", "pedidos"}
+PAGINAS = {"login", "inicio", "venta", "turno", "devoluciones", "notificaciones", "inventario", "catalogo", "mercancia", "faltantes", "pedidos", "tableta"}
 
 router = APIRouter(include_in_schema=False)
 mimetypes.add_type("application/manifest+json", ".webmanifest")  # Windows no lo conoce
@@ -28,6 +28,16 @@ def inicio():
 def favicon():
     """Ícono de Cuadra (también lo descarga el script del acceso directo)."""
     return FileResponse(WEB / "static" / "app" / "cuadra.ico", media_type="image/x-icon")
+
+
+@router.get("/certificado")
+def certificado():
+    """La autoridad del certificado de la red local, para instalarla en la
+    tableta y que Chrome confíe en el servidor HTTPS (ver certificado_local)."""
+    ca = Path("certificados") / "ca.crt"
+    if not ca.exists():
+        return RedirectResponse("/inicio")
+    return FileResponse(ca, media_type="application/x-x509-ca-cert", filename="cuadra-red-local.crt")
 
 
 @router.get("/{pagina}")

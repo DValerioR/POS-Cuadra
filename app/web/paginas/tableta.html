@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tableta · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/tableta.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body class="tableta" x-data="pantallaTableta()">
+
+  <header class="tableta-barra">
+    <div class="marca"><span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span><span x-text="negocio || 'Farmacia'"></span></div>
+    <span class="tableta-usuario" x-show="usuario" x-text="usuario && (usuario.nombre_completo || usuario.nombre_usuario)"></span>
+    <button type="button" class="tableta-salir" @click="salir()"><svg class="ico"><use href="/static/iconos.svg#salir"/></svg>Salir</button>
+  </header>
+
+  <nav class="tableta-pestanas" x-cloak x-show="!cargando">
+    <button type="button" :class="{ activa: pestana === 'buscar' }" @click="pestana = 'buscar'">
+      <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg>Producto</button>
+    <button type="button" :class="{ activa: pestana === 'caducar' }" @click="verPorCaducar(meses)">
+      <svg class="ico"><use href="/static/iconos.svg#reloj"/></svg>Por caducar</button>
+  </nav>
+
+  <main class="tableta-contenido" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <!-- ===== Producto ===== -->
+    <section x-show="pestana === 'buscar'">
+      <div class="tableta-buscar">
+        <button type="button" class="primario tableta-escanear" @click="abrirCamara()">
+          <svg><use href="/static/iconos.svg#camara"/></svg><span>Escanear</span></button>
+        <input type="search" x-model="buscar" @input.debounce.300ms="alBuscar()" @keydown.enter.prevent="enterBuscar()"
+               placeholder="O escribe el nombre o código" autocomplete="off" enterkeyhint="search">
+      </div>
+
+      <div class="tableta-resultados" x-show="resultados.length && !producto">
+        <template x-for="r in resultados" :key="r.id">
+          <button type="button" @click="abrir(r)">
+            <span class="nombre" x-text="r.nombre"></span>
+            <span class="precio" x-text="r.precio_venta ? dinero(r.precio_venta) : 'sin precio'"></span>
+          </button>
+        </template>
+      </div>
+      <div class="tableta-resultados" x-show="!resultados.length && !producto && buscar.trim().length >= 2 && !buscando">
+        <p class="suave" style="padding: 16px; margin: 0">No se encontró nada con eso.</p>
+      </div>
+
+      <template x-if="!producto && !resultados.length && buscar.trim().length < 2">
+        <div class="tableta-vacio">
+          <svg><use href="/static/iconos.svg#codigo"/></svg>
+          <p>Escanea el código de barras o busca el producto para ver su precio, existencia y caducidades.</p>
+        </div>
+      </template>
+
+      <template x-if="producto">
+        <div class="tableta-producto">
+          <div class="panel">
+            <div class="fila" style="justify-content: space-between; align-items: flex-start">
+              <div style="min-width: 0">
+                <h1 x-text="producto.nombre"></h1>
+                <p class="suave" x-text="producto.clave || 'sin clave'"></p>
+              </div>
+              <button type="button" class="tableta-cerrar" @click="cerrarProducto()" title="Cerrar"><svg class="ico"><use href="/static/iconos.svg#tache"/></svg></button>
+            </div>
+            <div class="tableta-cifras">
+              <div><span>Precio</span><strong x-text="producto.precio_venta ? dinero(producto.precio_venta) : 'Sin precio'"></strong></div>
+              <div :class="{ negativa: Number(producto.existencia.existencia_registrada) < 0 }">
+                <span>Existencia</span><strong x-text="cantidad(producto.existencia.existencia_registrada)"></strong></div>
+            </div>
+            <p class="etiquetas-producto">
+              <span class="etiqueta peligro" x-show="producto.requiere_receta">Pide receta</span>
+              <span class="etiqueta gris" x-show="producto.existencia.no_caduca">No caduca</span>
+              <span class="etiqueta" x-show="puedeCapturar" x-text="`${cantidad(sinCaducidad)} sin caducidad registrada`"></span>
+            </p>
+          </div>
+
+          <div class="tableta-acciones">
+            <button type="button" class="primario" x-show="puedeCapturar" @click="abrirHoja('capturar')">
+              <svg><use href="/static/iconos.svg#reloj"/></svg>Capturar caducidad</button>
+            <button type="button" x-show="puedeAjustar && puedeCapturar" :disabled="guardando" @click="marcarNoCaduca(true)">
+              <svg><use href="/static/iconos.svg#info"/></svg>No caduca</button>
+            <button type="button" x-show="puedeAjustar && producto.existencia.no_caduca" :disabled="guardando" @click="marcarNoCaduca(false)">
+              <svg><use href="/static/iconos.svg#reloj"/></svg>Sí caduca</button>
+            <button type="button" x-show="puedeAjustar" @click="abrirHoja('contar')">
+              <svg><use href="/static/iconos.svg#paquete"/></svg>Contar</button>
+          </div>
+
+          <div class="panel" style="padding: 0; overflow: hidden">
+            <div class="paso" style="margin: 14px 16px 6px">Lotes (sale primero el que caduca antes)</div>
+            <template x-for="l in producto.existencia.lotes" :key="l.id">
+              <div class="tableta-lote">
+                <div><strong x-text="l.caducidad ? mesAnio(l.caducidad) : textoLote(l)"></strong>
+                  <div class="suave" x-show="l.caducidad" x-text="textoLote(l)"></div></div>
+                <strong x-text="`${cantidad(l.cantidad)} pzas`"></strong>
+              </div>
+            </template>
+            <p class="suave" style="padding: 0 16px 16px; margin: 0" x-show="!producto.existencia.lotes.length">No hay piezas registradas.</p>
+          </div>
+        </div>
+      </template>
+    </section>
+
+    <!-- ===== Por caducar ===== -->
+    <section x-show="pestana === 'caducar'">
+      <div class="tableta-meses">
+        <template x-for="m in [1, 3, 6, 12]" :key="m">
+          <button type="button" :class="{ activa: meses === m }" @click="verPorCaducar(m)" x-text="m === 1 ? '1 mes' : `${m} meses`"></button>
+        </template>
+      </div>
+      <div class="panel" style="padding: 0; overflow: hidden">
+        <template x-for="l in porCaducar" :key="l.lote_id">
+          <button type="button" class="tableta-caduca" :class="nivel(l.dias)" @click="abrirPorId(l.producto_id)">
+            <div style="min-width: 0"><div class="nombre" x-text="l.nombre"></div>
+              <div class="suave" x-text="(l.numero_lote ? `Lote ${l.numero_lote} · ` : '') + `${cantidad(l.cantidad)} pzas`"></div></div>
+            <div class="derecha"><strong x-text="mesAnio(l.caducidad)"></strong><div x-text="textoDias(l.dias)"></div></div>
+          </button>
+        </template>
+        <p class="suave" style="padding: 16px; margin: 0" x-show="!porCaducar.length"
+           x-text="`Nada caducado ni por caducar en ${meses === 1 ? '1 mes' : meses + ' meses'}.`"></p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Cámara -->
+  <div class="tableta-camara" x-show="camara" x-cloak>
+    <video x-ref="video" playsinline muted></video>
+    <div class="mira"></div>
+    <p>Apunta al código de barras</p>
+    <button type="button" @click="cerrarCamara()">Cancelar</button>
+  </div>
+
+  <!-- Hojas -->
+  <div class="velo arriba" x-show="hoja" x-cloak @click.self="cerrarHoja()">
+    <form class="panel tableta-hoja" x-show="hoja === 'capturar'" @submit.prevent="guardarCaptura()">
+      <h2>Capturar caducidad</h2>
+      <p class="suave" x-text="producto && producto.nombre"></p>
+      <label>Caducidad que trae la caja (mes y año)</label>
+      <input type="month" x-model="captura.mes">
+      <div class="rejilla-2">
+        <div><label>¿Cuántas piezas?</label><input type="number" inputmode="numeric" min="1" step="1" x-model="captura.cantidad">
+          <p class="ayuda" x-text="`Hay ${cantidad(sinCaducidad)} sin caducidad.`"></p></div>
+        <div><label>Lote (opcional)</label><input x-model="captura.lote" autocapitalize="characters"></div>
+      </div>
+      <div class="mensaje error" x-show="errorHoja"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorHoja"></span></div>
+      <div class="fila separado">
+        <button type="button" @click="cerrarHoja()">Cancelar</button>
+        <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar'"></button>
+      </div>
+    </form>
+
+    <form class="panel tableta-hoja" x-show="hoja === 'contar'" @submit.prevent="guardarConteo()">
+      <h2>Contar</h2>
+      <p class="suave" x-text="producto && producto.nombre"></p>
+      <label>¿Cuántas piezas hay en total?</label>
+      <input class="numero-grande" type="number" inputmode="numeric" min="0" step="1" x-model="conteo">
+      <p class="ayuda" x-text="producto && `Hoy el sistema dice ${cantidad(producto.existencia.existencia_registrada)}.`"></p>
+      <div class="mensaje error" x-show="errorHoja"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorHoja"></span></div>
+      <div class="fila separado">
+        <button type="button" @click="cerrarHoja()">Cancelar</button>
+        <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar conteo'"></button>
+      </div>
+    </form>
+  </div>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>
