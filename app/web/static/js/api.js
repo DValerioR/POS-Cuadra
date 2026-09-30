@@ -219,6 +219,7 @@ const SECCIONES = [
   { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin", "mostrador"] },
   { id: "notificaciones", texto: "Notificaciones", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
+  { id: "precio", texto: "Consultar precio", icono: "precio", grupo: "Ventas", accion: "consultarPrecio", existe: true, roles: TODOS, tecla: "F8" },
   { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: true, roles: ["admin", "bodega"], tecla: "F3" },
   { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/mercancia", existe: true, roles: ["admin", "bodega"], tecla: "F4" },
   { id: "pedidos", texto: "Pedidos a proveedores", icono: "portapapeles", grupo: "Inventario", ruta: "/pedidos", existe: true, roles: ["admin", "bodega"] },
@@ -263,10 +264,12 @@ async function pintarBarra() {
     <a class="marca" href="/inicio" title="Ir a la pantalla de inicio"><span class="logo">${icono("cruz", "")}</span><span data-negocio>Farmacia</span></a>
     <button type="button" class="boton-menu" aria-expanded="false">${icono("menu")}Menú</button>
     <nav></nav>
+    <button type="button" class="boton-precio" title="Consultar precio (F8)" onclick="abrirConsultaPrecio()">${icono("precio")}<span>Precio</span></button>
     <a class="campana" href="/notificaciones" title="Notificaciones" hidden>${icono("campana", "")}<span class="numero"></span></a>
     <span class="usuario" data-usuario></span>
     <button type="button" class="salir" onclick="cerrarSesion()" title="Cerrar sesión">${icono("salir")}<span>Salir</span></button>`;
   const nav = barra.querySelector("nav");
+  montarConsultaPrecio();
   barra.addEventListener("click", (ev) => {
     if (ev.target.closest("a[href]") && !Salida.permitir()) ev.preventDefault();
   });
@@ -305,12 +308,13 @@ async function pintarBarra() {
 // Deja los enlaces solo con ícono cuando con su nombre no caben, para que no
 // se encimen sobre la campana y el usuario ni corten el nombre del negocio.
 function compactarBarra(barra) {
-  barra.classList.remove("compacta");
+  barra.classList.remove("compacta", "minima");
   const nav = barra.querySelector("nav");
   const marca = barra.querySelector("[data-negocio]");
-  if (nav.scrollWidth > nav.clientWidth + 1 || marca.scrollWidth > marca.clientWidth + 1) {
-    barra.classList.add("compacta");
-  }
+  const noCabe = () => nav.scrollWidth > nav.clientWidth + 1 || marca.scrollWidth > marca.clientWidth + 1;
+  if (noCabe()) barra.classList.add("compacta");
+  // Si ni así cabe, también sin nombre la pantalla actual, Inicio y el botón de precio.
+  if (noCabe()) barra.classList.add("minima");
 }
 
 // --- Campana de notificaciones (solo administradores) ----------------------
@@ -339,6 +343,169 @@ function vigilarSolicitudes(campana) {
 }
 
 document.addEventListener("DOMContentLoaded", pintarBarra);
+
+// --- Consultar precio (todos) -----------------------------------------------
+// Ventana para escanear un código (o buscar por nombre) y ver el precio de
+// venta, sin tocar la venta en curso. Se abre con F8 desde cualquier pantalla
+// con barra, con el botón de la etiqueta en la barra o desde Inicio → Ventas.
+
+function montarConsultaPrecio() {
+  if (window.abrirConsultaPrecio) return;
+  let raiz = null;
+  let anterior = null; // lo que tenía el foco, para regresarlo al cerrar
+  let resultados = [];
+  let elegido = -1;
+  let espera = null;
+
+  const crear = () => {
+    raiz = document.createElement("div");
+    raiz.className = "velo arriba consulta-precio";
+    raiz.hidden = true;
+    raiz.innerHTML = `
+      <div class="panel consulta-precio-panel" role="dialog" aria-label="Consultar precio">
+        <div class="encabezado">
+          <span class="circulo">${icono("precio", "")}</span>
+          <div><h2>Consultar precio</h2><p class="suave">Escanea el código o escribe el nombre.</p></div>
+          <button type="button" class="cerrar-consulta" title="Cerrar (Esc)">${icono("tache")}</button>
+        </div>
+        <div class="buscador"><span class="lupa">${icono("codigo", "")}</span><input type="text" autocomplete="off" placeholder="Código de barras o nombre del producto"></div>
+        <div class="consulta-resultados"></div>
+        <div class="consulta-ficha" hidden></div>
+        <p class="consulta-pie"><kbd>↑</kbd> <kbd>↓</kbd> elegir · <kbd>Enter</kbd> ver precio · <kbd>Esc</kbd> cerrar</p>
+      </div>`;
+    document.body.append(raiz);
+    raiz.addEventListener("click", (ev) => { if (ev.target === raiz) cerrar(); });
+    // Las teclas del popup no llegan a la pantalla de atrás (ej. Enter cobraría en Vender).
+    raiz.addEventListener("keydown", (ev) => ev.stopPropagation());
+    raiz.querySelector(".cerrar-consulta").addEventListener("click", cerrar);
+    const campo = raiz.querySelector("input");
+    campo.addEventListener("input", () => {
+      clearTimeout(espera);
+      espera = setTimeout(() => buscar(campo.value), 250);
+    });
+    campo.addEventListener("keydown", (ev) => {
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        if (!resultados.length) return;
+        elegido = (elegido + (ev.key === "ArrowDown" ? 1 : -1) + resultados.length) % resultados.length;
+        pintarResultados();
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        clearTimeout(espera);
+        enter(campo.value);
+      }
+    });
+    raiz.querySelector(".consulta-resultados").addEventListener("click", (ev) => {
+      const boton = ev.target.closest("button[data-i]");
+      if (boton) mostrar(resultados[Number(boton.dataset.i)]);
+    });
+  };
+
+  const campo = () => raiz.querySelector("input");
+  const pintarResultados = () => {
+    const caja = raiz.querySelector(".consulta-resultados");
+    caja.innerHTML = resultados.map((p, i) => `
+      <button type="button" data-i="${i}" class="${i === elegido ? "elegido" : ""}">
+        <span>${escapar(p.nombre)}<small>${escapar(p.clave || "sin clave")}</small></span>
+        <strong>${p.precio_venta ? dinero(p.precio_venta) : "Sin precio"}</strong>
+      </button>`).join("");
+  };
+  const limpiarResultados = () => {
+    resultados = [];
+    elegido = -1;
+    pintarResultados();
+  };
+
+  async function buscar(texto) {
+    const q = texto.trim();
+    if (q.length < 2) return limpiarResultados();
+    try {
+      const lista = await API.get(`/productos?q=${encodeURIComponent(q)}&solo_activos=true&limite=8`);
+      if (campo().value.trim() !== q) return; // ya se escribió otra cosa
+      resultados = lista;
+      elegido = lista.length ? 0 : -1;
+      pintarResultados();
+    } catch { /* se reintenta al seguir escribiendo */ }
+  }
+
+  async function enter(texto) {
+    const q = texto.trim();
+    if (!q) return;
+    if (elegido >= 0 && resultados[elegido] && !/^\d{6,}$/.test(q)) return mostrar(resultados[elegido]);
+    try {
+      // Lo que manda el escáner: primero por código exacto; si no, por nombre.
+      const porClave = await API.get(`/productos?clave=${encodeURIComponent(q)}&limite=1`);
+      if (porClave.length) return mostrar(porClave[0]);
+      const lista = await API.get(`/productos?q=${encodeURIComponent(q)}&solo_activos=true&limite=8`);
+      if (lista.length === 1) return mostrar(lista[0]);
+      resultados = lista;
+      elegido = lista.length ? 0 : -1;
+      pintarResultados();
+      if (!lista.length) ficha(`<div class="mensaje aviso">${icono("alerta")}<span>No se encontró ningún producto con «${escapar(q)}».</span></div>`);
+    } catch (e) {
+      ficha(`<div class="mensaje error">${icono("alerta")}<span>${escapar(e.message)}</span></div>`);
+    }
+  }
+
+  const ficha = (html) => {
+    const caja = raiz.querySelector(".consulta-ficha");
+    caja.innerHTML = html;
+    caja.hidden = !html;
+  };
+
+  async function mostrar(p) {
+    limpiarResultados();
+    const c = campo();
+    c.value = "";
+    c.focus();
+    let existencia = null;
+    try {
+      existencia = await API.get(`/inventario/productos/${p.id}`);
+    } catch { /* el precio se muestra aunque no se pueda leer la existencia */ }
+    const exist = existencia ? Number(existencia.existencia_registrada) : null;
+    ficha(`
+      <div class="consulta-nombre">${escapar(p.nombre)}</div>
+      <div class="suave">${escapar(p.clave || "sin clave")}${p.laboratorio ? " · " + escapar(p.laboratorio) : ""}</div>
+      <div class="consulta-cifras">
+        <div><span>Precio de venta</span><strong class="consulta-precio-grande">${p.precio_venta ? dinero(p.precio_venta) : "Sin precio"}</strong>
+          <small>${Number(p.iva_porcentaje) || Number(p.ieps_porcentaje) ? "ya incluye impuestos" : "&nbsp;"}</small></div>
+        <div><span>Existencia</span><strong class="${exist !== null && exist <= 0 ? "agotado" : ""}">${exist === null ? "—" : cantidad(exist)}</strong>
+          <small>${exist !== null && exist <= 0 ? "sin existencia registrada" : "&nbsp;"}</small></div>
+      </div>
+      ${p.requiere_receta ? `<p class="consulta-receta">${icono("receta")} Pide receta médica</p>` : ""}`);
+  }
+
+  function abrir() {
+    if (!raiz) crear();
+    if (raiz.hidden) {
+      anterior = document.activeElement;
+      raiz.hidden = false;
+      ficha("");
+      limpiarResultados();
+      campo().value = "";
+    }
+    campo().focus();
+  }
+
+  function cerrar() {
+    if (!raiz || raiz.hidden) return;
+    raiz.hidden = true;
+    if (anterior && document.contains(anterior)) anterior.focus();
+  }
+
+  window.abrirConsultaPrecio = abrir;
+  // En captura para ganarle a los atajos de cada pantalla mientras está abierta.
+  window.addEventListener("keydown", (ev) => {
+    if (ev.key === "F8") {
+      ev.preventDefault();
+      abrir();
+    } else if (raiz && !raiz.hidden && ev.key === "Escape") {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      cerrar();
+    }
+  }, true);
+}
 
 // --- Asistente de IA (solo administradores) --------------------------------
 // Botón flotante abajo a la izquierda (a la derecha está Cobrar) que abre un

@@ -43,6 +43,7 @@ function pantallaInicio() {
     ROLES,
 
     async init() {
+      montarConsultaPrecio();
       document.addEventListener("solicitudes-pendientes", (ev) => (this.pendientes = ev.detail));
       this.actualizarReloj();
       setInterval(() => this.actualizarReloj(), 15000);
@@ -85,7 +86,8 @@ function pantallaInicio() {
     },
     get rapidos() {
       if (!this.usuario) return [];
-      return seccionesDe(this.usuario.rol).filter((s) => s.tecla);
+      return seccionesDe(this.usuario.rol).filter((s) => s.tecla)
+        .sort((a, b) => Number(a.tecla.slice(1)) - Number(b.tecla.slice(1)));
     },
 
     // Número rojo en la opción y en el título de su menú (ej. "Ventas").
@@ -110,6 +112,8 @@ function pantallaInicio() {
             ? "Listo: al iniciar sesión en esta computadora se entrará directo a Vender."
             : "Listo: al iniciar sesión en esta computadora se entrará a esta pantalla de inicio."
         );
+      } else if (s.accion === "consultarPrecio") {
+        abrirConsultaPrecio();
       } else if (s.accion === "ia") {
         this.claveIa = "";
         this.pruebaIa = null;

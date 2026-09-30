@@ -143,6 +143,7 @@ a.marca:hover { opacity: 0.9; }
 .barra.compacta { gap: 14px; }
 .barra.compacta nav a:not(.activo):not([href="/inicio"]) span { display: none; }
 .barra.compacta .usuario > span:last-child { display: none; }
+.barra.minima nav a span, .barra.minima .boton-precio span { display: none; }
 @media (max-width: 760px) {
   .barra { gap: 10px; padding: 0 12px; }
   .barra .marca > span:last-child, .barra .salir span { display: none; }
@@ -1229,3 +1230,38 @@ body.tableta { font-size: 18px; }
 .tableta-hoja { width: min(560px, 100%); max-height: calc(92vh - 16px); overflow-y: auto; box-shadow: var(--sombra-alta); }
 .tableta-hoja h2 { margin: 0; }
 .tableta-hoja input { font-size: 20px; }
+
+/* --- Consultar precio (F8) ----------------------------------------------- */
+
+.barra .boton-precio { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; }
+.barra .boton-precio { margin-left: auto; }
+.barra .boton-precio + .campana { margin-left: 0; }
+.barra .boton-precio ~ .usuario { margin-left: 0; }
+.consulta-precio { z-index: 70; }
+.consulta-precio-panel { width: min(640px, 100%); max-height: calc(92vh - 16px); overflow-y: auto; box-shadow: var(--sombra-alta); }
+.consulta-precio-panel .encabezado { align-items: flex-start; }
+.consulta-precio-panel .encabezado > div { flex: 1 1 auto; }
+.cerrar-consulta { flex: 0 0 auto; padding: 8px; }
+.consulta-precio-panel .buscador { margin-top: 8px; }
+.consulta-precio-panel .buscador input { font-size: 20px; }
+.consulta-resultados { display: flex; flex-direction: column; margin-top: 8px; }
+.consulta-resultados:empty { display: none; }
+.consulta-resultados button {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  border: 0; border-bottom: 1px solid var(--linea); border-radius: 0; background: transparent;
+  padding: 10px 12px; text-align: left; font-weight: 400;
+}
+.consulta-resultados button small { display: block; color: var(--texto-suave); font-size: 13px; }
+.consulta-resultados button strong { white-space: nowrap; color: var(--primario-oscuro); }
+.consulta-resultados button.elegido, .consulta-resultados button:hover { background: var(--primario-suave); }
+.consulta-ficha { margin-top: 14px; padding: 16px; border-radius: var(--radio); background: var(--fondo); }
+.consulta-ficha .mensaje { margin: 0; }
+.consulta-nombre { font-size: 22px; font-weight: 800; line-height: 1.25; }
+.consulta-cifras { display: grid; grid-template-columns: 3fr 2fr; gap: 12px; margin-top: 12px; }
+.consulta-cifras > div { background: var(--panel); border-radius: var(--radio); padding: 12px 16px; }
+.consulta-cifras span, .consulta-cifras small { display: block; font-size: 14px; color: var(--texto-suave); }
+.consulta-cifras strong { display: block; font-size: 30px; color: var(--primario-oscuro); line-height: 1.2; }
+.consulta-cifras strong.consulta-precio-grande { font-size: 44px; }
+.consulta-cifras strong.agotado { color: var(--peligro); }
+.consulta-receta { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--peligro); font-weight: 700; }
+.consulta-pie { margin: 12px 0 0; font-size: 13px; color: var(--texto-suave); text-align: center; }
