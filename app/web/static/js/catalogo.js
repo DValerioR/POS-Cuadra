@@ -14,6 +14,7 @@ const FILTROS = [
   { id: "revisar", texto: "Para revisar", params: { solo_revision: true } },
   { id: "sin-precio", texto: "Sin precio", params: { sin_precio: true } },
   { id: "sin-categoria", texto: "Sin categoría", params: { sin_categoria: true } },
+  { id: "encargo", texto: "Por encargo", params: { solo_encargo: true } },
   { id: "inactivos", texto: "Desactivados", params: { solo_inactivos: true } },
 ];
 const POR_PAGINA = 50;
@@ -234,7 +235,7 @@ function pantallaCatalogo() {
       const vacio = {
         id: null, nombre: "", clave: "", categoria_id: null, laboratorio: "", requiere_receta: false, no_caduca: false,
         costo: "", precio_venta: "", precio_maximo_publico: "", iva_porcentaje: 0, ieps_porcentaje: 0,
-        minimo: "", maximo: "", requiere_revision: false, motivo_revision: null, activo: true,
+        minimo: "", maximo: "", encargo: false, requiere_revision: false, motivo_revision: null, activo: true,
       };
       const base = p ? { ...vacio, ...p } : vacio;
       // Números como texto para los campos; vacío = sin dato.
@@ -325,8 +326,9 @@ function pantallaCatalogo() {
         precio_maximo_publico: num(e.precio_maximo_publico),
         iva_porcentaje: String(e.iva_porcentaje),
         ieps_porcentaje: String(e.ieps_porcentaje),
-        minimo: num(e.minimo),
-        maximo: num(e.maximo),
+        encargo: e.encargo,
+        minimo: e.encargo ? null : num(e.minimo),
+        maximo: e.encargo ? null : num(e.maximo),
       };
       if (e.revisado) {
         datos.requiere_revision = false;

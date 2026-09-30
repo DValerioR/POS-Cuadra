@@ -140,6 +140,22 @@
             </div>
           </div>
 
+          <details class="sin-proveedor" x-show="arm.encargos && arm.encargos.length" open style="margin-top: 16px">
+            <summary><strong x-text="`Encargos de clientes por pedir (${arm.encargos.length})`"></strong>
+              <span class="suave">: agrégalos si este proveedor los tiene; al enviar el pedido quedan como "pedido al proveedor".</span></summary>
+            <table class="tabla" style="margin-top: 8px">
+              <tbody>
+                <template x-for="x in arm.encargos" :key="x.producto_id">
+                  <tr><td><span class="nombre" x-text="x.nombre"></span>
+                        <template x-for="o in x.ya_pedido"><span class="etiqueta" style="margin-left: 6px" x-text="`Ya pedido en #${o.folio}`"></span></template>
+                        <div class="suave" style="font-size: 13px" x-text="`Para: ${x.clientes.join(', ')}`"></div></td>
+                    <td class="derecha ajustado suave" x-text="`pedir ${cantidad(x.cantidad)}`"></td>
+                    <td class="ajustado"><button type="button" @click="agregarEncargo(x)">Agregar</button></td></tr>
+                </template>
+              </tbody>
+            </table>
+          </details>
+
           <details class="sin-proveedor" x-show="arm.sin_proveedor.length" style="margin-top: 16px">
             <summary><strong x-text="`Faltantes sin proveedor registrado (${arm.sin_proveedor.length})`"></strong>
               <span class="suave">: nadie los ha surtido todavía; agrégalos si este proveedor los tiene.</span></summary>

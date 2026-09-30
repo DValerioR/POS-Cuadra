@@ -16,6 +16,7 @@ function pantallaNotificaciones() {
     avisos: [], // ventas sin existencia pendientes
     avisosRevisados: [],
     respaldo: null, // estado de /respaldos; se avisa si falló o está atrasado
+    encargosPorPedir: 0,
     conteos: {}, // producto_id -> lo que se escribió en "¿Cuántas hay?"
     rechazando: null, // id de la solicitud a la que se le escribe el motivo del rechazo
     respuesta: "",
@@ -34,7 +35,7 @@ function pantallaNotificaciones() {
       }
       setInterval(() => this.esAdmin && !this.ocupado && this.cargar(), 15000);
       document.addEventListener("solicitudes-pendientes", (ev) => {
-        if (ev.detail !== this.pendientes.length + this.avisos.length + (this.alertaRespaldo ? 1 : 0) && !this.ocupado) this.cargar();
+        if (ev.detail !== this.pendientes.length + this.avisos.length + (this.alertaRespaldo ? 1 : 0) + this.encargosPorPedir && !this.ocupado) this.cargar();
       });
       window.addEventListener("keydown", (ev) => {
         if (ev.key === "Escape" && this.rechazando) this.rechazando = null;
@@ -61,14 +62,16 @@ function pantallaNotificaciones() {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const desde = encodeURIComponent(hoy.toISOString());
-        const [pendientes, hechas, avisos, avisosHoy, respaldo] = await Promise.all([
+        const [pendientes, hechas, avisos, avisosHoy, respaldo, encargosAbiertos] = await Promise.all([
           API.get("/solicitudes?estado=pendiente&limite=100"),
           API.get(`/solicitudes?desde=${desde}&limite=50`),
           API.get("/avisos-inventario?estado=pendiente&limite=200"),
           API.get(`/avisos-inventario?desde=${desde}&limite=100`),
           API.get("/respaldos/estado"),
+          API.get("/encargos/lista"),
         ]);
         this.respaldo = respaldo;
+        this.encargosPorPedir = encargosAbiertos.filter((e) => e.estado === "por_pedir").length;
         this.pendientes = pendientes;
         this.respondidas = hechas.filter((s) => s.estado !== "pendiente");
         this.avisos = avisos;

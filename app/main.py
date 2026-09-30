@@ -25,6 +25,7 @@ from app.api.ofertas import router as ofertas_router
 from app.api.ofertas_venta import router as ofertas_venta_router
 from app.api.terminal import router as terminal_router
 from app.api.respaldos import router as respaldos_router
+from app.api.encargos import router as encargos_router
 from app.api.web import estaticos, router as web_router
 from app.services import respaldos
 
@@ -62,6 +63,7 @@ app.include_router(ofertas_router)
 app.include_router(ofertas_venta_router)
 app.include_router(terminal_router)
 app.include_router(respaldos_router)
+app.include_router(encargos_router)
 
 # Pantallas: al final, para que las rutas del API tengan prioridad.
 app.mount("/static", estaticos, name="static")

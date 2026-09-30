@@ -38,6 +38,10 @@ class Producto(Base):
     # Existencias mínima y máxima, para las sugerencias de pedido.
     minimo: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
     maximo: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
+    # Solo por encargo: no se tiene en existencia; se pide al proveedor cuando
+    # un cliente lo solicita (ver models/encargo.py). Sin mínimo ni máximo, no
+    # sale en faltantes.
+    encargo: Mapped[bool] = mapped_column(default=False, server_default=false())
     # Marcado por el importador u otro proceso cuando algo necesita ojo humano
     # (sin grupo, costo en cero, clave repetida, ...). El motivo dice qué revisar.
     requiere_revision: Mapped[bool] = mapped_column(default=False, server_default=false())

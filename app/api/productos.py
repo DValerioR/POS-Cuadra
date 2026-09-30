@@ -31,8 +31,10 @@ class Filtros:
         sin_precio: bool = False,
         sin_categoria: bool = False,
         categoria_id: int | None = None,
+        solo_encargo: bool = False,
     ):
         self.q, self.clave = q, clave
+        self.solo_encargo = solo_encargo
         self.solo_revision, self.solo_activos, self.solo_inactivos = solo_revision, solo_activos, solo_inactivos
         self.sin_precio, self.sin_categoria, self.categoria_id = sin_precio, sin_categoria, categoria_id
 
@@ -69,6 +71,8 @@ class Filtros:
             stmt = stmt.where(Producto.categoria_id.is_(None))
         if self.categoria_id is not None:
             stmt = stmt.where(Producto.categoria_id == self.categoria_id)
+        if self.solo_encargo:
+            stmt = stmt.where(Producto.encargo.is_(True))
         return stmt
 
 
@@ -164,6 +168,9 @@ def _obtener(db: Session, usuario: Usuario, producto_id: int) -> Producto:
 
 
 def _guardar(db: Session, producto: Producto, precio_anterior: Decimal | None, usuario: Usuario) -> Producto:
+    if producto.encargo:
+        # Por encargo no se tiene en existencia: sin mínimo ni máximo (no sale en faltantes).
+        producto.minimo = producto.maximo = None
     if producto.categoria_id is not None:
         categoria = db.get(Categoria, producto.categoria_id)
         if categoria is None or categoria.negocio_id != producto.negocio_id:

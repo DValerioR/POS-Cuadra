@@ -99,6 +99,7 @@
                         <div class="suave" style="font-size: 14px">
                           <span x-text="p.clave || 'sin clave'"></span>
                           <span class="etiqueta" x-show="p.requiere_revision" :title="p.motivo_revision">Revisar</span>
+                          <span class="etiqueta gris" x-show="p.encargo" title="Solo se pide cuando un cliente lo encarga">Por encargo</span>
                           <span class="etiqueta peligro" x-show="!p.activo">Desactivado</span>
                         </div>
                         <div class="motivo-revision" x-show="p.requiere_revision && p.motivo_revision" x-text="p.motivo_revision"></div>
@@ -378,10 +379,16 @@
         </div>
 
         <div class="paso separado">Existencias para pedidos</div>
-        <div class="rejilla-2">
+        <label class="casilla" style="margin: 0 0 8px">
+          <input type="checkbox" x-model="editor.encargo">
+          <span>Encargo <span class="ayuda">(no se tiene en existencia: solo se pide cuando un cliente lo solicita)</span></span>
+        </label>
+        <div class="rejilla-2" x-show="!editor.encargo">
           <div><label style="margin-top: 0">Mínimo</label><input type="number" min="0" step="1" x-model="editor.minimo"></div>
           <div><label style="margin-top: 0">Máximo</label><input type="number" min="0" step="1" x-model="editor.maximo"></div>
         </div>
+        <p class="ayuda" style="margin: 0" x-show="editor.encargo">
+          Sin mínimo ni máximo: no sale en faltantes. Cuando un cliente lo pida, regístralo en Encargos y se agrega al pedido del proveedor.</p>
 
         <template x-if="proveedoresDelProducto.length">
           <div>

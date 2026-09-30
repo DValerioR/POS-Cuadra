@@ -106,6 +106,7 @@ function pantallaPedidos() {
           con_sugerencias: r.con_sugerencias,
           renglones: r.renglones.map((x) => ({ ...x, cantidad: cantidad(x.cantidad) })),
           sin_proveedor: r.sin_proveedor,
+          encargos: r.encargos || [],
         };
         this.vista = "armar";
         window.scrollTo(0, 0);
@@ -126,6 +127,12 @@ function pantallaPedidos() {
       this.agregar({ producto_id: x.producto_id, clave: x.clave, nombre: x.nombre, existencia: x.existencia,
                      minimo: x.minimo, maximo: x.maximo, sugerido: x.sugerido, cantidad: cantidad(x.sugerido) });
       this.arm.sin_proveedor = this.arm.sin_proveedor.filter((y) => y.producto_id !== x.producto_id);
+    },
+    // Encargo de clientes: al enviar el pedido, sus encargos pasan solos a "pedido al proveedor".
+    agregarEncargo(x) {
+      this.agregar({ producto_id: x.producto_id, clave: x.clave, nombre: x.nombre, existencia: 0,
+                     minimo: null, maximo: null, sugerido: x.cantidad, cantidad: cantidad(x.cantidad) });
+      this.arm.encargos = this.arm.encargos.filter((y) => y.producto_id !== x.producto_id);
     },
     agregar(x) {
       if (this.arm.renglones.some((r) => r.producto_id === x.producto_id)) return;
@@ -200,6 +207,7 @@ function pantallaPedidos() {
         renglones: p.renglones.map((r) => ({ ...r, costo: r.costo_esperado, cantidad: cantidad(r.cantidad),
                                              ya_pedido: [], sugerido: null, existencia: null })),
         sin_proveedor: [],
+        encargos: [],
       };
       this.vista = "armar";
     },

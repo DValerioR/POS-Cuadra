@@ -58,7 +58,7 @@ def reporte(db: Session, usuario: Usuario, proveedor_id: int) -> dict:
     filas = db.execute(
         select(Producto, exist)
         .outerjoin(existencia, existencia.c.producto_id == Producto.id)
-        .where(Producto.negocio_id == usuario.negocio_id, Producto.activo.is_(True),
+        .where(Producto.negocio_id == usuario.negocio_id, Producto.activo.is_(True), Producto.encargo.is_(False),
                Producto.minimo.is_not(None), Producto.maximo.is_not(None), Producto.maximo > 0,
                exist <= Producto.minimo)
         .order_by(Producto.nombre)

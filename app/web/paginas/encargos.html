@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encargos · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Encargos de clientes: productos que un cliente pidió en específico. El
+    // personal los encarga al proveedor (o se agregan en Pedidos), le avisa al
+    // cliente que ya se pidió y que ya llegó, y lo marca entregado.
+    // Ver services/encargos.py.
+    const ESTADOS = [
+      { id: "por_pedir", texto: "Por pedir", ayuda: "Falta encargarlo al proveedor (se puede agregar en Pedidos)." },
+      { id: "pedido", texto: "Pedidos al proveedor", ayuda: "Ya se encargaron; avisa al cliente que ya se pidió." },
+      { id: "llego", texto: "Ya llegaron", ayuda: "Avisa al cliente que pase por él." },
+    ];
+
+    function pantallaEncargos() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        lista: [],
+        estados: ESTADOS,
+        nuevo: null, // formulario de encargo nuevo
+        buscar: "",
+        encontrados: [],
+        _espera: null,
+        guardando: false,
+        verTerminados: false,
+        terminados: [],
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.puede) await this.cargar();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+          setInterval(() => this.puede && !this.nuevo && this.cargar(), 30000);
+        },
+        get puede() {
+          return this.usuario && ["admin", "mostrador", "bodega"].includes(this.usuario.rol);
+        },
+        async cargar() {
+          try {
+            this.lista = await API.get("/encargos/lista");
+            if (this.verTerminados) {
+              this.terminados = (await API.get("/encargos/lista?todos=true")).filter((e) => ["entregado", "cancelado"].includes(e.estado));
+            }
+            this.error = "";
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        de(estado) {
+          return this.lista.filter((e) => e.estado === estado);
+        },
+        async alternarTerminados() {
+          this.verTerminados = !this.verTerminados;
+          if (this.verTerminados) await this.cargar();
+        },
+
+        // --- Nuevo encargo --------------------------------------------------
+        abrirNuevo() {
+          this.nuevo = { cliente: "", telefono: "", producto: null, descripcion: "", cantidad: "1", notas: "" };
+          this.buscar = "";
+          this.encontrados = [];
+          this.$nextTick(() => document.getElementById("nuevo-cliente").focus());
+        },
+        alBuscar() {
+          clearTimeout(this._espera);
+          const q = this.buscar.trim();
+          if (q.length < 2) {
+            this.encontrados = [];
+            return;
+          }
+          this._espera = setTimeout(async () => {
+            try {
+              this.encontrados = await API.get(`/productos?q=${encodeURIComponent(q)}&solo_activos=true&limite=8`);
+            } catch (e) {
+              this.error = e.message;
+            }
+          }, 220);
+        },
+        elegir(p) {
+          this.nuevo.producto = p;
+          this.encontrados = [];
+          this.buscar = "";
+        },
+        async guardarNuevo() {
+          const n = this.nuevo;
+          if (this.guardando) return;
+          this.guardando = true;
+          this.error = "";
+          try {
+            await API.post("/encargos", {
+              cliente: n.cliente, telefono: n.telefono || null, cantidad: n.cantidad || "1", notas: n.notas || null,
+              producto_id: n.producto ? n.producto.id : null,
+              descripcion: n.producto ? null : (n.descripcion || this.buscar || null),
+            });
+            this.nuevo = null;
+            await this.cargar();
+            this.avisar("Encargo registrado.");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.guardando = false;
+          }
+        },
+
+        // --- Cambios --------------------------------------------------------
+        async estado(e, nuevo) {
+          try {
+            await API.put(`/encargos/${e.id}/estado`, { estado: nuevo });
+            await this.cargar();
+          } catch (err) {
+            this.error = err.message;
+          }
+        },
+        async avisado(e) {
+          try {
+            await API.post(`/encargos/${e.id}/avisado`, {});
+            await this.cargar();
+          } catch (err) {
+            this.error = err.message;
+          }
+        },
+        fecha(f) {
+          return new Date(f).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 4000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaEncargos()">
+
+  <header class="barra" data-pagina="encargos"></header>
+
+  <main class="contenido cajas-pantalla" x-cloak x-show="!cargando">
+    <template x-if="usuario && !puede">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Los encargos los manejan mostrador, bodega y administradores.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="puede">
+      <div class="pila" style="gap: 16px">
+        <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 12px">
+          <div class="encabezado" style="margin: 0">
+            <span class="circulo"><svg><use href="/static/iconos.svg#portapapeles"/></svg></span>
+            <div><h1>Encargos</h1>
+              <p class="suave">Productos que un cliente pidió en específico: encárgalos al proveedor y avísale cuando se pidió y cuando llegó.</p></div>
+          </div>
+          <button type="button" class="primario" style="flex: 0 0 auto" @click="abrirNuevo()" x-show="!nuevo">+ Nuevo encargo</button>
+        </div>
+
+        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+        <!-- Nuevo -->
+        <template x-if="nuevo">
+          <form class="panel pila" style="gap: 10px" @submit.prevent="guardarNuevo()">
+            <h2 style="margin: 0">Nuevo encargo</h2>
+            <div class="rejilla-2">
+              <div><label style="margin-top: 0">Cliente</label><input id="nuevo-cliente" x-model="nuevo.cliente" maxlength="120" required></div>
+              <div><label style="margin-top: 0">Teléfono <span class="ayuda">(para avisarle)</span></label><input x-model="nuevo.telefono" maxlength="40" inputmode="tel"></div>
+            </div>
+            <label style="margin: 0">Producto</label>
+            <template x-if="nuevo.producto">
+              <div class="fila" style="gap: 8px; align-items: center">
+                <strong x-text="nuevo.producto.nombre"></strong>
+                <span class="etiqueta gris" x-show="nuevo.producto.encargo">Por encargo</span>
+                <button type="button" class="texto-suave" style="flex: 0 0 auto" @click="nuevo.producto = null">Cambiar</button>
+              </div>
+            </template>
+            <template x-if="!nuevo.producto">
+              <div class="pila" style="gap: 6px">
+                <input x-model="buscar" @input="alBuscar()" placeholder="Busca en el catálogo, o escribe lo que pidió si no lo tenemos" autocomplete="off">
+                <template x-for="p in encontrados" :key="p.id">
+                  <button type="button" class="texto-suave" style="justify-content: flex-start; text-align: left" @click="elegir(p)">
+                    <span x-text="p.nombre"></span> <span class="etiqueta gris" x-show="p.encargo">Por encargo</span>
+                  </button>
+                </template>
+                <p class="ayuda" style="margin: 0" x-show="buscar.trim().length >= 2 && !encontrados.length">
+                  No está en el catálogo: se guardará como lo escribiste.</p>
+              </div>
+            </template>
+            <div class="rejilla-2">
+              <div><label style="margin-top: 0">Cantidad</label><input type="number" min="1" step="1" x-model="nuevo.cantidad"></div>
+              <div><label style="margin-top: 0">Notas <span class="ayuda">(opcional)</span></label><input x-model="nuevo.notas" maxlength="500"></div>
+            </div>
+            <div class="fila" style="gap: 8px">
+              <button type="button" @click="nuevo = null">Cancelar</button>
+              <button class="primario" :disabled="guardando || !nuevo.cliente.trim() || (!nuevo.producto && !buscar.trim())"
+                      x-text="guardando ? 'Guardando…' : 'Registrar encargo'"></button>
+            </div>
+          </form>
+        </template>
+
+        <p class="suave" x-show="!lista.length && !nuevo">No hay encargos pendientes.</p>
+
+        <!-- Por estado -->
+        <template x-for="s in estados" :key="s.id">
+          <div class="pila" style="gap: 8px" x-show="de(s.id).length">
+            <div class="paso" style="margin: 0" x-text="`${s.texto} (${de(s.id).length})`"></div>
+            <p class="ayuda" style="margin: 0" x-text="s.ayuda"></p>
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <template x-for="e in de(s.id)" :key="e.id">
+                <div class="encargo-fila">
+                  <div>
+                    <strong x-text="`${Number(e.cantidad) !== 1 ? Number(e.cantidad) + ' × ' : ''}${e.descripcion}`"></strong>
+                    <span class="etiqueta gris" x-show="!e.producto_id">No está en el catálogo</span>
+                    <span class="etiqueta" x-show="e.canal === 'whatsapp'">WhatsApp</span>
+                    <span class="etiqueta peligro" x-show="e.falta_avisar" x-text="e.estado === 'llego' ? 'Falta avisar que llegó' : 'Falta avisar que se pidió'"></span>
+                    <div class="suave" style="font-size: 14px">
+                      <span x-text="e.cliente"></span><span x-show="e.telefono" x-text="` · ${e.telefono}`"></span>
+                      <span x-text="` · ${fecha(e.created_at)}`"></span><span x-show="e.creado_por" x-text="` · ${e.creado_por}`"></span>
+                    </div>
+                    <div class="suave" style="font-size: 14px" x-show="e.notas" x-text="e.notas"></div>
+                  </div>
+                  <div class="acciones">
+                    <button type="button" class="primario" x-show="e.falta_avisar" @click="avisado(e)" x-text="e.estado === 'llego' ? 'Ya le avisé que llegó' : 'Ya le avisé que se pidió'"></button>
+                    <button type="button" x-show="e.estado === 'por_pedir'" @click="estado(e, 'pedido')">Ya se pidió</button>
+                    <button type="button" x-show="e.estado === 'pedido'" @click="estado(e, 'llego')">Ya llegó</button>
+                    <button type="button" x-show="e.estado === 'llego'" @click="estado(e, 'entregado')">Se entregó</button>
+                    <button type="button" class="texto-peligro" @click="estado(e, 'cancelado')">Cancelar</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <button type="button" class="texto-suave" style="align-self: flex-start" @click="alternarTerminados()"
+                x-text="verTerminados ? 'Ocultar entregados y cancelados' : 'Ver entregados y cancelados'"></button>
+        <template x-if="verTerminados">
+          <div class="panel" style="padding: 0; overflow: hidden">
+            <template x-for="e in terminados" :key="e.id">
+              <div class="encargo-fila">
+                <div><span x-text="e.descripcion"></span>
+                  <div class="suave" style="font-size: 14px" x-text="`${e.cliente} · ${e.estado_texto} · ${fecha(e.updated_at)}`"></div></div>
+                <div class="acciones"><button type="button" class="texto-suave" x-show="e.estado === 'cancelado'" @click="estado(e, 'por_pedir')">Volver a abrir</button></div>
+              </div>
+            </template>
+            <p class="suave" style="padding: 12px 18px; margin: 0" x-show="!terminados.length">No hay.</p>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

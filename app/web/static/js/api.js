@@ -237,6 +237,7 @@ const SECCIONES = [
   { id: "venta", texto: "Vender", icono: "carrito", grupo: "Ventas", ruta: "/venta", existe: true, roles: ["admin", "mostrador"], tecla: "F1" },
   { id: "turno", texto: "Turno y corte", icono: "caja", grupo: "Ventas", ruta: "/turno", existe: true, roles: ["admin", "mostrador"], tecla: "F2" },
   { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin", "mostrador"] },
+  { id: "encargos", texto: "Encargos de clientes", icono: "portapapeles", grupo: "Ventas", ruta: "/encargos", existe: true, roles: ["admin", "mostrador", "bodega"] },
   { id: "notificaciones", texto: "Notificaciones", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
   { id: "facturas", texto: "Facturar un ticket", icono: "ticket", grupo: "Ventas", ruta: "/facturas", existe: true, roles: ["admin", "mostrador"] },
@@ -522,7 +523,37 @@ function montarConsultaPrecio() {
           <small>${exist !== null && exist <= 0 ? "sin existencia registrada" : "&nbsp;"}</small></div>
       </div>
       ${textoOferta}
-      ${p.requiere_receta ? `<p class="consulta-receta">${icono("receta")} Pide receta médica</p>` : ""}`);
+      ${p.requiere_receta ? `<p class="consulta-receta">${icono("receta")} Pide receta médica</p>` : ""}
+      ${p.encargo ? `<p class="consulta-encargo">${icono("camion")} Solo por encargo: se pide al proveedor cuando un cliente lo solicita</p>` : ""}
+      ${p.encargo || (exist !== null && exist <= 0) ? `
+        <button type="button" class="registrar-encargo">${icono("portapapeles")} Registrar un encargo de este producto</button>
+        <form class="form-encargo" hidden>
+          <div class="fila" style="gap: 8px; flex-wrap: wrap">
+            <input name="cliente" placeholder="Nombre del cliente" required maxlength="120" style="flex: 2 1 180px">
+            <input name="telefono" placeholder="Teléfono (para avisarle)" maxlength="40" style="flex: 1 1 140px">
+            <input name="cantidad" type="number" min="1" step="1" value="1" style="flex: 0 0 80px" aria-label="Cantidad">
+            <button class="primario" style="flex: 0 0 auto">Registrar</button>
+          </div>
+        </form>` : ""}`);
+    const boton = raiz.querySelector(".registrar-encargo");
+    const form = raiz.querySelector(".form-encargo");
+    if (boton && form) {
+      boton.addEventListener("click", () => {
+        boton.hidden = true;
+        form.hidden = false;
+        form.cliente.focus();
+      });
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        try {
+          await API.post("/encargos", { cliente: form.cliente.value, telefono: form.telefono.value || null,
+                                        producto_id: p.id, cantidad: form.cantidad.value || "1" });
+          form.outerHTML = `<div class="mensaje info">${icono("palomita")}<span>Encargo registrado para ${escapar(form.cliente.value)}. Se ve en Encargos y en Pedidos.</span></div>`;
+        } catch (e) {
+          form.insertAdjacentHTML("beforeend", `<div class="mensaje error">${icono("alerta")}<span>${escapar(e.message)}</span></div>`);
+        }
+      });
+    }
   }
 
   function abrir() {

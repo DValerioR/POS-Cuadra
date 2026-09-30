@@ -12,6 +12,7 @@ class ProductoBase(BaseModel):
     laboratorio: str | None = None
     requiere_receta: bool = False
     no_caduca: bool = False
+    encargo: bool = False  # solo por encargo: sin mínimo ni máximo
     precio_venta: Decimal | None = None
     costo: Decimal | None = None
     precio_maximo_publico: Decimal | None = None
@@ -36,6 +37,7 @@ class ProductoUpdate(BaseModel):
     laboratorio: str | None = None
     requiere_receta: bool | None = None
     no_caduca: bool | None = None
+    encargo: bool | None = None
     precio_venta: Decimal | None = None
     costo: Decimal | None = None
     precio_maximo_publico: Decimal | None = None

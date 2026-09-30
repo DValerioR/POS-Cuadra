@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.models import (
     Entrada, EntradaRenglon, EstadoPedido, Pedido, PedidoEntrada, PedidoRenglon, Producto, Proveedor, Usuario,
 )
-from app.services import faltantes, sugerencias_pedido
+from app.services import encargos, faltantes, sugerencias_pedido
 from app.services.entradas import _proveedor, _validar_rol
 from app.services.errores import NoEncontrado, OperacionInvalida
 
@@ -83,8 +83,16 @@ def preparar(db: Session, usuario: Usuario, proveedor_id: int, sugerencias: bool
             "ya_pedido": otros, "cantidad": Decimal(0) if otros else cantidad,
         })
     sin_proveedor = [{**x, "ya_pedido": pedidos.get(x["producto_id"], [])} for x in r["sin_proveedor"]]
+    # Encargos de clientes que falta pedir (de cualquier proveedor): se agregan a mano al pedido.
+    de_clientes = []
+    for pid, lista in encargos.por_pedir_con_producto(db, usuario.negocio_id).items():
+        p = db.get(Producto, pid)
+        de_clientes.append({"producto_id": pid, "clave": p.clave, "nombre": p.nombre,
+                            "cantidad": sum((e.cantidad for e in lista), Decimal(0)),
+                            "clientes": [e.cliente for e in lista], "ya_pedido": pedidos.get(pid, [])})
     return {"proveedor_id": r["proveedor_id"], "proveedor": r["proveedor"], "renglones": renglones,
-            "sin_proveedor": sin_proveedor, "con_sugerencias": bool(sugerencias)}
+            "sin_proveedor": sin_proveedor, "encargos": sorted(de_clientes, key=lambda x: x["nombre"]),
+            "con_sugerencias": bool(sugerencias)}
 
 
 def _costos_esperados(db: Session, negocio_id: int, proveedor_id: int, productos: dict[int, Producto]) -> dict:
@@ -155,6 +163,7 @@ def enviar(db: Session, usuario: Usuario, pedido_id: int) -> Pedido:
         raise OperacionInvalida("El pedido ya se había enviado")
     pedido.estado = EstadoPedido.ENVIADO
     pedido.enviado_at = _ahora()
+    encargos.al_enviar_pedido(db, pedido)
     return pedido
 
 

@@ -1470,3 +1470,11 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 .grupo-clave .tabla { margin: 0 0 8px; }
 .grupo-clave .encabezado-grupo .etiqueta { flex: 0 0 110px; text-align: center; }
 .grupo-clave .encabezado-grupo > button:last-child { flex: 0 0 140px; white-space: nowrap; }
+
+/* Encargos */
+.consulta-encargo { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--primario-oscuro); font-weight: 700; }
+.consulta-ficha .registrar-encargo { margin-top: 12px; width: 100%; }
+.consulta-ficha .form-encargo { margin-top: 12px; }
+.encargo-fila { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; padding: 14px 18px; border-bottom: 1px solid var(--borde); }
+.encargo-fila:last-child { border-bottom: 0; }
+.encargo-fila .acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; }

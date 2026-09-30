@@ -19,6 +19,7 @@ from app.models.pedido import EstadoPedido, Pedido, PedidoEntrada, PedidoRenglon
 from app.models.factura import ClienteFiscal, EstadoFactura, Factura
 from app.models.oferta import Oferta
 from app.models.cobro_terminal import CobroTerminal
+from app.models.encargo import Encargo, EstadoEncargo
 
 __all__ = [
     "Negocio",
@@ -65,4 +66,6 @@ __all__ = [
     "Factura",
     "Oferta",
     "CobroTerminal",
+    "Encargo",
+    "EstadoEncargo",
 ]
