@@ -112,12 +112,27 @@ def guardar_archivo(db: Session, usuario: Usuario, nombre: str, datos: bytes) ->
 
 # --- Reconocer productos ----------------------------------------------------
 
+def digito_verificador(codigo: str) -> str:
+    """Dígito verificador GS1 (EAN/UPC) de un código sin él."""
+    suma = sum(int(d) * (3 if i % 2 == 0 else 1) for i, d in enumerate(reversed(codigo)))
+    return str((10 - suma % 10) % 10)
+
+
+def _por_codigo(db: Session, negocio_id: int, clave: str) -> Producto | None:
+    return db.scalar(select(Producto).where(
+        Producto.negocio_id == negocio_id, Producto.activo.is_(True),
+        (Producto.clave == clave) | (func.ltrim(Producto.clave, "0") == clave.lstrip("0")),
+    ).limit(1))
+
+
 def reconocer(
     db: Session, negocio_id: int, proveedor_id: int | None, clave: str | None, descripcion: str | None,
 ) -> tuple[Producto | None, Decimal, str | None]:
     """(producto, factor, cómo se reconoció). Primero la equivalencia del
     proveedor (por su clave o por la descripción), después el código de
-    barras en el catálogo."""
+    barras en el catálogo. Walmart manda el código con ceros a la izquierda y
+    sin el dígito verificador ("000750647512078"): si no se encuentra tal cual,
+    se prueba agregándoselo."""
     if proveedor_id is not None:
         stmt = select(ProveedorEquivalencia).where(ProveedorEquivalencia.proveedor_id == proveedor_id)
         eq = None
@@ -130,10 +145,10 @@ def reconocer(
             if producto is not None and producto.activo:
                 return producto, eq.factor, "equivalencia"
     if clave and clave.lstrip("0"):
-        producto = db.scalar(select(Producto).where(
-            Producto.negocio_id == negocio_id, Producto.activo.is_(True),
-            (Producto.clave == clave) | (func.ltrim(Producto.clave, "0") == clave.lstrip("0")),
-        ).limit(1))
+        producto = _por_codigo(db, negocio_id, clave)
+        sin_ceros = clave.lstrip("0")
+        if producto is None and sin_ceros.isdigit() and len(sin_ceros) in (11, 12):
+            producto = _por_codigo(db, negocio_id, sin_ceros + digito_verificador(sin_ceros))
         if producto is not None:
             return producto, Decimal(producto.factor_conversion or 1), "codigo"
     return None, Decimal(1), None

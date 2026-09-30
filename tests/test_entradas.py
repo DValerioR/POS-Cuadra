@@ -7,6 +7,7 @@ from decimal import Decimal as D
 import pytest
 
 from app.importador.cfdi import XmlInvalido, leer_cfdi
+from app.services import entradas as entradas_servicio
 from app.models import Categoria, Lote, PrecioHistorial, Producto, Proveedor, ProveedorEquivalencia
 
 CFDI = """<?xml version="1.0" encoding="UTF-8"?>
@@ -229,3 +230,13 @@ def test_iva_desconocido_si_el_cfdi_no_lo_dice():
     no_objeto = sin_impuestos.replace(b'NoIdentificacion="PROV-99"', b'NoIdentificacion="PROV-99" ObjetoImp="01"')
     assert leer_cfdi(sin_impuestos).renglones[1].iva is None
     assert leer_cfdi(no_objeto).renglones[1].iva == D(0)
+
+
+def test_codigo_walmart_sin_digito_verificador(db, negocio, catalogo):
+    # Walmart manda "000" + el código sin su último dígito.
+    assert entradas_servicio.digito_verificador("750105530208") == "6"  # 7501055302086 (Coca-Cola)
+    db.add(Producto(negocio_id=negocio.id, nombre="REFRESCO COCA 500ML", clave="7501055302086"))
+    db.commit()
+    producto, _, como = entradas_servicio.reconocer(db, negocio.id, None, "000750105530208", "COCA 500")
+    assert (producto.nombre, como) == ("REFRESCO COCA 500ML", "codigo")
+    assert entradas_servicio.reconocer(db, negocio.id, None, "000750105530209", None)[0] is None
