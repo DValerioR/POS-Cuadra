@@ -11,7 +11,10 @@
   si el último respaldo tiene más de 24 horas y, si es así, hace uno. Se
   guardan los últimos 30 automáticos (`RESPALDOS_A_CONSERVAR`). Los hechos con
   el botón "Respaldar ahora" no se borran solos.
-- **Copia fuera de la computadora (recomendado):** con
+- **Copia fuera de la computadora (recomendado):** en el programa,
+  Configuración → Respaldos → "Elegir dónde guardar la copia": memoria USB,
+  Google Drive u OneDrive (sus aplicaciones de escritorio suben solas a la nube
+  lo que se guarda en su carpeta) u otra carpeta. También se puede poner a mano con
   `CARPETA_RESPALDOS_COPIA=E:\Respaldos POS` (una USB) o una carpeta que se
   sincronice con Google Drive / OneDrive, cada respaldo se copia también ahí.
   Si la copia falla (USB desconectada), el respaldo local se hace igual y la

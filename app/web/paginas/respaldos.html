@@ -22,6 +22,13 @@
         aviso: "",
         r: null, // estado de /respaldos
         respaldando: false,
+        // Copia fuera de la computadora
+        destinos: [],
+        eligiendo: false, // se está eligiendo dónde guardar la copia
+        opcion: null, // "usb" | "google_drive" | "onedrive" | "carpeta"
+        rutaOtra: "",
+        guardandoCopia: false,
+        tiposCopia: { usb: "Memoria USB", google_drive: "Google Drive", onedrive: "OneDrive", carpeta: "Otra carpeta" },
 
         async init() {
           try {
@@ -36,6 +43,47 @@
         get esAdmin() {
           return this.usuario && this.usuario.rol === "admin";
         },
+        // --- Copia fuera de la computadora -----------------------------------
+        async abrirCopia() {
+          this.eligiendo = true;
+          this.opcion = null;
+          this.rutaOtra = "";
+          await this.buscarDestinos();
+        },
+        async buscarDestinos() {
+          try {
+            this.destinos = await API.get("/respaldos/destinos");
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        destinosDe(tipo) {
+          return this.destinos.filter((d) => d.tipo === tipo);
+        },
+        async usarCopia(ruta) {
+          this.error = "";
+          this.guardandoCopia = true;
+          try {
+            this.r = await API.put("/respaldos/copia", { ruta });
+            this.eligiendo = false;
+            if (!ruta) {
+              this.avisar("Listo: ya no se guarda copia fuera de la computadora.");
+              return;
+            }
+            if (this.r.archivos.length) {
+              await API.post("/respaldos/copia/probar", {});
+              this.r = await API.get("/respaldos/estado");
+              this.avisar("Listo: se copió el último respaldo ahí. Desde ahora cada respaldo se copia solo.");
+            } else {
+              this.avisar("Listo: desde ahora cada respaldo se copia ahí.");
+            }
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.guardandoCopia = false;
+          }
+        },
+
         async respaldarAhora() {
           this.error = "";
           this.respaldando = true;
@@ -115,10 +163,80 @@
           <p class="suave" style="margin: 12px 0 0" x-show="r.automaticos"
              x-text="`Se hace uno solo cada día mientras el servidor está prendido. Se guardan los últimos ${r.conservar} automáticos; los que haces con el botón no se borran.`"></p>
           <p class="suave" style="margin: 12px 0 0" x-show="!r.automaticos">Los respaldos automáticos están apagados en esta computadora.</p>
-          <p class="suave" style="margin: 4px 0 0"><span x-text="`Carpeta: ${r.carpeta}`"></span>
-            <span x-show="r.copia" x-text="` · copia extra en: ${r.copia}`"></span></p>
-          <p class="ayuda" style="margin: 4px 0 0" x-show="!r.copia">Conviene guardar también una copia fuera de esta computadora:
-            descarga un respaldo de vez en cuando a una USB, o pide que se configure una carpeta de copia (CARPETA_RESPALDOS_COPIA).</p>
+          <p class="suave" style="margin: 4px 0 0" x-text="`Carpeta: ${r.carpeta}`"></p>
+        </div>
+
+        <!-- Copia fuera de la computadora -->
+        <div class="panel">
+          <h2 style="margin-top: 0">Copia fuera de esta computadora</h2>
+          <template x-if="r.copia && !eligiendo">
+            <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center">
+              <div>
+                <span class="etiqueta verde" x-text="tiposCopia[r.copia_tipo] || 'Carpeta'"></span>
+                <div class="suave" style="margin-top: 4px" x-text="`Cada respaldo se copia también en ${r.copia}`"></div>
+              </div>
+              <div class="fila" style="gap: 8px; flex: 0 0 auto">
+                <button type="button" @click="abrirCopia()">Cambiar</button>
+                <button type="button" class="texto-peligro" :disabled="guardandoCopia" @click="usarCopia(null)">Quitar</button>
+              </div>
+            </div>
+          </template>
+          <template x-if="!r.copia && !eligiendo">
+            <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center">
+              <p class="suave" style="margin: 0; flex: 1 1 320px">Si esta computadora se descompone o se la roban, los respaldos se pierden con ella.
+                Guarda una copia en una memoria USB o en la nube (Google Drive u OneDrive).</p>
+              <button type="button" class="primario" style="flex: 0 0 auto" @click="abrirCopia()">Elegir dónde guardar la copia</button>
+            </div>
+          </template>
+
+          <template x-if="eligiendo">
+            <div class="pila" style="gap: 12px">
+              <div class="modos-impresora">
+                <template x-for="(texto, tipo) in tiposCopia" :key="tipo">
+                  <button type="button" class="opcion" :class="{ activa: opcion === tipo }" @click="opcion = tipo">
+                    <strong x-text="texto"></strong>
+                    <span x-show="tipo !== 'carpeta'" x-text="destinosDe(tipo).length ? 'Detectada en esta computadora' : 'No se detectó'"></span>
+                    <span x-show="tipo === 'carpeta'">Escribir la ruta</span>
+                  </button>
+                </template>
+              </div>
+
+              <template x-if="opcion && opcion !== 'carpeta'">
+                <div class="pila" style="gap: 8px">
+                  <template x-for="d in destinosDe(opcion)" :key="d.ruta">
+                    <div class="fila" style="justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center">
+                      <div><strong x-text="d.nombre"></strong><div class="suave" style="font-size: 13px" x-text="`Se guardará en ${d.ruta}`"></div></div>
+                      <button type="button" class="primario" style="flex: 0 0 auto" :disabled="guardandoCopia" @click="usarCopia(d.ruta)"
+                              x-text="guardandoCopia ? 'Probando…' : 'Usar esta'"></button>
+                    </div>
+                  </template>
+                  <div class="mensaje info" x-show="!destinosDe(opcion).length" style="margin: 0">
+                    <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+                    <span x-show="opcion === 'usb'">Conecta la memoria USB a la computadora donde está el servidor y presiona "Buscar otra vez".
+                      Déjala conectada: la copia se hace cada día.</span>
+                    <span x-show="opcion === 'google_drive'">Instala "Google Drive para computadoras" (drive.google.com/download), inicia sesión con la
+                      cuenta de la farmacia y presiona "Buscar otra vez". Lo que se guarde en su carpeta se sube solo a Google Drive.</span>
+                    <span x-show="opcion === 'onedrive'">Abre OneDrive (ya viene con Windows) e inicia sesión con la cuenta de Microsoft de la farmacia,
+                      luego presiona "Buscar otra vez". Lo que se guarde en su carpeta se sube solo a OneDrive.</span>
+                  </div>
+                </div>
+              </template>
+
+              <template x-if="opcion === 'carpeta'">
+                <form class="fila" style="gap: 8px" @submit.prevent="usarCopia(rutaOtra)">
+                  <input x-model="rutaOtra" placeholder="Ej. E:\Respaldos POS  o  \\OTRA-PC\Respaldos" spellcheck="false">
+                  <button class="primario" style="flex: 0 0 auto" :disabled="!rutaOtra.trim() || guardandoCopia"
+                          x-text="guardandoCopia ? 'Probando…' : 'Usar esta'"></button>
+                </form>
+              </template>
+
+              <div class="fila" style="gap: 8px">
+                <button type="button" @click="buscarDestinos()">Buscar otra vez</button>
+                <button type="button" class="texto-suave" @click="eligiendo = false">Cancelar</button>
+              </div>
+              <p class="ayuda" style="margin: 0">Las carpetas y memorias son las de la computadora donde está el servidor del POS.</p>
+            </div>
+          </template>
         </div>
 
         <div class="panel" style="padding: 0; overflow: hidden">

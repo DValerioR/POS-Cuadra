@@ -74,3 +74,50 @@ def test_campana_avisa_solo_si_hay_automaticos(como_admin, monkeypatch):
     assert r["respaldo"] == 1 and r["total"] >= 1  # no hay ningún respaldo
     respaldos.hacer()
     assert como_admin.get("/notificaciones/pendientes").json()["respaldo"] == 0
+
+
+@pytest.fixture
+def env_temporal(tmp_path, monkeypatch):
+    from app.core import config
+    ruta = tmp_path / ".env"
+    ruta.write_text("DATABASE_URL=postgresql+psycopg://x\n", encoding="utf-8")
+    monkeypatch.setattr(config, "ENV_PATH", ruta)
+    return ruta
+
+
+def test_destinos_detectados(tmp_path, monkeypatch):
+    nube = tmp_path / "OneDrive"
+    nube.mkdir()
+    drive = tmp_path / "Google Drive" / "Mi unidad"
+    drive.mkdir(parents=True)
+    monkeypatch.setattr(respaldos, "_unidades_usb", lambda: [("E:\\", "KINGSTON")])
+    monkeypatch.setattr(respaldos, "_carpetas_onedrive", lambda: [nube])
+    monkeypatch.setattr(respaldos, "_carpetas_google_drive", lambda: [drive])
+    d = {x["tipo"]: x for x in respaldos.destinos()}
+    assert d["usb"]["nombre"] == "KINGSTON (E:)" and d["usb"]["ruta"].endswith("Respaldos POS")
+    assert d["onedrive"]["ruta"] == str(nube / "Respaldos POS")
+    assert d["google_drive"]["ruta"] == str(drive / "Respaldos POS")
+    assert respaldos.tipo_de_copia(str(nube / "Respaldos POS")) == "onedrive"
+    assert respaldos.tipo_de_copia(str(tmp_path / "otra")) == "carpeta"
+
+
+def test_configurar_probar_y_quitar_copia(como_admin, como_mostrador, env_temporal, tmp_path, monkeypatch):
+    destino = tmp_path / "OneDrive" / "Respaldos POS"
+    assert como_mostrador.put("/respaldos/copia", json={"ruta": str(destino)}).status_code == 403
+    # Sin respaldos todavía: se guarda, pero no hay qué copiar.
+    r = como_admin.put("/respaldos/copia", json={"ruta": str(destino)})
+    assert r.status_code == 200 and r.json()["copia"] == str(destino)
+    assert f"CARPETA_RESPALDOS_COPIA={destino}" in env_temporal.read_text(encoding="utf-8")
+    assert como_admin.post("/respaldos/copia/probar").status_code == 409
+    hecho = respaldos.hacer()  # con copia configurada, se copia solo
+    assert (destino / hecho["nombre"]).exists()
+    assert como_admin.post("/respaldos/copia/probar").json()["nombre"] == hecho["nombre"]
+    # Rutas que no sirven.
+    archivo = tmp_path / "soy_un_archivo.txt"
+    archivo.write_text("x")
+    assert como_admin.put("/respaldos/copia", json={"ruta": str(archivo / "sub")}).status_code == 409
+    assert como_admin.put("/respaldos/copia", json={"ruta": "relativa/carpeta"}).status_code == 409
+    assert como_admin.put("/respaldos/copia", json={"ruta": settings.carpeta_respaldos}).status_code == 409
+    # Quitar.
+    r = como_admin.put("/respaldos/copia", json={"ruta": None})
+    assert r.json()["copia"] is None and "CARPETA_RESPALDOS_COPIA" not in env_temporal.read_text(encoding="utf-8")

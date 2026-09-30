@@ -172,7 +172,8 @@ def estado() -> dict:
         "error": e.get("error"), "copia_error": e.get("copia_error"),
         "atrasado": atrasado, "necesita_atencion": bool(e.get("error")) or atrasado,
         "automaticos": automaticos_activos(), "carpeta": str(carpeta().resolve()),
-        "copia": settings.carpeta_respaldos_copia, "conservar": settings.respaldos_a_conservar,
+        "copia": settings.carpeta_respaldos_copia, "copia_tipo": tipo_de_copia(settings.carpeta_respaldos_copia),
+        "conservar": settings.respaldos_a_conservar,
         "archivos": archivos(),
     }
 
@@ -209,3 +210,121 @@ def iniciar_automaticos() -> threading.Event | None:
     parar = threading.Event()
     threading.Thread(target=_ciclo, args=(parar,), name="respaldos", daemon=True).start()
     return parar
+
+
+# --- Copia fuera de la computadora ------------------------------------------------------
+# USB, o la carpeta de Google Drive / OneDrive de sus aplicaciones de
+# escritorio: la aplicación sube sola a la nube lo que se guarda ahí. El POS
+# solo copia el respaldo a esa carpeta. (Las rutas son de la computadora donde
+# corre el servidor.)
+
+SUBCARPETA = "Respaldos POS"
+TIPOS_COPIA = {"usb": "Memoria USB", "google_drive": "Google Drive", "onedrive": "OneDrive", "carpeta": "Otra carpeta"}
+
+
+def _unidades_usb() -> list[tuple[str, str]]:
+    """(letra, nombre) de las unidades extraíbles conectadas (solo Windows)."""
+    if os.name != "nt":
+        return []
+    import ctypes
+    import string
+
+    k = ctypes.windll.kernel32
+    mapa = k.GetLogicalDrives()
+    unidades = []
+    for i, letra in enumerate(string.ascii_uppercase):
+        raiz = f"{letra}:\\"
+        if mapa >> i & 1 and k.GetDriveTypeW(raiz) == 2:  # 2 = DRIVE_REMOVABLE
+            nombre = ctypes.create_unicode_buffer(261)
+            k.GetVolumeInformationW(raiz, nombre, 261, None, None, None, None, 0)
+            unidades.append((raiz, nombre.value or "USB"))
+    return unidades
+
+
+def _carpetas_onedrive() -> list[Path]:
+    rutas = [os.environ.get(v) for v in ("OneDriveCommercial", "OneDriveConsumer", "OneDrive")]
+    perfil = Path(os.environ.get("USERPROFILE", Path.home()))
+    rutas += [str(p) for p in perfil.glob("OneDrive*")]
+    vistas, carpetas = set(), []
+    for r in rutas:
+        if r and Path(r).is_dir() and Path(r).resolve() not in vistas:
+            vistas.add(Path(r).resolve())
+            carpetas.append(Path(r))
+    return carpetas
+
+
+def _carpetas_google_drive() -> list[Path]:
+    """Google Drive para escritorio monta una unidad (normalmente G:) con "Mi unidad" / "My Drive"."""
+    candidatos = []
+    if os.name == "nt":
+        import string
+
+        for letra in string.ascii_uppercase:
+            for nombre in ("Mi unidad", "My Drive"):
+                candidatos.append(Path(f"{letra}:\\") / nombre)
+    perfil = Path(os.environ.get("USERPROFILE", Path.home()))
+    candidatos += [perfil / "Google Drive" / "Mi unidad", perfil / "Google Drive" / "My Drive", perfil / "Google Drive"]
+    vistas, carpetas = set(), []
+    for c in candidatos:
+        try:
+            if c.is_dir() and c.resolve() not in vistas:
+                vistas.add(c.resolve())
+                carpetas.append(c)
+        except OSError:
+            continue
+    return carpetas
+
+
+def destinos() -> list[dict]:
+    """Lugares donde se puede guardar la copia, detectados en esta computadora."""
+    lista = [{"tipo": "usb", "nombre": f"{nombre} ({raiz[:2]})", "ruta": str(Path(raiz) / SUBCARPETA)}
+             for raiz, nombre in _unidades_usb()]
+    lista += [{"tipo": "google_drive", "nombre": f"Google Drive ({c})", "ruta": str(c / SUBCARPETA)} for c in _carpetas_google_drive()]
+    lista += [{"tipo": "onedrive", "nombre": f"OneDrive ({c.name})", "ruta": str(c / SUBCARPETA)} for c in _carpetas_onedrive()]
+    return lista
+
+
+def tipo_de_copia(ruta: str | None) -> str | None:
+    if not ruta:
+        return None
+    for d in destinos():
+        if Path(d["ruta"]) == Path(ruta):
+            return d["tipo"]
+    return "carpeta"
+
+
+def configurar_copia(ruta: str | None) -> dict:
+    """Guarda (o quita, con None) la carpeta de copia, después de comprobar
+    que se puede escribir en ella. Queda en el .env: se usa sin reiniciar."""
+    ruta = (ruta or "").strip() or None
+    if ruta:
+        destino = Path(ruta)
+        if not destino.is_absolute():
+            raise OperacionInvalida("Escribe la ruta completa de la carpeta (por ejemplo E:\\Respaldos POS)")
+        if destino.resolve() == carpeta().resolve():
+            raise OperacionInvalida("La copia debe ir a otro lugar, no a la misma carpeta de los respaldos")
+        try:
+            destino.mkdir(parents=True, exist_ok=True)
+            prueba = destino / ".prueba_pos"
+            prueba.write_text("ok", encoding="utf-8")
+            prueba.unlink()
+        except OSError as e:
+            raise OperacionInvalida(f"No se puede escribir en {ruta}: {e.strerror or e}")
+    config.escribir_variable("CARPETA_RESPALDOS_COPIA", ruta)
+    settings.carpeta_respaldos_copia = ruta
+    _guardar_estado(copia_error=None)
+    return estado()
+
+
+def copiar_ultimo() -> dict:
+    """Copia ahora el respaldo más reciente a la carpeta de copia (para probarla)."""
+    if not settings.carpeta_respaldos_copia:
+        raise OperacionInvalida("No hay carpeta de copia configurada")
+    lista = archivos()
+    if not lista:
+        raise OperacionInvalida("Todavía no hay respaldos que copiar: primero haz uno")
+    error = _copiar(carpeta() / lista[0]["nombre"])
+    _guardar_estado(copia_error=error)
+    if error:
+        raise OperacionInvalida(error)
+    return {"nombre": lista[0]["nombre"], "carpeta": settings.carpeta_respaldos_copia}
