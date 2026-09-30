@@ -251,7 +251,7 @@ const SECCIONES = [
   { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: true, roles: ["admin"] },
   { id: "mi-password", texto: "Cambiar mi contraseña", icono: "candado", grupo: "Configuración", accion: "miPassword", existe: true, roles: TODOS },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas-impresoras", existe: true, roles: ["admin"] },
-  { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: false, roles: ["admin"] },
+  { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: true, roles: ["admin"] },
   { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
   { id: "ia", texto: "Asistente de IA (clave de Claude)", icono: "chispa", grupo: "Configuración", accion: "ia", existe: true, roles: ["admin"] },
   { id: "entrada-directa", texto: "Entrar directo a Vender en esta computadora", icono: "rayo", grupo: "Configuración", accion: "entradaDirecta", existe: true, roles: ["admin", "mostrador"] },

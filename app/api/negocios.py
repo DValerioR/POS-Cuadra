@@ -1,6 +1,7 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, undefer
 
 from app.core.auth import solo_admin, usuario_actual
@@ -40,7 +41,11 @@ def actualizar_negocio(datos: NegocioUpdate, usuario: Usuario = Depends(solo_adm
     negocio = db.get(Negocio, usuario.negocio_id)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(negocio, campo, valor)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Ya existe un negocio con ese nombre")
     db.refresh(negocio)
     return negocio
 

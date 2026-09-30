@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Datos del negocio · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Datos del negocio (solo administradores): nombre, datos fiscales (para
+    // facturar más adelante), textos del ticket con vista previa y redondeo.
+    const REGIMENES = {
+      "601": "General de Ley Personas Morales",
+      "603": "Personas Morales con Fines no Lucrativos",
+      "605": "Sueldos y Salarios",
+      "606": "Arrendamiento",
+      "612": "Personas Físicas con Actividades Empresariales y Profesionales",
+      "621": "Incorporación Fiscal",
+      "625": "Actividades Empresariales con ingresos a través de Plataformas Tecnológicas",
+      "626": "Régimen Simplificado de Confianza",
+    };
+    const ANCHO_TICKET = 48;
+
+    function pantallaNegocio() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        guardando: false,
+        original: null,
+        f: null,
+        regimenes: REGIMENES,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) this.cargar(await API.get("/negocio"));
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        cargar(n) {
+          this.original = n;
+          this.f = {
+            nombre: n.nombre, razon_social: n.razon_social || "", rfc: n.rfc || "", regimen_fiscal: n.regimen_fiscal || "",
+            codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "",
+            redondeo: n.redondeo_precio_venta === null ? "" : String(Number(n.redondeo_precio_venta)),
+          };
+        },
+        get cambios() {
+          if (!this.f || !this.original) return false;
+          const o = this.original;
+          const r = o.redondeo_precio_venta === null ? "" : String(Number(o.redondeo_precio_venta));
+          return this.f.nombre !== o.nombre || this.f.razon_social !== (o.razon_social || "") || this.f.rfc !== (o.rfc || "") ||
+            this.f.regimen_fiscal !== (o.regimen_fiscal || "") || this.f.codigo_postal !== (o.codigo_postal || "") ||
+            this.f.ticket_encabezado !== (o.ticket_encabezado || "") || this.f.ticket_pie !== (o.ticket_pie || "") || this.f.redondeo !== r;
+        },
+        async guardar() {
+          const f = this.f;
+          if (!f.nombre.trim()) return (this.error = "El negocio necesita un nombre.");
+          this.guardando = true;
+          this.error = "";
+          try {
+            const n = await API.put("/negocio", {
+              nombre: f.nombre.trim(),
+              razon_social: f.razon_social.trim() || null,
+              rfc: f.rfc.trim() || null,
+              regimen_fiscal: f.regimen_fiscal || null,
+              codigo_postal: f.codigo_postal.trim() || null,
+              ticket_encabezado: f.ticket_encabezado.trim() || null,
+              ticket_pie: f.ticket_pie.trim() || null,
+              redondeo_precio_venta: f.redondeo || null,
+            });
+            this.cargar(n);
+            document.querySelectorAll("[data-negocio]").forEach((e) => (e.textContent = n.nombre));
+            this.avisar("Listo: se guardaron los datos del negocio.");
+          } catch (e) {
+            this.error = e.message;
+            window.scrollTo(0, 0);
+          } finally {
+            this.guardando = false;
+          }
+        },
+        // Vista previa aproximada del ticket (texto centrado a 48 columnas).
+        centrar(texto) {
+          const t = texto.slice(0, ANCHO_TICKET);
+          return " ".repeat(Math.max(0, Math.floor((ANCHO_TICKET - t.length) / 2))) + t;
+        },
+        renglon(izq, der) {
+          return izq.slice(0, ANCHO_TICKET - der.length - 1).padEnd(ANCHO_TICKET - der.length) + der;
+        },
+        get ticket() {
+          if (!this.f) return "";
+          const lineas = [this.centrar(this.f.nombre.toUpperCase())];
+          for (const l of this.f.ticket_encabezado.split("\n")) if (l.trim()) lineas.push(this.centrar(l.trim()));
+          lineas.push("", this.renglon("Folio 1234", "29/09/2026 10:30"), "-".repeat(ANCHO_TICKET),
+                      this.renglon("2 PARACETAMOL 500MG C/10", "$70.00"), this.renglon("1 SHAMPOO 400ML", "$116.00"),
+                      "-".repeat(ANCHO_TICKET), this.renglon("TOTAL", "$186.00"), "");
+          for (const l of this.f.ticket_pie.split("\n")) if (l.trim()) lineas.push(this.centrar(l.trim()));
+          return lineas.join("\n");
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 4000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaNegocio()">
+
+  <header class="barra" data-pagina="negocio"></header>
+
+  <main class="contenido negocio-datos" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Los datos del negocio los cambia un administrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin && f">
+      <form class="pila" style="gap: 16px" @submit.prevent="guardar()">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#tienda"/></svg></span>
+          <div><h1>Datos del negocio</h1><p class="suave">Nombre, datos fiscales, ticket y redondeo de precios.</p></div>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">Negocio</div>
+          <label style="margin-top: 0">Nombre <span class="ayuda">(sale en la barra, en Inicio y arriba del ticket)</span></label>
+          <input x-model="f.nombre" maxlength="80">
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">Datos fiscales <span class="ayuda">(los de sus facturas; se usarán al facturar desde el sistema)</span></div>
+          <label style="margin-top: 0">Razón social</label>
+          <input x-model="f.razon_social" maxlength="200" placeholder="Como aparece en la constancia de situación fiscal">
+          <div class="rejilla-2">
+            <div><label>RFC</label><input x-model="f.rfc" maxlength="13" autocapitalize="characters" placeholder="12 o 13 caracteres"></div>
+            <div><label>Código postal <span class="ayuda">(lugar de expedición)</span></label><input x-model="f.codigo_postal" maxlength="5" inputmode="numeric"></div>
+          </div>
+          <label>Régimen fiscal</label>
+          <select x-model="f.regimen_fiscal">
+            <option value="">Sin elegir</option>
+            <template x-for="(texto, clave) in regimenes" :key="clave">
+              <option :value="clave" x-text="`${clave} - ${texto}`" :selected="clave === f.regimen_fiscal"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="panel ticket-negocio">
+          <div>
+            <div class="paso" style="margin-top: 0">Ticket</div>
+            <label style="margin-top: 0">Arriba <span class="ayuda">(dirección, teléfono, RFC…; una línea por renglón)</span></label>
+            <textarea rows="4" x-model="f.ticket_encabezado" maxlength="500"></textarea>
+            <label>Abajo <span class="ayuda">(agradecimiento, horario, redes…)</span></label>
+            <textarea rows="3" x-model="f.ticket_pie" maxlength="300"></textarea>
+          </div>
+          <div>
+            <div class="paso" style="margin-top: 0">Así se verá <span class="ayuda">(aproximado)</span></div>
+            <pre class="vista-ticket" x-text="ticket"></pre>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">Redondeo de precios de venta</div>
+          <p class="suave" style="margin-top: 0">Al calcular un precio (por margen o al cambiar impuestos) se redondea hacia arriba, sin pasar del precio máximo al público.</p>
+          <div class="interruptor">
+            <button type="button" :class="{ activo: f.redondeo === '' }" @click="f.redondeo = ''">Sin redondeo</button>
+            <button type="button" :class="{ activo: f.redondeo === '0.5' }" @click="f.redondeo = '0.5'">A 50 centavos</button>
+            <button type="button" :class="{ activo: f.redondeo === '1' }" @click="f.redondeo = '1'">A pesos enteros</button>
+          </div>
+        </div>
+
+        <div class="panel acciones-pedido">
+          <span class="suave" x-text="cambios ? 'Hay cambios sin guardar.' : 'Todo guardado.'"></span>
+          <button class="primario" style="flex: 0 0 auto" :disabled="guardando || !cambios" x-text="guardando ? 'Guardando…' : 'Guardar'"></button>
+        </div>
+      </form>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

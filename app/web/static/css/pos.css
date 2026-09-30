@@ -1349,3 +1349,14 @@ code.comando { display: block; margin-top: 6px; font-size: 13px; word-break: bre
   .cifras-ventas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cifra.principal { grid-column: 1 / -1; }
 }
+
+/* --- Datos del negocio --------------------------------------------------- */
+
+.negocio-datos { max-width: 980px; margin: 0 auto; }
+.ticket-negocio { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
+.vista-ticket {
+  margin: 0; padding: 16px 14px; background: #fff; border: 1px dashed var(--borde); border-radius: 6px;
+  font-family: "Consolas", "Courier New", monospace; font-size: 11px; line-height: 1.45; color: #222;
+  box-shadow: var(--sombra); white-space: pre; overflow-x: auto;
+}
+@media (max-width: 900px) { .ticket-negocio { grid-template-columns: 1fr; } }

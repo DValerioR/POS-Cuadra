@@ -24,6 +24,11 @@ class Negocio(Base):
     # Paso al que se redondean los precios de venta (1.00 = pesos enteros,
     # 0.50 = medios pesos). None = no redondear. Ver services/precios.py.
     redondeo_precio_venta: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
+    # Datos fiscales (los de sus facturas). Se usarán al facturar desde el POS.
+    razon_social: Mapped[str | None] = mapped_column(default=None)
+    rfc: Mapped[str | None] = mapped_column(default=None)
+    regimen_fiscal: Mapped[str | None] = mapped_column(default=None)  # clave del SAT, ej. "612"
+    codigo_postal: Mapped[str | None] = mapped_column(default=None)  # lugar de expedición
     # Líneas del ticket arriba (dirección, teléfono, RFC) y abajo (agradecimiento).
     ticket_encabezado: Mapped[str | None] = mapped_column(default=None)
     ticket_pie: Mapped[str | None] = mapped_column(default=None)
