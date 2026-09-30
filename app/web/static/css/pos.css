@@ -768,20 +768,11 @@ details.desglose table { margin-top: 8px; }
 
 /* --- Faltantes por proveedor --------------------------------------------- */
 
-.faltantes { max-width: 1100px; margin: 0 auto; }
+.faltantes { max-width: 760px; margin: 0 auto; }
 .proveedores-faltantes { display: flex; flex-wrap: wrap; gap: 8px; }
 .proveedores-faltantes .opcion { flex-direction: row; padding: 10px 16px; color: var(--texto); }
-.tabla-faltantes tr.otro-mejor td { background: var(--aviso-suave); }
-.tabla-faltantes tr.otro-mejor td:last-child { color: var(--aviso); }
-.sin-proveedor summary { cursor: pointer; }
-.sin-proveedor .tabla { margin-top: 12px; }
-
-@media print {
-  body { background: #fff; }
-  .barra, .no-imprimir, #asistente, .aviso-flotante { display: none !important; }
-  .contenido { padding: 0; }
-  .panel { box-shadow: none; border: 0; }
-}
+.faltantes .grande { display: flex; justify-content: center; gap: 10px; }
+.faltantes .mensaje { margin: 16px 0 0; }
 
 /* --- Centro de notificaciones ------------------------------------------ */
 

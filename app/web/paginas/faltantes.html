@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Faltantes por proveedor · POS</title>
+  <title>Reporte de faltantes · POS</title>
   <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="/static/app/icono-180.png">
@@ -12,10 +12,10 @@
   <link rel="stylesheet" href="/static/css/pos.css">
   <script src="/static/js/api.js"></script>
   <script>
-    // Faltantes por proveedor: lo que ese proveedor ha surtido y está en su
-    // mínimo o menos, con su último costo y, si otro proveedor lo dio más
-    // barato en su última compra, cuál y a cuánto. Aparte, los faltantes que
-    // todavía no tienen proveedor registrado (salen en todos los reportes).
+    // Generador del reporte de faltantes: se elige el proveedor y se descarga
+    // el Excel con lo que ese proveedor ha surtido y está en su mínimo o menos,
+    // su último costo y, si otro proveedor lo dio más barato, cuál y a cuánto.
+    // En otra hoja van los faltantes sin proveedor registrado.
     function pantallaFaltantes() {
       return {
         usuario: null,
@@ -23,9 +23,8 @@
         error: "",
         proveedores: [],
         proveedor: null,
-        r: null,
-        leyendo: false,
-        soloMejorOtro: false,
+        generando: false,
+        resultado: null,
 
         async init() {
           try {
@@ -40,35 +39,36 @@
         get puedeUsar() {
           return this.usuario && (this.usuario.rol === "admin" || this.usuario.rol === "bodega");
         },
-        async elegir(p) {
+        elegir(p) {
           this.proveedor = p;
-          this.leyendo = true;
+          this.resultado = null;
           this.error = "";
+        },
+        async generar() {
+          if (!this.proveedor || this.generando) return;
+          this.generando = true;
+          this.error = "";
+          this.resultado = null;
           try {
-            this.r = await API.get(`/reportes/faltantes?proveedor_id=${p.id}`);
+            const r = await API.get(`/reportes/faltantes?proveedor_id=${this.proveedor.id}`);
+            this.resultado = {
+              proveedor: r.proveedor,
+              productos: r.del_proveedor.length,
+              masBaratos: r.del_proveedor.filter((x) => x.mejor_proveedor).length,
+              sinProveedor: r.sin_proveedor.length,
+            };
+            if (this.resultado.productos || this.resultado.sinProveedor) {
+              window.location.href = `/reportes/faltantes/excel?proveedor_id=${this.proveedor.id}`;
+            }
           } catch (e) {
             this.error = e.message;
           } finally {
-            this.leyendo = false;
+            this.generando = false;
           }
         },
-        get lista() {
-          if (!this.r) return [];
-          return this.soloMejorOtro ? this.r.del_proveedor.filter((x) => x.mejor_proveedor) : this.r.del_proveedor;
+        plural(n, uno, varios) {
+          return `${n} ${n === 1 ? uno : varios}`;
         },
-        get conMejorOtro() {
-          return this.r ? this.r.del_proveedor.filter((x) => x.mejor_proveedor).length : 0;
-        },
-        fecha(f) {
-          if (!f) return "";
-          const [a, m, d] = f.split("-");
-          return `${d}/${m}/${a}`;
-        },
-        todos(x) {
-          return x.proveedores.map((p) => `${p.proveedor}: ${dinero(p.costo)} (${this.fecha(p.fecha)})`).join(" · ");
-        },
-        dinero,
-        cantidad,
       };
     }
   </script>
@@ -87,16 +87,15 @@
     </template>
 
     <template x-if="puedeUsar">
-      <div class="pila" style="gap: 16px">
-        <div class="encabezado no-imprimir" style="margin: 0">
-          <span class="circulo"><svg><use href="/static/iconos.svg#camion"/></svg></span>
-          <div><h1>Faltantes por proveedor</h1>
-            <p class="suave">Lo que está en su mínimo o menos, para pedirlo. Si otro proveedor lo dio más barato en su última compra, se marca en amarillo.</p></div>
+      <div class="panel">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#grafica"/></svg></span>
+          <div><h1>Reporte de faltantes</h1>
+            <p class="suave">Elige el proveedor y se genera en Excel la lista de lo que hay que pedirle.</p></div>
         </div>
 
-        <div class="mensaje error" x-show="error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
-
-        <div class="proveedores-faltantes no-imprimir">
+        <div class="paso">1. ¿A qué proveedor le vas a pedir?</div>
+        <div class="proveedores-faltantes">
           <template x-for="p in proveedores" :key="p.id">
             <button type="button" class="opcion" :class="{ activa: proveedor && proveedor.id === p.id }" @click="elegir(p)" x-text="p.nombre"></button>
           </template>
@@ -105,69 +104,36 @@
           </p>
         </div>
 
-        <div class="panel leyendo" x-show="leyendo"><span class="girando"></span><span>Preparando el reporte…</span></div>
+        <div class="paso separado">2. Genera el reporte</div>
+        <button type="button" class="primario grande" :disabled="!proveedor || generando" @click="generar()">
+          <svg class="ico"><use href="/static/iconos.svg#grafica"/></svg>
+          <span x-text="generando ? 'Generando…' : (proveedor ? `Generar Excel de ${proveedor.nombre}` : 'Generar Excel')"></span>
+        </button>
 
-        <template x-if="r && !leyendo">
-          <div class="pila" style="gap: 16px">
-            <div class="fila" style="flex-wrap: wrap; justify-content: space-between">
-              <div style="flex: 1 1 300px">
-                <h2 style="margin: 0" x-text="`Pedido para ${r.proveedor}`"></h2>
-                <p class="suave" style="margin: 0" x-text="`${fecha(r.fecha)} · ${r.del_proveedor.length} productos · costo estimado ${dinero(r.total_estimado)} sin impuestos`"></p>
-              </div>
-              <div class="fila no-imprimir" style="flex: 0 0 auto; gap: 8px">
-                <a class="boton" style="white-space: nowrap" :href="`/reportes/faltantes/excel?proveedor_id=${r.proveedor_id}`">Descargar Excel</a>
-                <button type="button" onclick="window.print()">Imprimir</button>
-              </div>
-            </div>
+        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
 
-            <div class="mensaje aviso" x-show="conMejorOtro" style="margin: 0">
-              <svg class="ico"><use href="/static/iconos.svg#precio"/></svg>
-              <span x-text="conMejorOtro === 1 ? '1 producto lo dio más barato otro proveedor en su última compra.' : `${conMejorOtro} productos los dio más barato otro proveedor en su última compra.`"></span>
-              <label class="casilla no-imprimir" style="margin: 0 0 0 auto"><input type="checkbox" x-model="soloMejorOtro"> Ver solo esos</label>
-            </div>
-
-            <div class="panel" style="padding: 0; overflow: hidden">
-              <table class="tabla tabla-faltantes" x-show="lista.length">
-                <thead><tr><th>Producto</th><th class="derecha ajustado">Hay</th><th class="derecha ajustado">Mín / máx</th><th class="derecha ajustado">Pedir</th><th class="derecha ajustado">Último costo aquí</th><th>Mejor precio con otro</th></tr></thead>
-                <tbody>
-                  <template x-for="x in lista" :key="x.producto_id">
-                    <tr :class="{ 'otro-mejor': x.mejor_proveedor }" :title="todos(x)">
-                      <td><div class="nombre" x-text="x.nombre"></div><div class="suave" style="font-size: 13px" x-text="x.clave || 'sin clave'"></div></td>
-                      <td class="derecha" x-text="cantidad(x.existencia)"></td>
-                      <td class="derecha suave" x-text="`${cantidad(x.minimo)} / ${cantidad(x.maximo)}`"></td>
-                      <td class="derecha"><strong x-text="cantidad(x.sugerido)"></strong></td>
-                      <td class="derecha"><span x-text="dinero(x.costo)"></span><div class="suave" style="font-size: 13px" x-text="fecha(x.fecha_costo)"></div></td>
-                      <td>
-                        <template x-if="x.mejor_proveedor">
-                          <div><strong x-text="`${x.mejor_proveedor}: ${dinero(x.mejor_costo)}`"></strong>
-                            <div style="font-size: 13px" x-text="`${fecha(x.mejor_fecha)} · aquí sale ${x.diferencia_porcentaje}% más caro`"></div></div>
-                        </template>
-                        <span class="suave" x-show="!x.mejor_proveedor">Este es el mejor</span>
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-              <p class="suave" style="padding: 16px 18px; margin: 0" x-show="!lista.length">Nada que pedir a este proveedor por ahora.</p>
-            </div>
-
-            <details class="panel sin-proveedor" x-show="r.sin_proveedor.length">
-              <summary><strong x-text="`Sin proveedor registrado (${r.sin_proveedor.length})`"></strong>
-                <span class="suave">: faltan y todavía no se sabe quién los surte; aparecen en todos los reportes.</span></summary>
-              <table class="tabla">
-                <thead><tr><th>Producto</th><th class="derecha ajustado">Hay</th><th class="derecha ajustado">Mín / máx</th><th class="derecha ajustado">Pedir</th></tr></thead>
-                <tbody>
-                  <template x-for="x in r.sin_proveedor" :key="x.producto_id">
-                    <tr><td><span class="nombre" x-text="x.nombre"></span> <span class="suave" style="font-size: 13px" x-text="x.clave || ''"></span></td>
-                      <td class="derecha" x-text="cantidad(x.existencia)"></td>
-                      <td class="derecha suave" x-text="`${cantidad(x.minimo)} / ${cantidad(x.maximo)}`"></td>
-                      <td class="derecha"><strong x-text="cantidad(x.sugerido)"></strong></td></tr>
-                  </template>
-                </tbody>
-              </table>
-            </details>
+        <template x-if="resultado && (resultado.productos || resultado.sinProveedor)">
+          <div class="mensaje ok">
+            <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
+            <span>
+              Listo, se descargó el reporte de <strong x-text="resultado.proveedor"></strong>:
+              <span x-text="plural(resultado.productos, 'producto por pedir', 'productos por pedir')"></span><span
+                x-show="resultado.masBaratos" x-text="` (${plural(resultado.masBaratos, 'lo dio', 'los dio')} más barato otro proveedor; van en amarillo)`"></span><span
+                x-show="resultado.sinProveedor" x-text="` y ${plural(resultado.sinProveedor, 'faltante', 'faltantes')} sin proveedor registrado en otra hoja`"></span>.
+            </span>
           </div>
         </template>
+        <template x-if="resultado && !resultado.productos && !resultado.sinProveedor">
+          <div class="mensaje info">
+            <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+            <span>No hay nada que pedirle a <strong x-text="resultado.proveedor"></strong> por ahora.</span>
+          </div>
+        </template>
+
+        <p class="ayuda" style="margin-top: 16px">
+          Entran los productos que ese proveedor ha surtido y están en su mínimo o menos. Para cada uno se sugiere
+          pedir hasta su máximo y se compara el último costo de cada proveedor.
+        </p>
       </div>
     </template>
   </main>

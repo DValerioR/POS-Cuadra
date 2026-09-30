@@ -221,11 +221,11 @@ const SECCIONES = [
 
   { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: true, roles: ["admin", "bodega"], tecla: "F3" },
   { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/mercancia", existe: true, roles: ["admin", "bodega"], tecla: "F4" },
-  { id: "faltantes", texto: "Faltantes por proveedor", icono: "grafica", grupo: "Inventario", ruta: "/faltantes", existe: true, roles: ["admin", "bodega"] },
   { id: "productos", texto: "Productos y precios", icono: "precio", grupo: "Inventario", ruta: "/catalogo", existe: true, roles: ["admin"] },
 
   { id: "reporte-ventas", texto: "Ventas del día", icono: "grafica", grupo: "Reportes", ruta: "/reportes/ventas", existe: false, roles: ["admin"] },
   { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/inventario?vista=por-caducar", existe: true, roles: ["admin", "bodega"] },
+  { id: "faltantes", texto: "Faltantes por proveedor (Excel)", icono: "camion", grupo: "Reportes", ruta: "/faltantes", existe: true, roles: ["admin", "bodega"] },
 
   { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: false, roles: ["admin"] },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas", existe: false, roles: ["admin"] },
@@ -285,8 +285,9 @@ async function pintarBarra() {
       montarAsistente();
     }
     nav.innerHTML += seccionesDe(usuario.rol)
-      // Notificaciones va en la campana; las rutas con "?" son vistas de otra pantalla.
-      .filter((s) => s.ruta && s.existe && s.id !== "notificaciones" && !s.ruta.includes("?"))
+      // Notificaciones va en la campana; las rutas con "?" son vistas de otra
+      // pantalla, y los reportes se sacan desde Inicio.
+      .filter((s) => s.ruta && s.existe && s.id !== "notificaciones" && !s.ruta.includes("?") && s.grupo !== "Reportes")
       .map((s) => enlace(s.ruta, s.texto, s.icono, s.id === actual))
       .join("");
     const nombre = usuario.nombre_completo || usuario.nombre_usuario;
