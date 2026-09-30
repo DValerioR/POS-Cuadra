@@ -54,7 +54,7 @@
           this.original = n;
           this.f = {
             nombre: n.nombre, razon_social: n.razon_social || "", rfc: n.rfc || "", regimen_fiscal: n.regimen_fiscal || "",
-            codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "",
+            codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "", ticket_logo: n.ticket_logo, logo_url: n.logo_url,
             redondeo: n.redondeo_precio_venta === null ? "" : String(Number(n.redondeo_precio_venta)),
           };
         },
@@ -64,7 +64,7 @@
           const r = o.redondeo_precio_venta === null ? "" : String(Number(o.redondeo_precio_venta));
           return this.f.nombre !== o.nombre || this.f.razon_social !== (o.razon_social || "") || this.f.rfc !== (o.rfc || "") ||
             this.f.regimen_fiscal !== (o.regimen_fiscal || "") || this.f.codigo_postal !== (o.codigo_postal || "") ||
-            this.f.ticket_encabezado !== (o.ticket_encabezado || "") || this.f.ticket_pie !== (o.ticket_pie || "") || this.f.redondeo !== r;
+            this.f.ticket_encabezado !== (o.ticket_encabezado || "") || this.f.ticket_pie !== (o.ticket_pie || "") || this.f.redondeo !== r || this.f.ticket_logo !== o.ticket_logo;
         },
         async guardar() {
           const f = this.f;
@@ -80,6 +80,7 @@
               codigo_postal: f.codigo_postal.trim() || null,
               ticket_encabezado: f.ticket_encabezado.trim() || null,
               ticket_pie: f.ticket_pie.trim() || null,
+              ticket_logo: f.ticket_logo,
               redondeo_precio_venta: f.redondeo || null,
             });
             this.cargar(n);
@@ -171,10 +172,17 @@
             <textarea rows="4" x-model="f.ticket_encabezado" maxlength="500"></textarea>
             <label>Abajo <span class="ayuda">(agradecimiento, horario, redes…)</span></label>
             <textarea rows="3" x-model="f.ticket_pie" maxlength="300"></textarea>
+            <label class="casilla" :class="{ apagada: !f.logo_url }" style="margin-top: 14px">
+              <input type="checkbox" x-model="f.ticket_logo" :disabled="!f.logo_url">
+              <span>Poner el logo arriba a la derecha <span class="ayuda" x-text="f.logo_url ? '(en blanco y negro)' : '(primero sube el logo en Configuración → Logo e imagen de inicio)'"></span></span>
+            </label>
           </div>
           <div>
             <div class="paso" style="margin-top: 0">Así se verá <span class="ayuda">(aproximado)</span></div>
-            <pre class="vista-ticket" x-text="ticket"></pre>
+            <div class="vista-ticket-papel">
+              <img class="vista-ticket-logo" x-show="f.ticket_logo && f.logo_url" :src="f.logo_url && `/negocio/logo-ticket?${f.logo_url.split('?')[1] || ''}`" alt="">
+              <pre class="vista-ticket" x-text="ticket"></pre>
+            </div>
           </div>
         </div>
 

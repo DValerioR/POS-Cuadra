@@ -3,9 +3,10 @@ se informa para reimprimir cuando la impresora responda."""
 
 from dataclasses import dataclass
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, undefer
 
 from app.impresion import transporte
+from app.impresion.logo import raster_para_ticket
 from app.impresion.escpos import Ticket
 from app.impresion.ticket import DatosTicket, armar_ticket
 from app.models import Caja, MetodoPago, Negocio, Usuario, Venta
@@ -15,6 +16,18 @@ from app.models import Caja, MetodoPago, Negocio, Usuario, Venta
 class ResultadoImpresion:
     impreso: bool
     error: str | None = None
+
+
+def logo_ticket(db: Session, negocio_id: int, columnas: int) -> tuple[int, int, bytes] | None:
+    """El logo en puntos para la esquina superior derecha, si el negocio
+    tiene logo y eligió ponerlo en el ticket."""
+    negocio = db.get(Negocio, negocio_id, options=[undefer(Negocio.logo_imagen)])
+    if not negocio.ticket_logo or not negocio.logo_imagen:
+        return None
+    try:
+        return raster_para_ticket(negocio.logo_imagen, columnas)
+    except Exception:
+        return None  # una imagen dañada no debe impedir imprimir el ticket
 
 
 def _datos(db: Session, venta: Venta, caja: Caja) -> DatosTicket:
@@ -27,6 +40,7 @@ def _datos(db: Session, venta: Venta, caja: Caja) -> DatosTicket:
         caja=db.get(Caja, venta.caja_id).nombre,
         cajero=cajero.nombre_completo,
         columnas=caja.impresora_columnas,
+        logo=logo_ticket(db, venta.negocio_id, caja.impresora_columnas),
     )
 
 
@@ -59,8 +73,10 @@ def reimprimir_venta(db: Session, venta: Venta, caja: Caja) -> ResultadoImpresio
     return _mandar(caja, ticket_de_venta(db, venta, caja, reimpresion=True))
 
 
-def imprimir_prueba(caja: Caja, abrir_cajon: bool) -> ResultadoImpresion:
+def imprimir_prueba(caja: Caja, abrir_cajon: bool, logo: tuple[int, int, bytes] | None = None) -> ResultadoImpresion:
     ticket = Ticket(caja.impresora_columnas)
+    if logo:
+        ticket.imagen(*logo)
     ticket.linea("PRUEBA DE IMPRESIÓN", "centro", negrita=True, doble=True)
     ticket.linea(f"Caja: {caja.nombre}", "centro")
     ticket.linea("Acentos: áéíóú ÁÉÍÓÚ ñ Ñ ü ¿¡", "centro")

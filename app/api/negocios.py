@@ -5,7 +5,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, undefer
 
 from app.core.auth import solo_admin, usuario_actual
+from app.core.config import settings
 from app.core.database import get_db
+from app.impresion.logo import fondo_transparente, vista_previa_png
 from app.models import Negocio, Usuario
 from app.schemas.negocio import NegocioOut, NegocioUpdate
 
@@ -61,6 +63,26 @@ def ver_logo(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(g
                     headers={"Cache-Control": "private, max-age=31536000"})
 
 
+@router.get("/logo-ticket")
+def ver_logo_ticket(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """El logo como sale impreso en el ticket (en puntos blanco y negro)."""
+    negocio = db.get(Negocio, usuario.negocio_id, options=[undefer(Negocio.logo_imagen)])
+    if not negocio.logo_imagen:
+        raise HTTPException(status_code=404, detail="El negocio no tiene logo")
+    return Response(vista_previa_png(negocio.logo_imagen), media_type="image/png",
+                    headers={"Cache-Control": "private, max-age=31536000"})
+
+
+@router.get("/logo-publico")
+def ver_logo_publico(db: Session = Depends(get_db)):
+    """El logo del negocio predeterminado, sin sesión (para la pantalla de
+    inicio de sesión). No es información privada."""
+    negocio = db.get(Negocio, settings.negocio_predeterminado, options=[undefer(Negocio.logo_imagen)])
+    if negocio is None or not negocio.logo_imagen:
+        raise HTTPException(status_code=404, detail="Sin logo")
+    return Response(negocio.logo_imagen, media_type=negocio.logo_tipo, headers={"Cache-Control": "no-cache"})
+
+
 @router.put("/logo", response_model=NegocioOut)
 async def subir_logo(request: Request, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
     """Cambia la imagen de inicio. El cuerpo es la imagen tal cual (PNG, JPG,
@@ -71,6 +93,11 @@ async def subir_logo(request: Request, usuario: Usuario = Depends(solo_admin), d
     tipo = tipo_de_imagen(datos)
     if tipo is None:
         raise HTTPException(status_code=422, detail="El archivo no es una imagen PNG, JPG, GIF o WEBP")
+    # Un logo sobre fondo blanco se guarda con ese fondo transparente, para que
+    # se vea limpio sobre la barra verde y el fondo de Inicio.
+    sin_fondo = fondo_transparente(datos)
+    if sin_fondo:
+        datos, tipo = sin_fondo
     negocio = db.get(Negocio, usuario.negocio_id)
     negocio.logo_imagen = datos
     negocio.logo_tipo = tipo

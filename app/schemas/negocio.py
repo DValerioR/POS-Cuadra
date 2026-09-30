@@ -22,6 +22,7 @@ class NegocioUpdate(BaseModel):
     redondeo_precio_venta: Decimal | None = Field(default=None, gt=0)
     ticket_encabezado: str | None = Field(default=None, max_length=500)
     ticket_pie: str | None = Field(default=None, max_length=300)
+    ticket_logo: bool | None = None
     razon_social: str | None = Field(default=None, max_length=200)
     rfc: str | None = None
     regimen_fiscal: str | None = None
@@ -71,6 +72,7 @@ class NegocioOut(BaseModel):
     redondeo_precio_venta: Decimal | None
     ticket_encabezado: str | None
     ticket_pie: str | None
+    ticket_logo: bool = False
     razon_social: str | None = None
     rfc: str | None = None
     regimen_fiscal: str | None = None

@@ -74,7 +74,8 @@ def prueba_impresion(
         caja = turnos.obtener_caja(db, usuario.negocio_id, caja_id)
     except ERRORES_NEGOCIO as e:
         raise a_http(e)
-    r = impresion.imprimir_prueba(caja, datos.abrir_cajon)
+    r = impresion.imprimir_prueba(caja, datos.abrir_cajon,
+                                  impresion.logo_ticket(db, usuario.negocio_id, caja.impresora_columnas))
     return ImpresionOut(impreso=r.impreso, error=r.error)
 
 

@@ -69,6 +69,13 @@ a.marca:hover { opacity: 0.9; }
   color: var(--primario);
 }
 .marca .logo svg { width: 22px; height: 22px; }
+/* Con el logo del negocio en lugar de la cruz: sin fondo, a lo ancho. */
+.marca .logo.con-imagen { display: flex; width: auto; height: auto; background: transparent; border-radius: 0; }
+.marca .logo.con-imagen img { height: 40px; width: auto; display: block; }
+.login .marca .logo.con-imagen { width: auto; height: auto; background: transparent; }
+.login .marca .logo.con-imagen img { height: 110px; }
+.circulo.con-imagen { background: transparent; width: auto; }
+.circulo.con-imagen img { height: 48px; width: auto; display: block; }
 .barra nav { display: flex; gap: 4px; height: 100%; min-width: 0; }
 .barra nav a {
   display: flex; align-items: center; gap: 8px;
@@ -1354,9 +1361,11 @@ code.comando { display: block; margin-top: 6px; font-size: 13px; word-break: bre
 
 .negocio-datos { max-width: 980px; margin: 0 auto; }
 .ticket-negocio { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
+.vista-ticket-papel { position: relative; background: #fff; border: 1px dashed var(--borde); border-radius: 6px; box-shadow: var(--sombra); padding-top: 4px; }
+.vista-ticket-logo { display: block; width: 42%; margin: 10px 14px 0 auto; image-rendering: pixelated; }
 .vista-ticket {
-  margin: 0; padding: 16px 14px; background: #fff; border: 1px dashed var(--borde); border-radius: 6px;
+  margin: 0; padding: 12px 14px 16px; background: transparent; border: 0;
   font-family: "Consolas", "Courier New", monospace; font-size: 11px; line-height: 1.45; color: #222;
-  box-shadow: var(--sombra); white-space: pre; overflow-x: auto;
+  white-space: pre; overflow-x: auto;
 }
 @media (max-width: 900px) { .ticket-negocio { grid-template-columns: 1fr; } }

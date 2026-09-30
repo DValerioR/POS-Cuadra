@@ -252,7 +252,7 @@ const SECCIONES = [
   { id: "mi-password", texto: "Cambiar mi contraseña", icono: "candado", grupo: "Configuración", accion: "miPassword", existe: true, roles: TODOS },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas-impresoras", existe: true, roles: ["admin"] },
   { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: true, roles: ["admin"] },
-  { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
+  { id: "imagen", texto: "Logo e imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
   { id: "ia", texto: "Asistente de IA (clave de Claude)", icono: "chispa", grupo: "Configuración", accion: "ia", existe: true, roles: ["admin"] },
   { id: "entrada-directa", texto: "Entrar directo a Vender en esta computadora", icono: "rayo", grupo: "Configuración", accion: "entradaDirecta", existe: true, roles: ["admin", "mostrador"] },
 
@@ -268,6 +268,19 @@ function seccionesDe(rol) {
 function paginaDeEntrada(rol) {
   const vender = SECCIONES.find((s) => s.id === "venta");
   return EntradaDirecta.activa() && vender.roles.includes(rol) ? vender.ruta : "/inicio";
+}
+
+// El logo del negocio en lugar de la cruz (si ya se subió uno). Si la imagen
+// no carga, se queda la cruz.
+function ponerLogo(contenedor, url) {
+  if (!contenedor || !url) return;
+  const img = new Image();
+  img.alt = "";
+  img.onload = () => {
+    contenedor.replaceChildren(img);
+    contenedor.classList.add("con-imagen");
+  };
+  img.src = url;
 }
 
 // --- Barra superior de las pantallas ---------------------------------------
@@ -304,6 +317,7 @@ async function pintarBarra() {
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
+    ponerLogo(barra.querySelector(".marca .logo"), negocio.logo_url);
     if (usuario.rol === "admin") {
       vigilarSolicitudes(barra.querySelector(".campana"));
       montarAsistente();

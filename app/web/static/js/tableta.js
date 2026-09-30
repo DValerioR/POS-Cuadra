@@ -46,6 +46,7 @@ function pantallaTableta() {
         const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
         this.usuario = usuario;
         this.negocio = negocio.nombre;
+        ponerLogo(this.$refs.logo, negocio.logo_url);
       } catch {
         return; // sin sesión: API manda al login
       } finally {

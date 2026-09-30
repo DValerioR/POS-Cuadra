@@ -20,6 +20,7 @@ class DatosTicket:
     caja: str
     cajero: str
     columnas: int = 48
+    logo: tuple[int, int, bytes] | None = None  # ver impresion/logo.py
 
 
 def _dinero(valor: Decimal) -> str:
@@ -35,6 +36,8 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
     t = Ticket(datos.columnas)
     fecha = venta.created_at.astimezone(ZoneInfo(settings.zona_horaria))
 
+    if datos.logo:
+        t.imagen(*datos.logo)
     t.linea(datos.negocio, "centro", negrita=True, doble=True)
     for renglon in (datos.encabezado or "").splitlines():
         t.linea(renglon.strip(), "centro")

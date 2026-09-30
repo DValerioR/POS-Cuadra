@@ -18,7 +18,11 @@
 
   <!-- Menús por tema, como los de PVWin -->
   <header class="barra-menus">
-    <span class="marca"><span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span><span x-text="negocio ? negocio.nombre : ''"></span></span>
+    <span class="marca">
+      <span class="logo" :class="{ 'con-imagen': negocio && negocio.logo_url }">
+        <template x-if="negocio && negocio.logo_url"><img :src="negocio.logo_url" alt=""></template>
+        <template x-if="!(negocio && negocio.logo_url)"><svg><use href="/static/iconos.svg#cruz"/></svg></template>
+      </span><span x-text="negocio ? negocio.nombre : ''"></span></span>
     <nav class="menus" role="menubar" x-cloak>
       <template x-for="(g, i) in grupos" :key="g.nombre">
         <div class="menu">
@@ -213,7 +217,10 @@
   <div class="velo" x-show="ventana === 'acerca'" x-cloak @click.self="cerrarVentana()">
     <div class="panel ventana-texto">
       <div class="encabezado">
-        <span class="circulo"><svg><use href="/static/iconos.svg#cruz"/></svg></span>
+        <span class="circulo" :class="{ 'con-imagen': negocio && negocio.logo_url }">
+          <template x-if="negocio && negocio.logo_url"><img :src="negocio.logo_url" alt=""></template>
+          <template x-if="!(negocio && negocio.logo_url)"><svg><use href="/static/iconos.svg#cruz"/></svg></template>
+        </span>
         <div><h2>Punto de venta</h2><p class="suave" x-text="negocio ? negocio.nombre : ''"></p></div>
       </div>
       <table class="tabla">

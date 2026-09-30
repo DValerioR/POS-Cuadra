@@ -2,8 +2,8 @@
 
 Las dos impresoras de la farmacia (Bixolon SRP-330II y Epson TM-T20II)
 hablan ESC/POS; solo se usa lo que ambas entienden igual. No se usa la
-librería python-escpos para no cargar dependencias (pyusb, Pillow...) que
-no hacen falta para imprimir texto, cortar y abrir el cajón.
+librería python-escpos para no cargar dependencias (pyusb...) que no hacen
+falta; el logo se convierte a puntos en impresion/logo.py.
 
 Además de los bytes, se arma una versión en texto plano del mismo ticket,
 para verlo en pantalla o en pruebas sin impresora.
@@ -62,6 +62,15 @@ class Ticket:
         for parte in partes[:-1]:
             self._escribir(parte, negrita=negrita)
         self._escribir(partes[-1].ljust(espacio) + " " + derecha, negrita=negrita)
+        return self
+
+    def imagen(self, bytes_renglon: int, alto: int, bits: bytes) -> "Ticket":
+        """Imagen en puntos (GS v 0), por ejemplo el logo. `bits`: un bit por
+        punto, 1 = negro, `bytes_renglon` bytes por renglón."""
+        self._bytes += ESC + b"a\x00" + GS + b"v0\x00" + bytes([
+            bytes_renglon % 256, bytes_renglon // 256, alto % 256, alto // 256,
+        ]) + bits + b"\n"
+        self._texto.append("[logo]".rjust(self.columnas))
         return self
 
     def separador(self, caracter: str = "-") -> "Ticket":

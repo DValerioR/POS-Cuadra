@@ -17,7 +17,7 @@
 <body class="tableta" x-data="pantallaTableta()">
 
   <header class="tableta-barra">
-    <div class="marca"><span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span><span x-text="negocio || 'Farmacia'"></span></div>
+    <div class="marca"><span class="logo" x-ref="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span><span x-text="negocio || 'Farmacia'"></span></div>
     <span class="tableta-usuario" x-show="usuario" x-text="usuario && (usuario.nombre_completo || usuario.nombre_usuario)"></span>
     <button type="button" class="tableta-salir" @click="salir()"><svg class="ico"><use href="/static/iconos.svg#salir"/></svg>Salir</button>
   </header>

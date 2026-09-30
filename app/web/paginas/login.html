@@ -17,7 +17,7 @@
   <div class="login-fondo">
     <div class="panel login" x-data="pantallaLogin()">
       <div class="marca">
-        <span class="logo"><svg><use href="/static/iconos.svg#cruz"/></svg></span>
+        <span class="logo" id="logo-login"><svg><use href="/static/iconos.svg#cruz"/></svg></span>
         <span>Punto de venta</span>
       </div>
       <p class="subtitulo">Escribe tu usuario y contraseña para empezar.</p>
@@ -61,5 +61,6 @@
       };
     }
   </script>
+  <script>ponerLogo(document.getElementById("logo-login"), "/negocio/logo-publico");</script>
 </body>
 </html>

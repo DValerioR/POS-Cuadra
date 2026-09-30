@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, LargeBinary, Numeric, func
+from sqlalchemy import DateTime, LargeBinary, Numeric, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -32,4 +32,6 @@ class Negocio(Base):
     # Líneas del ticket arriba (dirección, teléfono, RFC) y abajo (agradecimiento).
     ticket_encabezado: Mapped[str | None] = mapped_column(default=None)
     ticket_pie: Mapped[str | None] = mapped_column(default=None)
+    # Imprimir el logo (la imagen de inicio) arriba a la derecha del ticket.
+    ticket_logo: Mapped[bool] = mapped_column(default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
