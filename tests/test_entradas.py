@@ -151,6 +151,24 @@ def test_registrar_crea_lotes_y_actualiza_costo(como_bodega, catalogo, proveedor
     assert db.get(Producto, catalogo["amox"].id).precio_venta == D(60)  # no se pidió cambiar precio
 
 
+def test_solo_factura_no_mueve_inventario(como_bodega, catalogo, proveedor, db):
+    """Facturas cuya mercancía ya estaba en el inventario: se guarda el costo y
+    cómo llama el proveedor a cada producto, pero no se suman piezas."""
+    antes = lotes(db, catalogo["shampoo"])
+    r = entrada(como_bodega, proveedor, [{"producto_id": catalogo["shampoo"].id, "cantidad": "2", "factor": "6",
+                                          "costo_unitario": "300", "descripcion_proveedor": "SHAMPOO 400ML CAJA C/6"}],
+                afecta_inventario=False)
+    assert r.status_code == 201, r.text
+    assert r.json()["afecta_inventario"] is False
+    assert lotes(db, catalogo["shampoo"]) == antes
+    db.expire_all()
+    assert db.get(Producto, catalogo["shampoo"].id).costo == D(50)
+    # La equivalencia sí quedó: la próxima factura lo reconoce sola.
+    _, shampoo = leer_xml(como_bodega).json()["renglones"]
+    assert shampoo["producto"]["id"] == catalogo["shampoo"].id
+    assert como_bodega.get("/entradas").json()[0]["afecta_inventario"] is False
+
+
 def test_la_siguiente_vez_se_reconoce_solo(como_bodega, catalogo, proveedor):
     entrada(como_bodega, proveedor, [{"producto_id": catalogo["shampoo"].id, "cantidad": "2", "factor": "6",
                                       "costo_unitario": "300", "descripcion_proveedor": "SHAMPOO   400ML  CAJA C/6",

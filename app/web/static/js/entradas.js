@@ -128,6 +128,7 @@ function pantallaEntradas() {
         archivo_nombre: b.archivo_nombre || null,
         proveedor_id: b.proveedor_id || "",
         pedido_id: "",
+        afecta_inventario: true,
         proveedor_leido: b.proveedor_id ? null : (b.proveedor_nombre || b.proveedor_rfc ? { nombre: b.proveedor_nombre || "", rfc: b.proveedor_rfc || "" } : null),
         folio: b.folio || "",
         fecha_factura: b.fecha_factura || "",
@@ -397,6 +398,7 @@ function pantallaEntradas() {
           total_factura: e.total_factura === "" ? null : String(e.total_factura),
           archivo_id: e.archivo_id,
           pedido_id: e.pedido_id ? Number(e.pedido_id) : null,
+          afecta_inventario: e.afecta_inventario,
           renglones: e.renglones.map((r) => ({
             producto_id: r.producto.id,
             cantidad: String(r.cantidad),

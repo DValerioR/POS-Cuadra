@@ -12,6 +12,10 @@ directo al inventario. Al confirmar:
   reconocerlo solo la siguiente vez.
 
 Una factura (proveedor + folio) entra una sola vez.
+
+Una entrada de "solo historial" (`afecta_inventario=False`) es para facturas
+cuya mercancía ya está en el inventario (por ejemplo, las de antes de usar
+el sistema): guarda proveedor, costos y equivalencias, pero no toca lotes.
 """
 
 import re
@@ -274,6 +278,7 @@ def registrar(
     total_factura: Decimal | None = None,
     archivo_id: int | None = None,
     notas: str | None = None,
+    afecta_inventario: bool = True,
 ) -> Entrada:
     """No hace commit."""
     _validar_rol(usuario)
@@ -300,7 +305,7 @@ def registrar(
     entrada = Entrada(
         negocio_id=usuario.negocio_id, proveedor_id=proveedor.id, folio=folio, fecha_factura=fecha_factura,
         fecha_recepcion=fecha_recepcion, origen=origen, usuario_id=usuario.id, total_factura=total_factura,
-        subtotal=Decimal(0), notas=(notas or "").strip() or None,
+        subtotal=Decimal(0), notas=(notas or "").strip() or None, afecta_inventario=afecta_inventario,
     )
     db.add(entrada)
     db.flush()
@@ -318,14 +323,16 @@ def registrar(
         piezas = (r.cantidad * r.factor).quantize(CENTAVO, ROUND_HALF_UP)
         costo_pieza = (r.costo_unitario / r.factor).quantize(Decimal("0.0001"), ROUND_HALF_UP)
 
-        lote = _lote_destino(db, producto, numero_lote, r.caducidad)
-        lote.cantidad += piezas
-        lote.costo_unitario = costo_pieza
+        lote = None
+        if afecta_inventario:
+            lote = _lote_destino(db, producto, numero_lote, r.caducidad)
+            lote.cantidad += piezas
+            lote.costo_unitario = costo_pieza
 
         renglon = EntradaRenglon(
             producto_id=producto.id, descripcion_proveedor=r.descripcion_proveedor, clave_proveedor=r.clave_proveedor,
             cantidad=r.cantidad, factor=r.factor, piezas=piezas, costo_unitario=r.costo_unitario,
-            costo_pieza=costo_pieza, lote_id=lote.id, numero_lote=numero_lote, caducidad=r.caducidad,
+            costo_pieza=costo_pieza, lote_id=lote.id if lote else None, numero_lote=numero_lote, caducidad=r.caducidad,
             costo_anterior=producto.costo, precio_anterior=producto.precio_venta,
         )
         producto.costo = costo_pieza

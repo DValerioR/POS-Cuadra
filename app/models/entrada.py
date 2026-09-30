@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, LargeBinary, Numeric, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, ForeignKey, LargeBinary, Numeric, UniqueConstraint, func, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -79,6 +79,10 @@ class Entrada(Base):
     # Suma de renglones (cantidad × costo, sin impuestos).
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     notas: Mapped[str | None] = mapped_column(default=None)
+    # False = solo historial: la mercancía ya estaba en el inventario (facturas
+    # viejas, o que se dieron de entrada en otro sistema). Guarda proveedor,
+    # costos y equivalencias, pero no suma piezas a ningún lote.
+    afecta_inventario: Mapped[bool] = mapped_column(default=True, server_default=true())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     renglones: Mapped[list["EntradaRenglon"]] = relationship(order_by="EntradaRenglon.id")
@@ -98,7 +102,7 @@ class EntradaRenglon(Base):
     piezas: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # las que entran al inventario
     costo_unitario: Mapped[Decimal] = mapped_column(Numeric(12, 4))  # por unidad de la factura, sin impuestos
     costo_pieza: Mapped[Decimal] = mapped_column(Numeric(12, 4))
-    lote_id: Mapped[int] = mapped_column(ForeignKey("lotes.id"))
+    lote_id: Mapped[int | None] = mapped_column(ForeignKey("lotes.id"), default=None)  # None si no afectó inventario
     numero_lote: Mapped[str | None] = mapped_column(default=None)
     caducidad: Mapped[date | None] = mapped_column(Date, default=None)
     costo_anterior: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), default=None)

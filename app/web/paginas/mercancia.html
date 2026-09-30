@@ -57,11 +57,12 @@
                         <div class="suave" style="font-size: 14px">
                           <span x-text="`${x.productos} productos · ${textoOrigen(x.origen)}`"></span>
                           <span x-show="x.precios_cambiados" x-text="` · ${x.precios_cambiados} precios cambiados`"></span>
+                          <span class="etiqueta gris" x-show="!x.afecta_inventario">Solo factura</span>
                           <a x-show="x.archivo_id" :href="`/entradas/archivos/${x.archivo_id}`" target="_blank"> · ver factura</a>
                         </div>
                       </td>
                       <td x-text="fecha(x.fecha_recepcion)"></td>
-                      <td class="derecha" x-text="cantidad(x.piezas)"></td>
+                      <td class="derecha" x-text="x.afecta_inventario ? cantidad(x.piezas) : '—'"></td>
                       <td class="derecha" x-text="dinero(x.subtotal)"></td>
                     </tr>
                   </template>
@@ -139,6 +140,11 @@
                 <div><label>Fecha de la factura</label><input type="date" x-model="e.fecha_factura"></div>
                 <div><label>Fecha de recepción</label><input type="date" x-model="e.fecha_recepcion"></div>
               </div>
+              <label class="casilla" style="margin-top: 12px">
+                <input type="checkbox" :checked="!e.afecta_inventario" @change="e.afecta_inventario = !$event.target.checked">
+                <span>La mercancía ya está en el inventario: solo registrar la factura
+                  <span class="ayuda">(guarda el proveedor, los costos y cómo llama a cada producto, sin sumar piezas)</span></span>
+              </label>
               <div x-effect="cargarPedidos(e.proveedor_id)" x-show="pedidosAbiertos.length">
                 <label>¿Es de un pedido? <span class="ayuda">(para comparar lo pedido contra lo que llegó)</span></label>
                 <select x-model="e.pedido_id">
@@ -256,7 +262,7 @@
                   <div class="suave" style="font-size: 14px" x-show="faltantes.length" x-text="`Falta: ${faltantes.join(', ')}.`"></div>
                 </div>
                 <button type="button" class="primario grande" style="flex: 0 0 auto; width: auto; min-width: 240px" :disabled="faltantes.length > 0 || guardando" @click="confirmar()"
-                        x-text="guardando ? 'Guardando…' : 'Confirmar entrada'"></button>
+                        x-text="guardando ? 'Guardando…' : (e.afecta_inventario ? 'Confirmar entrada' : 'Registrar la factura')"></button>
               </div>
             </div>
           </div>
@@ -268,7 +274,9 @@
             <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
             <h2>Entrada registrada</h2>
             <p class="suave" x-text="`${resultado.proveedor} · factura ${resultado.folio}`"></p>
-            <p><strong x-text="`${cantidad(resultado.piezas)} piezas`"></strong> de <span x-text="resultado.productos"></span> productos ya están en el inventario.
+            <p x-show="resultado.afecta_inventario"><strong x-text="`${cantidad(resultado.piezas)} piezas`"></strong> de <span x-text="resultado.productos"></span> productos ya están en el inventario.</p>
+            <p x-show="!resultado.afecta_inventario">Se guardó la factura con <span x-text="resultado.productos"></span> productos (costos y proveedor), sin mover el inventario.</p>
+            <p>
               <span x-show="resultado.precios_cambiados" x-text="resultado.precios_cambiados === 1 ? 'Se cambió el precio de venta de 1 producto.' : `Se cambiaron los precios de venta de ${resultado.precios_cambiados} productos.`"></span></p>
             <p x-show="resultado.pedido"><a :href="resultado.pedido && `/pedidos?id=${resultado.pedido.id}`"
                x-text="resultado.pedido && (resultado.pedido.estado === 'recibido' ? `Llegó todo el pedido #${resultado.pedido.folio}: ver la comparación` : `Ver qué faltó del pedido #${resultado.pedido.folio}`)"></a></p>

@@ -143,6 +143,8 @@ class EntradaIn(BaseModel):
     archivo_id: int | None = None
     notas: str | None = Field(default=None, max_length=500)
     pedido_id: int | None = None  # el pedido que surte esta factura, si hay
+    # False: solo historial (la mercancía ya estaba en el inventario).
+    afecta_inventario: bool = True
     renglones: list[RenglonIn] = Field(min_length=1, max_length=500)
 
 
@@ -157,6 +159,7 @@ def _resumen(db: Session, e: Entrada) -> dict:
     return {
         "id": e.id, "proveedor": e.proveedor.nombre, "folio": e.folio, "fecha_factura": e.fecha_factura,
         "fecha_recepcion": e.fecha_recepcion, "origen": e.origen, "subtotal": e.subtotal,
+        "afecta_inventario": e.afecta_inventario,
         "total_factura": e.total_factura, "productos": len(e.renglones),
         "piezas": sum((r.piezas for r in e.renglones), Decimal(0)),
         "precios_cambiados": sum(1 for r in e.renglones if r.precio_nuevo is not None),
@@ -174,6 +177,7 @@ def registrar(datos: EntradaIn, usuario: Usuario = Depends(usuario_actual), db: 
             db, usuario, datos.proveedor_id, datos.folio, datos.fecha_recepcion,
             [entradas.RenglonEntrada(**r.model_dump()) for r in datos.renglones],
             datos.origen, datos.fecha_factura, datos.total_factura, datos.archivo_id, datos.notas,
+            afecta_inventario=datos.afecta_inventario,
         )
         if datos.pedido_id is not None:
             pedidos.ligar_entrada(db, usuario, datos.pedido_id, entrada.id)
