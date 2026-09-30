@@ -387,6 +387,8 @@ p { margin: 0 0 12px; }
 
 /* Ventana de búsqueda por nombre (F2) */
 .velo.arriba { align-items: flex-start; padding-top: 8vh; }
+/* Lo que abre más abajo no puede medir toda la pantalla: le resta ese espacio. */
+.velo.arriba > * { max-height: calc(92vh - 16px); }
 .busqueda-nombre { width: min(760px, 100%); padding: 0; overflow: hidden; box-shadow: var(--sombra-alta); }
 .busqueda-nombre .buscador input { border: 0; border-bottom: 1px solid var(--borde); border-radius: 0; box-shadow: none; }
 .busqueda-nombre .buscador input:focus { outline: none; }
