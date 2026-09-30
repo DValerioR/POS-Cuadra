@@ -152,3 +152,17 @@ def test_turno_de_otro_negocio(como_admin, cliente_de, crear_usuario, otro_negoc
     t = abrir(ajeno, caja_ajena).json()
     assert como_admin.get(f"/turnos/{t['id']}/corte").status_code == 404
     assert cerrar(como_admin, t["id"], "0").status_code == 404
+
+
+def test_lista_de_cajas_dice_quien_tiene_turno_y_no_se_desactiva(como_admin, admin, db, negocio):
+    from app.models import Caja
+    c = Caja(negocio_id=negocio.id, nombre="Mostrador 9")
+    db.add(c)
+    db.commit()
+    r = como_admin.post("/turnos", json={"caja_id": c.id, "tipo": "manana", "fondo_inicial": "0"})
+    assert r.status_code == 201, r.text
+    fila = next(x for x in como_admin.get("/cajas").json() if x["id"] == c.id)
+    assert fila["turno_abierto_por"] == admin.nombre_completo and fila["turno_abierto_desde"]
+    r = como_admin.put(f"/cajas/{c.id}", json={"activa": False})
+    assert r.status_code == 409 and "turno abierto" in r.json()["detail"]
+    assert como_admin.put(f"/cajas/{c.id}", json={"impresora_modo": "red", "impresora_direccion": "192.168.1.60:9100"}).status_code == 200

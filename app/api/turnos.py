@@ -33,7 +33,15 @@ def _guardar_caja(db: Session, caja: Caja) -> CajaOut:
 @router.get("/cajas", response_model=list[CajaOut])
 def listar_cajas(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     cajas = db.scalars(select(Caja).where(Caja.negocio_id == usuario.negocio_id).order_by(Caja.nombre))
-    return [CajaOut.de(c) for c in cajas]
+    abiertos = {
+        caja_id: (nombre, desde) for caja_id, nombre, desde in db.execute(
+            select(Turno.caja_id, Usuario.nombre_completo, Turno.abierto_en)
+            .join(Usuario, Usuario.id == Turno.abierto_por_id)
+            .where(Turno.negocio_id == usuario.negocio_id, Turno.cerrado_en.is_(None))
+        )
+    }
+    return [CajaOut.de(c).model_copy(update=dict(zip(("turno_abierto_por", "turno_abierto_desde"), abiertos[c.id])))
+            if c.id in abiertos else CajaOut.de(c) for c in cajas]
 
 
 @router.post("/cajas", response_model=CajaOut, status_code=201)
@@ -49,6 +57,8 @@ def actualizar_caja(caja_id: int, datos: CajaUpdate, usuario: Usuario = Depends(
         caja = turnos.obtener_caja(db, usuario.negocio_id, caja_id)
     except ERRORES_NEGOCIO as e:
         raise a_http(e)
+    if datos.activa is False and caja.activa and turnos.turno_abierto(db, caja.id):
+        raise HTTPException(status_code=409, detail="La caja tiene un turno abierto: haz el corte antes de desactivarla")
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(caja, campo, valor)
     return _guardar_caja(db, caja)

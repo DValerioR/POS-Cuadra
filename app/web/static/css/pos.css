@@ -1292,3 +1292,27 @@ body.tableta { font-size: 18px; }
 .roles-usuario .opcion span { font-size: 13px; font-weight: 400; color: var(--texto-suave); }
 .seccion-usuario { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--linea); }
 @media (max-width: 600px) { .roles-usuario { grid-template-columns: 1fr; } }
+
+/* --- Cajas e impresoras -------------------------------------------------- */
+
+.cajas-pantalla { max-width: 860px; margin: 0 auto; }
+.esta-computadora { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.esta-computadora select { flex: 0 1 260px; }
+.fila-caja {
+  display: flex; align-items: center; gap: 14px; width: 100%;
+  border: 0; border-bottom: 1px solid var(--linea); border-radius: 0; background: transparent;
+  padding: 14px 18px; text-align: left; font-weight: 400;
+}
+.fila-caja:hover { background: var(--primario-suave); }
+.fila-caja .ico-grande { width: 30px; height: 30px; flex: 0 0 auto; color: var(--primario); }
+.fila-caja .datos { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.fila-caja .datos .suave { font-size: 14px; }
+.fila-caja.inactiva { opacity: 0.6; }
+.ventana-caja { width: min(660px, 100%); max-height: calc(92vh - 16px); overflow-y: auto; box-shadow: var(--sombra-alta); }
+.modos-impresora { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.modos-impresora .opcion { align-items: flex-start; text-align: left; gap: 4px; padding: 12px; }
+.modos-impresora .opcion span { font-size: 13px; font-weight: 400; color: var(--texto-suave); }
+.agente-caja { margin-top: 4px; }
+code.token { font-size: 15px; padding: 6px 10px; background: var(--fondo); border-radius: 8px; word-break: break-all; }
+code.comando { display: block; margin-top: 6px; font-size: 13px; word-break: break-all; }
+@media (max-width: 600px) { .modos-impresora { grid-template-columns: 1fr; } }

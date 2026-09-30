@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cajas e impresoras · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Cajas e impresoras (solo administradores): qué caja es esta computadora,
+    // dar de alta cajas, y configurar e imprimir la prueba de la impresora de
+    // tickets de cada una (de red o USB con el agente; ver agente_impresion/LEEME.md).
+    const MODOS = {
+      ninguna: { texto: "Sin impresora", ayuda: "No imprime tickets ni abre el cajón." },
+      red: { texto: "Impresora de red", ayuda: "Conectada con cable de red al módem (Ethernet)." },
+      agente: { texto: "USB con agente", ayuda: "Conectada por USB a la computadora de la caja, que corre el agente de impresión." },
+    };
+
+    function pantallaCajas() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        cajas: [],
+        estaCaja: CajaLocal.obtener(),
+        nueva: "",
+        c: null, // caja en edición (copia)
+        tokenNuevo: "",
+        guardando: false,
+        probando: false,
+        errorVentana: "",
+        modos: MODOS,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) await this.cargar();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+          window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && this.c) this.cerrar(); });
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        async cargar() {
+          this.cajas = await API.get("/cajas");
+        },
+        get cajaDeAqui() {
+          return this.cajas.find((c) => c.id === this.estaCaja) || null;
+        },
+        elegirEstaCaja(valor) {
+          const id = Number(valor) || null;
+          if (id) CajaLocal.guardar(id); else CajaLocal.quitar();
+          this.estaCaja = id;
+          this.avisar(id ? `Listo: esta computadora es ${this.cajaDeAqui.nombre}.` : "Listo: esta computadora ya no es caja.");
+        },
+        textoImpresora(c) {
+          if (c.impresora_modo === "ninguna") return "Sin impresora";
+          return `${MODOS[c.impresora_modo].texto} · ${c.impresora_direccion || "sin dirección"} · papel ${c.impresora_columnas >= 42 ? "80" : "58"} mm`;
+        },
+        async crear() {
+          const nombre = this.nueva.trim();
+          if (!nombre) return;
+          try {
+            const caja = await API.post("/cajas", { nombre });
+            this.nueva = "";
+            await this.cargar();
+            this.editar(this.cajas.find((c) => c.id === caja.id));
+            this.avisar(`Se creó ${nombre}. Ahora configura su impresora.`);
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+
+        // --- Editar ---------------------------------------------------------
+        editar(c) {
+          this.c = {
+            ...c,
+            ip: this.ipDe(c),
+            papel: c.impresora_columnas >= 42 ? 80 : 58,
+          };
+          this.tokenNuevo = "";
+          this.errorVentana = "";
+        },
+        cerrar() {
+          this.c = null;
+        },
+        // "192.168.1.60:9100" o "http://192.168.1.20:9110" -> "192.168.1.60"
+        ipDe(c) {
+          return (c.impresora_direccion || "").replace(/^https?:\/\//, "").replace(/:\d+\/?$/, "");
+        },
+        get direccion() {
+          const ip = (this.c.ip || "").trim();
+          if (!ip || this.c.impresora_modo === "ninguna") return null;
+          return this.c.impresora_modo === "red" ? `${ip}:9100` : `http://${ip}:9110`;
+        },
+        generarToken() {
+          const bytes = crypto.getRandomValues(new Uint8Array(18));
+          this.tokenNuevo = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, (x) => ({ "+": "-", "/": "_", "=": "" }[x]));
+        },
+        get comandoAgente() {
+          return `python C:\\POS-agente\\agente.py --impresora "NOMBRE DE LA IMPRESORA" --token ${this.tokenNuevo || "EL_TOKEN"}`;
+        },
+        async copiar(texto) {
+          try {
+            await navigator.clipboard.writeText(texto);
+            this.avisar("Copiado.");
+          } catch {
+            this.errorVentana = "No se pudo copiar; selecciónalo y cópialo a mano.";
+          }
+        },
+        async guardar() {
+          const c = this.c;
+          if (!c.nombre.trim()) return (this.errorVentana = "La caja necesita un nombre.");
+          if (c.impresora_modo !== "ninguna" && !/^[\w.-]+$/.test((c.ip || "").trim())) {
+            return (this.errorVentana = "Escribe la dirección IP (por ejemplo 192.168.1.60).");
+          }
+          if (c.impresora_modo === "agente" && !c.impresora_tiene_token && !this.tokenNuevo) {
+            return (this.errorVentana = "Genera el token del agente (el mismo se pone en la computadora de la caja).");
+          }
+          const datos = {
+            nombre: c.nombre.trim(),
+            impresora_modo: c.impresora_modo,
+            impresora_direccion: this.direccion,
+            impresora_columnas: c.papel === 80 ? 48 : 32,
+          };
+          if (this.tokenNuevo) datos.impresora_token = this.tokenNuevo;
+          this.guardando = true;
+          this.errorVentana = "";
+          try {
+            const guardada = await API.put(`/cajas/${c.id}`, datos);
+            await this.cargar();
+            this.c = { ...this.c, ...guardada };
+            this.avisar(`Listo: se guardó ${guardada.nombre}.`);
+            return true;
+          } catch (e) {
+            this.errorVentana = e.message;
+            return false;
+          } finally {
+            this.guardando = false;
+          }
+        },
+        async probar(abrirCajon) {
+          if (!(await this.guardar())) return;
+          this.probando = true;
+          try {
+            const r = await API.post(`/cajas/${this.c.id}/prueba-impresion`, { abrir_cajon: abrirCajon });
+            if (r.impreso) this.avisar(abrirCajon ? "Se mandó la prueba y la orden de abrir el cajón." : "Se mandó el ticket de prueba. Revisa acentos, Ñ y el corte.");
+            else this.errorVentana = `No se pudo imprimir: ${r.error}`;
+          } catch (e) {
+            this.errorVentana = e.message;
+          } finally {
+            this.probando = false;
+          }
+        },
+        async cambiarActiva(activa) {
+          try {
+            await API.put(`/cajas/${this.c.id}`, { activa });
+            await this.cargar();
+            this.c.activa = activa;
+            this.avisar(activa ? "La caja vuelve a estar disponible." : "Caja desactivada: ya no se pueden abrir turnos en ella.");
+          } catch (e) {
+            this.errorVentana = e.message;
+          }
+        },
+        fechaHora(f) {
+          return new Date(f).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 4000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaCajas()">
+
+  <header class="barra" data-pagina="cajas"></header>
+
+  <main class="contenido cajas-pantalla" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Las cajas e impresoras las configura un administrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#impresora"/></svg></span>
+          <div><h1>Cajas e impresoras</h1><p class="suave">Los puntos de cobro, su impresora de tickets y su cajón.</p></div>
+        </div>
+
+        <div class="panel esta-computadora">
+          <div>
+            <strong>Esta computadora</strong>
+            <p class="suave" style="margin: 2px 0 0">Se elige una vez en cada computadora de mostrador; al vender se usa esa caja.</p>
+          </div>
+          <select :value="estaCaja || ''" @change="elegirEstaCaja($event.target.value)">
+            <option value="">No es caja</option>
+            <template x-for="c in cajas.filter((x) => x.activa)" :key="c.id">
+              <option :value="c.id" x-text="c.nombre" :selected="c.id === estaCaja"></option>
+            </template>
+          </select>
+        </div>
+
+        <div class="panel" style="padding: 0; overflow: hidden">
+          <template x-for="c in cajas" :key="c.id">
+            <button type="button" class="fila-caja" :class="{ inactiva: !c.activa }" @click="editar(c)">
+              <svg class="ico-grande"><use href="/static/iconos.svg#caja"/></svg>
+              <span class="datos">
+                <strong x-text="c.nombre + (c.id === estaCaja ? ' (esta computadora)' : '')"></strong>
+                <span class="suave" x-text="textoImpresora(c)"></span>
+              </span>
+              <span class="etiqueta verde" x-show="c.turno_abierto_por" x-text="c.turno_abierto_por && `Turno abierto: ${c.turno_abierto_por}`"></span>
+              <span class="etiqueta gris" x-show="!c.activa">Desactivada</span>
+              <span class="etiqueta" x-show="c.activa && c.impresora_modo === 'ninguna'">Sin impresora</span>
+            </button>
+          </template>
+          <form class="fila nueva-categoria" @submit.prevent="crear()">
+            <input x-model="nueva" placeholder="Nombre de una caja nueva (ej. Mostrador 3)" maxlength="40">
+            <button style="flex: 0 0 auto" :disabled="!nueva.trim()">+ Agregar</button>
+          </form>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <!-- Editar caja -->
+  <div class="velo arriba" x-show="c" x-cloak @click.self="cerrar()">
+    <template x-if="c">
+      <form class="panel ventana-caja" @submit.prevent="guardar()">
+        <h2 style="margin-top: 0" x-text="c.nombre || 'Caja'"></h2>
+        <p class="suave" style="margin-top: 0" x-show="c.turno_abierto_por"
+           x-text="c.turno_abierto_por && `Turno abierto por ${c.turno_abierto_por} desde ${fechaHora(c.turno_abierto_desde)}.`"></p>
+        <label>Nombre</label>
+        <input x-model="c.nombre" maxlength="40">
+
+        <label>Impresora de tickets</label>
+        <div class="modos-impresora">
+          <template x-for="(m, clave) in modos" :key="clave">
+            <button type="button" class="opcion" :class="{ activa: c.impresora_modo === clave }" @click="c.impresora_modo = clave">
+              <strong x-text="m.texto"></strong><span x-text="m.ayuda"></span></button>
+          </template>
+        </div>
+
+        <template x-if="c.impresora_modo !== 'ninguna'">
+          <div>
+            <div class="rejilla-2">
+              <div>
+                <label x-text="c.impresora_modo === 'red' ? 'IP de la impresora' : 'IP de la computadora de esta caja'"></label>
+                <input x-model="c.ip" placeholder="Ej. 192.168.1.60" inputmode="decimal">
+                <p class="ayuda" style="margin: 4px 0 0" x-text="direccion ? `Se usará ${direccion}` : 'Conviene fijarla en el módem (reservación DHCP) para que no cambie.'"></p>
+              </div>
+              <div>
+                <label>Papel</label>
+                <div class="interruptor">
+                  <button type="button" :class="{ activo: c.papel === 80 }" @click="c.papel = 80">80 mm</button>
+                  <button type="button" :class="{ activo: c.papel === 58 }" @click="c.papel = 58">58 mm</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="agente-caja" x-show="c.impresora_modo === 'agente'">
+              <label>Token del agente <span class="ayuda">(la contraseña entre el servidor y la computadora de la caja)</span></label>
+              <div class="fila" style="gap: 8px; flex-wrap: wrap">
+                <span class="etiqueta verde" x-show="c.impresora_tiene_token && !tokenNuevo">Ya tiene token</span>
+                <code class="token" x-show="tokenNuevo" x-text="tokenNuevo"></code>
+                <button type="button" style="flex: 0 0 auto" @click="generarToken()" x-text="c.impresora_tiene_token || tokenNuevo ? 'Generar otro' : 'Generar token'"></button>
+              </div>
+              <template x-if="tokenNuevo">
+                <div class="mensaje info" style="margin: 10px 0 0">
+                  <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+                  <span>En la computadora de la caja, el agente se arranca con este token (cambia el nombre de la impresora; ver agente_impresion/LEEME.md). Se ve solo ahora: guárdalo al copiar.
+                    <code class="comando" x-text="comandoAgente"></code></span>
+                  <button type="button" @click="copiar(comandoAgente)">Copiar</button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <div class="mensaje error" x-show="errorVentana" style="margin-top: 12px"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorVentana"></span></div>
+
+        <div class="fila separado" style="flex-wrap: wrap; gap: 8px">
+          <button type="button" style="flex: 0 0 auto" @click="cerrar()">Cerrar <kbd>Esc</kbd></button>
+          <button type="button" style="flex: 0 0 auto" x-show="c.impresora_modo !== 'ninguna'" :disabled="guardando || probando" @click="probar(false)">
+            <svg class="ico"><use href="/static/iconos.svg#impresora"/></svg><span x-text="probando ? 'Imprimiendo…' : 'Imprimir prueba'"></span></button>
+          <button type="button" style="flex: 0 0 auto" x-show="c.impresora_modo !== 'ninguna'" :disabled="guardando || probando" @click="probar(true)">Probar cajón</button>
+          <button class="primario" style="flex: 1 1 160px" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar'"></button>
+        </div>
+
+        <div class="seccion-usuario">
+          <div class="fila" style="justify-content: space-between; flex-wrap: wrap" x-show="c.activa">
+            <span class="suave">Si ya no se usa, desactívala: no se podrán abrir turnos en ella, pero sus ventas y cortes se conservan.</span>
+            <button type="button" class="texto-peligro" style="flex: 0 0 auto" @click="cambiarActiva(false)">Desactivar</button>
+          </div>
+          <div class="fila" style="justify-content: space-between; flex-wrap: wrap" x-show="!c.activa">
+            <span class="suave">Está desactivada.</span>
+            <button type="button" class="primario" style="flex: 0 0 auto" @click="cambiarActiva(true)">Volver a activar</button>
+          </div>
+        </div>
+      </form>
+    </template>
+  </div>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

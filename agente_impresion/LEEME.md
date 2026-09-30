@@ -22,8 +22,9 @@ falta: en la caja se cambia `impresora_modo` a `red` y la dirección a
    ```
    Por ejemplo `EPSON TM-T20II Receipt` o `BIXOLON SRP-330II`.
 
-4. Inventar un token (una contraseña larga, distinta en cada caja), por ejemplo
-   con `python -c "import secrets; print(secrets.token_urlsafe(24))"`.
+4. El token (una contraseña larga, distinta en cada caja) se genera en el POS:
+   Inicio → Configuración → Cajas e impresoras → la caja → "USB con agente" →
+   "Generar token". Ahí mismo aparece el comando del paso 5 listo para copiar.
 
 5. Probarlo a mano:
    ```
@@ -37,16 +38,10 @@ falta: en la caja se cambia `impresora_modo` a `red` y la dirección a
    New-NetFirewallRule -DisplayName "Agente impresion POS" -Direction Inbound -Protocol TCP -LocalPort 9110 -RemoteAddress IP-DEL-SERVIDOR -Action Allow
    ```
 
-7. En el POS (como admin), configurar la caja con `PUT /cajas/{id}`:
-   ```json
-   {
-     "impresora_modo": "agente",
-     "impresora_direccion": "http://IP-DE-ESTA-PC:9110",
-     "impresora_token": "EL_TOKEN"
-   }
-   ```
-   y probar con `POST /cajas/{id}/prueba-impresion` (`{"abrir_cajon": true}`
-   para probar también el cajón). Revisa que los acentos y la Ñ salgan bien.
+7. En el POS (como admin), en Cajas e impresoras: poner la IP de esta
+   computadora, el papel (80 o 58 mm), Guardar, y usar "Imprimir prueba" y
+   "Probar cajón". Revisa que los acentos y la Ñ salgan bien. (Por API es
+   `PUT /cajas/{id}` y `POST /cajas/{id}/prueba-impresion`.)
 
 8. Que arranque solo al prender la computadora: en el Programador de tareas,
    crear una tarea "Al iniciar el sistema", que se ejecute aunque no haya
