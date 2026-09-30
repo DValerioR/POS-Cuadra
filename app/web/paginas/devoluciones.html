@@ -114,7 +114,7 @@
                     <td>
                       <div class="nombre" x-text="r.nombre"></div>
                       <div x-show="Number(r.descuento) > 0"><span class="etiqueta verde" x-text="r.oferta_texto || 'Oferta'"></span></div>
-                      <div class="suave" style="font-size: 14px" x-show="r.paquete_id && eligePiezas">Va en paquete: se regresa completo</div>
+                      <div class="suave" style="font-size: 14px" x-show="r.paquete_id && eligePiezas">Va en paquete: se regresa junto con el otro producto</div>
                       <div class="suave" style="font-size: 14px" x-show="Number(r.cantidad_devuelta) > 0"
                            x-text="`Ya regresó ${cantidad(r.cantidad_devuelta)}`"></div>
                       <template x-if="eligePiezas && cuantas(r) > 0 && lotesPendientes(r).length > 1">
@@ -130,7 +130,7 @@
                       </template>
                     </td>
                     <td class="derecha">
-                      <span x-text="dinero(precioPagado(r))"></span>
+                      <span x-text="dinero(precioMostrado(r))"></span>
                     </td>
                     <td class="centro" x-text="cantidad(r.cantidad)"></td>
                     <td class="centro" x-show="eligePiezas">

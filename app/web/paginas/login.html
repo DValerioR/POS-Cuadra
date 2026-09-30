@@ -50,7 +50,7 @@
             const r = await API.post("/auth/login", { usuario: this.usuario, password: this.password });
             const volver = new URLSearchParams(location.search).get("volver");
             // Solo rutas internas, para no redirigir a otro sitio.
-            location.href = volver && volver.startsWith("/") && !volver.startsWith("//") ? volver : paginaDeEntrada(r.usuario.rol);
+            location.href = volver && volver.startsWith("/") && !volver.startsWith("//") && !volver.startsWith("/login") ? volver : paginaDeEntrada(r.usuario.rol);
           } catch (e) {
             this.error = e.message;
             this.password = "";

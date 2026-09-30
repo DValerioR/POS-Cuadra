@@ -88,32 +88,52 @@ def test_paquete(como_admin, caja, prods):
     # Un paquete (300 → 270): $30 de ahorro repartido 250:50.
     assert [x["descuento"] for x in cot["renglones"]] == ["25.00", "5.00"]
     assert cot["total"] == "320.00"
-    assert cot["renglones"][1]["oferta"] == "Paquete con PAÑALES"
+    assert cot["renglones"][1]["oferta"] == "1 en paquete con PAÑALES"  # la otra toallita va a precio normal
     # Solo pañales: no hay paquete.
     assert como_admin.post("/ventas/cotizar", json={"renglones": [r(panal, 1)]}).json()["descuento"] == "0"
 
 
-def test_paquete_solo_se_devuelve_completo(como_admin, caja, prods):
+def test_paquete_por_pares(como_admin, caja, prods):
+    panal, toallitas = prods["panal"], prods["toallitas"]
+    assert nueva(como_admin, panal, "paquete", 270, paquete_con_id=toallitas.id).status_code == 201
+
+    def cotizar(n_panal, n_toallitas):
+        return como_admin.post("/ventas/cotizar", json={"renglones": [r(panal, n_panal), r(toallitas, n_toallitas)]}).json()
+
+    # 2 pañales y 1 toallitas: un paquete ($270) y un pañal a precio normal ($250).
+    cot = cotizar(2, 1)
+    assert cot["total"] == "520.00"
+    assert [x["oferta"] for x in cot["renglones"]] == ["1 en paquete con TOALLITAS", "Paquete con PAÑALES"]
+    # 2 y 2: dos paquetes.
+    assert cotizar(2, 2)["total"] == "540.00"
+
+
+def test_paquete_no_se_rompe_al_devolver(como_admin, caja, prods):
     from tests.test_devoluciones import cambiar
     panal, toallitas, jarabe = prods["panal"], prods["toallitas"], prods["jarabe"]
     assert nueva(como_admin, panal, "paquete", 270, paquete_con_id=toallitas.id).status_code == 201
-    v = vender(como_admin, caja, [r(panal, 1), r(toallitas, 1), r(jarabe, 1)], efectivo="350").json()
+    v = vender(como_admin, caja, [r(panal, 2), r(toallitas, 1), r(jarabe, 1)], efectivo="600").json()
+    assert v["total"] == "600.00"  # 270 del paquete + 250 del pañal de más + 80 del jarabe
     ids = {x["nombre"]: x["id"] for x in v["renglones"]}
 
-    def devolver(*nombres):
+    def devolver(**piezas):
         return como_admin.post(f"/ventas/{v['id']}/devoluciones", json={
             "caja_id": caja.id, "motivo": "no le quedó",
-            "piezas": [{"renglon_id": ids[n], "cantidad": "1"} for n in nombres]})
+            "piezas": [{"renglon_id": ids[n.upper().replace("PANAL", "PAÑALES")], "cantidad": str(c)} for n, c in piezas.items()]})
 
-    # Solo una parte del paquete: no se puede, ni como devolución ni como cambio.
-    d = devolver("TOALLITAS")
-    assert d.status_code == 409 and "paquete completo" in d.json()["detail"]
-    c = cambiar(como_admin, v, caja, [{"renglon_id": ids["PAÑALES"], "cantidad": "1"}], [r(jarabe, 1)])
-    assert c.status_code == 409
-    # Lo que no va en el paquete se devuelve normal.
-    assert devolver("JARABE").status_code == 201
-    # El paquete completo sí: regresa lo que se pagó por los dos.
-    d = devolver("PAÑALES", "TOALLITAS")
+    # Las toallitas solas romperían el paquete.
+    d = devolver(toallitas=1)
+    assert d.status_code == 409 and "regresar también" in d.json()["detail"]
+    assert devolver(panal=2).status_code == 409  # el segundo pañal va en el paquete
+    assert cambiar(como_admin, v, caja, [{"renglon_id": ids["TOALLITAS"], "cantidad": "1"}], [r(jarabe, 1)]).status_code == 409
+    # El pañal de más se regresa a precio normal; el paquete queda completo.
+    d = devolver(panal=1)
+    assert d.status_code == 201, d.text
+    assert d.json()["total"] == "250.00"
+    # Ahora ya solo queda el paquete: se regresa completo o nada.
+    assert devolver(panal=1).status_code == 409
+    assert devolver(jarabe=1).json()["total"] == "80.00"
+    d = devolver(panal=1, toallitas=1)
     assert d.status_code == 201, d.text
     assert d.json()["total"] == "270.00"
 

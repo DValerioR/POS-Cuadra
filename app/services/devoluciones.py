@@ -24,7 +24,7 @@ from app.models import (
     Devolucion, DevolucionRenglon, EstadoVenta, Lote, MetodoPago, RolUsuario, TipoDevolucion, Usuario, Venta,
     VentaRenglon, VentaRenglonLote,
 )
-from app.services import turnos, ventas
+from app.services import ofertas_venta, turnos, ventas
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 from app.services.ventas import RenglonSolicitado
 
@@ -141,29 +141,60 @@ def _piezas_solicitadas(venta: Venta, solicitadas: list[PiezaDevuelta]) -> Pieza
                 piezas.append((asignacion, tomar, ventas.importe_de_piezas(renglon, tomar)))
                 ya_pedido[asignacion.id] += tomar
                 pendiente -= tomar
-    _paquetes_completos(venta, ya_pedido)
+    return _ajustar_paquetes(venta, piezas, ya_pedido)
+
+
+def _ajustar_paquetes(venta: Venta, piezas: Piezas, ya_pedido: dict[int, Decimal]) -> Piezas:
+    """Lo vendido en paquete va por pares (una pieza de cada producto); las
+    piezas de más se cobraron a precio normal. Al devolver:
+    - no se puede romper un paquete: si se regresa una pieza que va en
+      paquete, debe regresar también la del otro producto;
+    - se regresa la diferencia entre lo que valía lo que tenía el cliente y lo
+      que vale lo que se queda (así una pieza de más se regresa a precio normal)."""
+    grupos: dict[int, list[VentaRenglon]] = defaultdict(list)
+    for r in venta.renglones:
+        if r.oferta is not None and r.oferta.tipo == "paquete" and r.descuento > 0:
+            grupos[r.oferta_id].append(r)
+    for renglones in grupos.values():
+        por_producto: dict[int, list[VentaRenglon]] = defaultdict(list)
+        for r in renglones:
+            por_producto[r.producto_id].append(r)
+        if len(por_producto) != 2:
+            continue
+
+        def suma(valor) -> list[Decimal]:
+            return [sum((valor(r) for r in rs), Decimal(0)) for rs in por_producto.values()]
+
+        vendidas = suma(lambda r: r.cantidad)
+        tiene = [v - d for v, d in zip(vendidas, suma(lambda r: sum((a.cantidad_devuelta for a in r.lotes), Decimal(0))))]
+        regresa = suma(lambda r: sum((ya_pedido[a.id] for a in r.lotes), Decimal(0)))
+        if not any(regresa):
+            continue
+        queda = [t - k for t, k in zip(tiene, regresa)]
+        sueltas_antes = [t - min(tiene) for t in tiene]
+        sueltas_despues = [q - min(queda) for q in queda]
+        if any(despues > antes for antes, despues in zip(sueltas_antes, sueltas_despues)):
+            a, b = (rs[0].nombre for rs in por_producto.values())
+            raise OperacionInvalida(
+                f"{a} y {b} se vendieron en paquete: para regresar uno hay que regresar también el otro"
+            )
+
+        precios = [rs[0].precio_unitario for rs in por_producto.values()]
+        ahorro = sum((r.descuento for r in renglones), Decimal(0)) / min(vendidas)
+
+        def valor(cantidades: list[Decimal]) -> Decimal:
+            return sum((c * p for c, p in zip(cantidades, precios)), Decimal(0)) - min(cantidades) * ahorro
+
+        del_grupo = [i for i, (a, _, _) in enumerate(piezas) if a.renglon_id in {r.id for r in renglones}]
+        pesos = [piezas[i][1] * _precio(renglones, piezas[i][0]) for i in del_grupo]
+        partes = ofertas_venta.repartir((valor(tiene) - valor(queda)).quantize(CENTAVO), pesos)
+        for i, parte in zip(del_grupo, partes):
+            piezas[i] = (piezas[i][0], piezas[i][1], parte)
     return piezas
 
 
-def _paquetes_completos(venta: Venta, ya_pedido: dict[int, Decimal]) -> None:
-    """Lo vendido en paquete solo se regresa completo: si se devuelve algo de
-    un paquete, deben venir todas las piezas pendientes de sus productos
-    (así nadie se queda con un producto a precio de paquete)."""
-    paquetes: dict[int, list[VentaRenglon]] = defaultdict(list)
-    for r in venta.renglones:
-        if r.oferta is not None and r.oferta.tipo == "paquete" and r.descuento > 0:
-            paquetes[r.oferta_id].append(r)
-    for renglones in paquetes.values():
-        pedido = {r.id: sum((ya_pedido[a.id] for a in r.lotes), Decimal(0)) for r in renglones}
-        if not any(pedido.values()):
-            continue
-        pendientes = {r.id: sum((a.cantidad - a.cantidad_devuelta for a in r.lotes), Decimal(0)) for r in renglones}
-        if any(pedido[r.id] < pendientes[r.id] for r in renglones):
-            lista = " y ".join(f"{pendientes[r.id].normalize():f} {r.nombre}" for r in renglones)
-            raise OperacionInvalida(
-                f"Se vendió en paquete: para devolverlo hay que regresar el paquete completo ({lista})"
-            )
-
+def _precio(renglones: list[VentaRenglon], asignacion: VentaRenglonLote) -> Decimal:
+    return next(r.precio_unitario for r in renglones if r.id == asignacion.renglon_id)
 
 
 def calcular_reembolso(

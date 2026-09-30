@@ -12,7 +12,8 @@ const API = {
       credentials: "same-origin",
     });
     if (respuesta.status === 401 && ruta !== "/auth/login") {
-      location.href = "/login?volver=" + encodeURIComponent(location.pathname);
+      // En la pantalla de entrada no se recarga: borraría lo que se está escribiendo.
+      if (location.pathname !== "/login") location.href = "/login?volver=" + encodeURIComponent(location.pathname);
       throw new Error("Inicia sesión");
     }
     const texto = await respuesta.text();

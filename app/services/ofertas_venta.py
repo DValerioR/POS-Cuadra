@@ -155,13 +155,17 @@ def quitar(db: Session, usuario: Usuario, oferta_id: int) -> Oferta:
     return oferta
 
 
+def _otro(oferta: Oferta, producto_id: int):
+    """El otro producto de un paquete."""
+    return oferta.paquete_con if producto_id == oferta.producto_id else oferta.producto
+
+
 def texto(oferta: Oferta, producto_id: int) -> str:
     """Cómo se llama la oferta en el ticket y en la pantalla de venta."""
     if oferta.tipo in PIEZAS_POR:
         return f"Oferta {oferta.tipo}"
     if oferta.tipo == "paquete":
-        otro = oferta.paquete_con if producto_id == oferta.producto_id else oferta.producto
-        return f"Paquete con {otro.nombre}"
+        return f"Paquete con {_otro(oferta, producto_id).nombre}"
     if oferta.tipo == "descuento" and oferta.precio and oferta.producto.precio_venta:
         porcentaje = ((1 - oferta.precio / oferta.producto.precio_venta) * 100).quantize(Decimal("1"), ROUND_HALF_UP)
         if porcentaje > 0:
@@ -179,7 +183,7 @@ class Aplicada:
     texto: str | None = None
 
 
-def _repartir(total: Decimal, pesos: list[Decimal]) -> list[Decimal]:
+def repartir(total: Decimal, pesos: list[Decimal]) -> list[Decimal]:
     """Reparte `total` en proporción a `pesos`, al centavo; el último se queda
     con lo que sobre para que la suma sea exacta."""
     suma = sum(pesos, Decimal(0))
@@ -211,6 +215,7 @@ def calcular(db: Session, negocio_id: int, renglones: list[tuple[Producto, Decim
         precios[p.id] = Decimal(p.precio_venta or 0)
 
     descuentos: dict[int, tuple[Decimal, Oferta]] = {}  # descuento total por producto
+    textos: dict[int, str] = {}
     for o in ofertas:
         pid, q, precio = o.producto_id, cantidades[o.producto_id], precios[o.producto_id]
         if o.tipo in ("descuento", "precio_especial"):
@@ -226,15 +231,19 @@ def calcular(db: Session, negocio_id: int, renglones: list[tuple[Producto, Decim
             paquetes = min(q, cantidades[otro]).to_integral_value(rounding=ROUND_FLOOR)
             ahorro = precio + precios[otro] - o.precio
             if paquetes > 0 and ahorro > 0:
-                a, b = _repartir((paquetes * ahorro).quantize(CENTAVO), [precio, precios[otro]])
+                a, b = repartir((paquetes * ahorro).quantize(CENTAVO), [precio, precios[otro]])
                 descuentos[pid] = (a, o)
                 descuentos[otro] = (b, o)
+                # Solo un paquete por cada par; las piezas de más van a precio normal.
+                for x in (pid, otro):
+                    if cantidades[x] > paquetes:
+                        textos[x] = f"{paquetes.normalize():f} en paquete con {_otro(o, x).nombre}"
 
     for pid, (total, oferta) in descuentos.items():
         indices = [i for i, (p, _) in enumerate(renglones) if p.id == pid]
-        partes = _repartir(total, [Decimal(renglones[i][1]) for i in indices])
+        partes = repartir(total, [Decimal(renglones[i][1]) for i in indices])
         for i, parte in zip(indices, partes):
-            resultado[i] = Aplicada(parte, oferta, texto(oferta, pid))
+            resultado[i] = Aplicada(parte, oferta, textos.get(pid) or texto(oferta, pid))
     return resultado
 
 

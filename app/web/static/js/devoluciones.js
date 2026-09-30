@@ -218,16 +218,64 @@ function pantallaDevoluciones() {
       this.piezas[renglon.id] = this.disponible(renglon);
       this.completarPaquete(renglon);
     },
-    // Lo vendido en paquete solo se regresa completo: marcar uno marca todo el paquete.
+    // Paquetes (igual que el servidor): van por pares, una pieza de cada
+    // producto; las piezas de más se cobraron a precio normal.
+    paquete(id) {
+      const productos = {};
+      const renglones = this.venta.renglones.filter((r) => r.paquete_id === id);
+      renglones.forEach((r) => {
+        const p = (productos[r.producto_id] ||= { renglones: [], precio: centavos(r.precio_unitario), vendidas: 0, tiene: 0 });
+        p.renglones.push(r);
+        p.vendidas += Number(r.cantidad);
+        p.tiene += this.disponible(r);
+      });
+      const lista = Object.values(productos);
+      const descuento = renglones.reduce((s, r) => s + centavos(r.descuento), 0);
+      return { lista, ahorro: descuento / Math.min(...lista.map((p) => p.vendidas)) };
+    },
+    regresaDe(p) {
+      return p.renglones.reduce((s, r) => s + this.cuantas(r), 0);
+    },
+    // ¿Regresar estas cantidades deja una pieza de paquete sin su pareja?
+    rompePaquete(g, regresa) {
+      const queda = g.lista.map((p, i) => p.tiene - regresa[i]);
+      return g.lista.some((p, i) => queda[i] - Math.min(...queda) > p.tiene - Math.min(...g.lista.map((x) => x.tiene)));
+    },
+    valorPaquete(g, cantidades) {
+      return cantidades.reduce((s, c, i) => s + c * g.lista[i].precio, 0) - Math.min(...cantidades) * g.ahorro;
+    },
+    // Si lo marcado rompe un paquete, se ajusta el otro producto (lo más parecido a lo que ya tenía).
     completarPaquete(renglon) {
       if (!renglon.paquete_id) return;
-      const marcar = this.cuantas(renglon) > 0;
-      this.venta.renglones
-        .filter((r) => r.paquete_id === renglon.paquete_id)
-        .forEach((r) => { this.piezas[r.id] = marcar ? this.disponible(r) : 0; });
+      const g = this.paquete(renglon.paquete_id);
+      if (g.lista.length !== 2) return;
+      const regresa = g.lista.map((p) => this.regresaDe(p));
+      if (!this.rompePaquete(g, regresa)) return;
+      const otro = g.lista.findIndex((p) => !p.renglones.includes(renglon));
+      let mejor = null;
+      for (let k = 0; k <= g.lista[otro].tiene; k++) {
+        const prueba = [...regresa];
+        prueba[otro] = k;
+        if (!this.rompePaquete(g, prueba) && (mejor === null || Math.abs(k - regresa[otro]) < Math.abs(mejor - regresa[otro]))) mejor = k;
+      }
+      let resto = mejor;
+      g.lista[otro].renglones.forEach((r) => {
+        this.piezas[r.id] = Math.min(this.disponible(r), resto);
+        resto -= this.piezas[r.id];
+      });
     },
 
     // Lo que se cobró por pieza: con oferta, su parte del descuento (igual que el servidor).
+    // En la tabla: si no todas las piezas fueron en paquete, el precio normal
+    // (la etiqueta dice cuántas iban en paquete).
+    precioMostrado(r) {
+      if (r.paquete_id) {
+        const g = this.paquete(r.paquete_id);
+        const p = g.lista.find((x) => x.renglones.includes(r));
+        if (p && p.vendidas > Math.min(...g.lista.map((x) => x.vendidas))) return Number(r.precio_unitario);
+      }
+      return this.precioPagado(r);
+    },
     precioPagado(r) {
       return Number(r.descuento) > 0 ? Number(r.importe) / Number(r.cantidad) : Number(r.precio_unitario);
     },
@@ -238,10 +286,16 @@ function pantallaDevoluciones() {
     // Lo que se regresa, en centavos.
     get totalARegresar() {
       if (this.modo === "cancelar") return this.porRegresar;
-      const suma = this.piezasElegidas.reduce(
-        (s, r) => s + Math.round(this.precioPagado(r) * 100 * this.cuantas(r)),
-        0
-      );
+      let suma = this.piezasElegidas
+        .filter((r) => !r.paquete_id)
+        .reduce((s, r) => s + Math.round(this.precioPagado(r) * 100 * this.cuantas(r)), 0);
+      // En un paquete se regresa lo que valía lo que tenía menos lo que vale lo que se queda.
+      new Set(this.piezasElegidas.map((r) => r.paquete_id).filter(Boolean)).forEach((id) => {
+        const g = this.paquete(id);
+        const tiene = g.lista.map((p) => p.tiene);
+        const queda = g.lista.map((p, i) => tiene[i] - this.regresaDe(p));
+        suma += Math.round(this.valorPaquete(g, tiene) - this.valorPaquete(g, queda));
+      });
       return Math.min(suma, this.porRegresar);
     },
     // Igual que el servidor: primero a tarjeta (hasta lo que se pagó con
