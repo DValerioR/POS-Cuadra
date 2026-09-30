@@ -369,7 +369,7 @@
     <div class="panel ventana" x-show="enTerminal">
       <template x-if="enTerminal">
         <div>
-          <div class="palomita" :class="{ esperando: !enTerminal.error }"><svg><use href="/static/iconos.svg#tarjeta"/></svg></div>
+          <div class="palomita" :class="enTerminal.error ? 'alerta' : 'esperando'"><svg><use href="/static/iconos.svg#tarjeta"/></svg></div>
           <h2 x-text="enTerminal.error ? 'No se cobró' : 'Cobrando en la terminal'"></h2>
           <div class="cambio-grande" x-show="enTerminal.cobro" x-text="enTerminal.cobro && dinero(enTerminal.cobro.monto)"></div>
           <p x-show="!enTerminal.error && enTerminal.cobro" x-text="enTerminal.cobro && enTerminal.cobro.mensaje"></p>

@@ -137,7 +137,8 @@ class _OrdenSimulada:
 class ClienteSimulado:
     """Terminal de mentira: la orden llega a la terminal en la primera
     consulta y se paga en la segunda (unos segundos en pantalla). Las pruebas
-    pueden decidir cómo termina con `siguiente`."""
+    deciden cómo termina con `siguiente`; en el demo, un monto que termina en
+    1 centavo (ej. $10.01) se rechaza."""
 
     terminales_simuladas: list[Terminal] = field(default_factory=lambda: [
         Terminal("SIMULADA__TERMINAL1", "PDV"), Terminal("SIMULADA__TERMINAL2", "STANDALONE"),
@@ -158,7 +159,9 @@ class ClienteSimulado:
 
     def crear_orden(self, terminal_id: str, monto: Decimal, referencia: str, idempotencia: str) -> Orden:
         orden = Orden(f"ORDSIM{next(self._contador):06d}", CREADA, CREADA, monto, f"PAYSIM{uuid.uuid4().hex[:8]}")
-        self.ordenes[orden.id] = _OrdenSimulada(orden, self.siguiente)
+        # Para ver en el demo un pago rechazado: montos que terminan en 1 centavo.
+        final = FALLIDA if monto % 1 == Decimal("0.01") else self.siguiente
+        self.ordenes[orden.id] = _OrdenSimulada(orden, final)
         return Orden(orden.id, CREADA, CREADA, monto, orden.pago_id)
 
     def consultar(self, orden_id: str) -> Orden:
