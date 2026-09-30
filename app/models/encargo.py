@@ -49,6 +49,10 @@ class Encargo(Base):
     avisado_por: Mapped[str | None] = mapped_column(default=None)
     aviso_texto: Mapped[str | None] = mapped_column(default=None)
     aviso_error: Mapped[str | None] = mapped_column(default=None)
+    # Por qué no se pudo encargar: la clave del motivo (ver services/encargos.py,
+    # MOTIVOS) y el detalle que escribió el personal (solo para la farmacia).
+    motivo_no_disponible: Mapped[str | None] = mapped_column(default=None)
+    motivo_detalle: Mapped[str | None] = mapped_column(default=None)
     creado_por_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), default=None)  # None = el bot
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

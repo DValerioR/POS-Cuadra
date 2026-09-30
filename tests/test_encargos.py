@@ -118,10 +118,16 @@ def test_el_bot_avisa_al_cambiar_de_estado(como_mostrador, db, negocio, wa):
 def test_no_se_pudo_encargar(como_mostrador, db, negocio, wa):
     p = _producto(db, negocio, "HUMIRA PLUMA 40MG", encargo=True)
     e = como_mostrador.post("/encargos", json={"cliente": "Ana", "telefono": "3861112233", "producto_id": p.id}).json()
-    r = como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "no_disponible"}).json()
+    # Hay que decir por qué.
+    assert como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "no_disponible"}).status_code == 409
+    r = como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "no_disponible", "motivo": "controlado",
+                                                               "detalle": "pide receta especial"}).json()
     assert (r["estado"], r["estado_texto"], r["falta_avisar"]) == ("no_disponible", "No se pudo encargar", False)
+    assert r["motivo_texto"] == "Es un medicamento controlado: pide receta especial"
     assert wa.enviados[-1]["plantilla"] == "encargo_no_disponible"
-    assert "no cuenta con existencias" in r["aviso_texto"]
+    assert wa.enviados[-1]["parametros"][2] == "ya que se trata de un medicamento controlado"
+    assert "no fue posible encargar HUMIRA PLUMA 40MG, ya que se trata de un medicamento controlado." in r["aviso_texto"]
+    assert "receta especial" not in r["aviso_texto"]  # el detalle es solo para la farmacia
     assert e["id"] in {x["id"] for x in como_mostrador.get("/encargos/lista").json()}  # sigue a la vista
     # Se puede volver a intentar más adelante.
     assert como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "por_pedir"}).json()["estado"] == "por_pedir"
@@ -153,3 +159,25 @@ def test_al_enviar_el_pedido_el_bot_avisa(como_admin, db, negocio, wa):
     assert [m["plantilla"] for m in wa.enviados] == ["encargo_pedido"]
     db.expire_all()
     assert db.get(Encargo, e.id).avisado_por == "whatsapp"
+
+
+def test_otro_motivo_pide_texto_y_no_se_manda(como_mostrador, db, negocio, wa):
+    e = como_mostrador.post("/encargos", json={"cliente": "Ana", "telefono": "3861112233", "descripcion": "Jarabe raro"}).json()
+    url = f"/encargos/{e['id']}/estado"
+    assert como_mostrador.put(url, json={"estado": "no_disponible", "motivo": "otro"}).status_code == 409
+    assert como_mostrador.put(url, json={"estado": "no_disponible", "motivo": "porque si"}).status_code == 409
+    r = como_mostrador.put(url, json={"estado": "no_disponible", "motivo": "otro", "detalle": "lo descontinuó el laboratorio"}).json()
+    assert r["motivo_texto"] == "lo descontinuó el laboratorio"
+    assert wa.enviados[-1]["parametros"][2] == "por causas ajenas a nuestra farmacia"
+    assert "descontinu" not in r["aviso_texto"]
+
+
+@pytest.mark.parametrize("motivo, frase", [
+    ("proveedor_no_maneja", "ya que nuestro proveedor no maneja este producto"),
+    ("no_manejamos", "ya que es un producto que no manejamos en nuestra farmacia"),
+    ("sin_existencias", "ya que nuestro proveedor no cuenta con existencias por el momento"),
+])
+def test_frase_formal_de_cada_motivo(como_mostrador, wa, motivo, frase):
+    e = como_mostrador.post("/encargos", json={"cliente": "Ana", "telefono": "3861112233", "descripcion": "Jarabe"}).json()
+    como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "no_disponible", "motivo": motivo})
+    assert wa.enviados[-1]["parametros"][2] == frase

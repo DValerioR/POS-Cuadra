@@ -21,7 +21,15 @@
       { id: "por_pedir", texto: "Por pedir", ayuda: "Falta encargarlo al proveedor (se puede agregar en Pedidos)." },
       { id: "pedido", texto: "Pedidos al proveedor", ayuda: "Ya se encargaron; cuando lleguen, márcalos." },
       { id: "llego", texto: "Ya llegaron", ayuda: "Esperando a que el cliente pase por ellos." },
-      { id: "no_disponible", texto: "No se pudieron encargar", ayuda: "El proveedor no los tenía. Se puede volver a intentar más adelante." },
+      { id: "no_disponible", texto: "No se pudieron encargar", ayuda: "Cada uno dice por qué. Se puede volver a intentar más adelante." },
+    ];
+
+    const MOTIVOS = [
+      { id: "sin_existencias", texto: "El proveedor no tiene existencias" },
+      { id: "controlado", texto: "Es un medicamento controlado" },
+      { id: "proveedor_no_maneja", texto: "El proveedor no lo maneja" },
+      { id: "no_manejamos", texto: "No lo manejamos en la farmacia" },
+      { id: "otro", texto: "Otro motivo" },
     ];
 
     function pantallaEncargos() {
@@ -40,6 +48,8 @@
         verTerminados: false,
         terminados: [],
         textoAbierto: null, // encargo cuyo mensaje enviado se está viendo
+        motivos: MOTIVOS,
+        noEncargo: null, // { id, motivo, detalle } mientras se captura por qué no se pudo encargar
 
         async init() {
           try {
@@ -126,6 +136,19 @@
         async estado(e, nuevo) {
           try {
             await API.put(`/encargos/${e.id}/estado`, { estado: nuevo });
+            await this.cargar();
+          } catch (err) {
+            this.error = err.message;
+          }
+        },
+        abrirNoEncargo(e) {
+          this.noEncargo = { id: e.id, motivo: "", detalle: "" };
+        },
+        async confirmarNoEncargo() {
+          const n = this.noEncargo;
+          try {
+            await API.put(`/encargos/${n.id}/estado`, { estado: "no_disponible", motivo: n.motivo, detalle: n.detalle || null });
+            this.noEncargo = null;
             await this.cargar();
           } catch (err) {
             this.error = err.message;
@@ -242,6 +265,24 @@
                       <span x-text="` · ${fecha(e.created_at)}`"></span><span x-show="e.creado_por" x-text="` · ${e.creado_por}`"></span>
                     </div>
                     <div class="suave" style="font-size: 14px" x-show="e.notas" x-text="e.notas"></div>
+                    <div style="font-size: 14px" x-show="e.estado === 'no_disponible' && e.motivo_texto"><strong>Motivo:</strong> <span x-text="e.motivo_texto"></span></div>
+                    <template x-if="noEncargo && noEncargo.id === e.id">
+                      <form class="pila" style="gap: 6px; margin-top: 10px" @submit.prevent="confirmarNoEncargo()">
+                        <strong style="font-size: 14px">¿Por qué no se pudo encargar?</strong>
+                        <template x-for="m in motivos" :key="m.id">
+                          <label class="casilla" style="margin: 0; font-weight: 400">
+                            <input type="radio" name="motivo" :value="m.id" x-model="noEncargo.motivo"><span x-text="m.texto"></span>
+                          </label>
+                        </template>
+                        <textarea rows="2" maxlength="300" x-model="noEncargo.detalle"
+                                  :placeholder="noEncargo.motivo === 'otro' ? 'Escribe el motivo (obligatorio)' : 'Detalle (opcional)'"></textarea>
+                        <p class="ayuda" style="margin: 0">El bot le avisa al cliente con una frase formal según el motivo; lo que escribas aquí es solo para la farmacia.</p>
+                        <div class="fila" style="gap: 8px">
+                          <button type="button" @click="noEncargo = null">Cancelar</button>
+                          <button class="primario" :disabled="!noEncargo.motivo || (noEncargo.motivo === 'otro' && !noEncargo.detalle.trim())">Confirmar</button>
+                        </div>
+                      </form>
+                    </template>
                     <div class="mensaje info" style="margin: 6px 0 0; font-size: 14px" x-show="textoAbierto === e.id" x-text="e.aviso_texto"></div>
                     <div class="suave" style="font-size: 13px; color: var(--peligro)" x-show="e.falta_avisar && e.aviso_error"
                          x-text="`No se pudo avisar por WhatsApp: ${e.aviso_error}. Avísale tú y márcalo.`"></div>
@@ -250,8 +291,8 @@
                     <button type="button" class="primario" x-show="e.falta_avisar" @click="avisado(e)">Ya le avisé</button>
                     <button type="button" x-show="e.estado === 'por_pedir'" @click="estado(e, 'pedido')">Ya se pidió</button>
                     <button type="button" x-show="e.estado === 'pedido'" @click="estado(e, 'llego')">Ya llegó</button>
-                    <button type="button" x-show="['por_pedir', 'pedido'].includes(e.estado)" @click="estado(e, 'no_disponible')"
-                            title="Por ejemplo, el proveedor no tiene existencias">No se encargó</button>
+                    <button type="button" x-show="['por_pedir', 'pedido'].includes(e.estado) && !(noEncargo && noEncargo.id === e.id)"
+                            @click="abrirNoEncargo(e)" title="Por ejemplo, el proveedor no tiene existencias">No se encargó</button>
                     <button type="button" x-show="e.estado === 'no_disponible'" @click="estado(e, 'por_pedir')">Volver a intentar</button>
                     <button type="button" x-show="e.estado === 'llego'" @click="estado(e, 'entregado')">Se entregó</button>
                     <button type="button" class="texto-peligro" @click="estado(e, 'cancelado')">Cancelar</button>

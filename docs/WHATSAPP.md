@@ -37,7 +37,16 @@ producto, `{{3}}` nombre de la farmacia):
 
 **encargo_no_disponible**
 
-> Estimado(a) {{1}}, lamentamos informarle que por el momento no fue posible encargar {{2}}, ya que nuestro proveedor no cuenta con existencias. Si lo desea, podemos intentarlo más adelante o sugerirle una alternativa. Atentamente, {{3}}.
+> Estimado(a) {{1}}, lamentamos informarle que no fue posible encargar {{2}}, {{3}}. Si lo desea, con gusto le sugerimos una alternativa. Atentamente, {{4}}.
+
+En esta, `{{3}}` es el motivo en frase formal (según lo que elija el personal):
+"ya que nuestro proveedor no cuenta con existencias por el momento", "ya que se
+trata de un medicamento controlado", "ya que nuestro proveedor no maneja este
+producto", "ya que es un producto que no manejamos en nuestra farmacia" o, con
+otro motivo, "por causas ajenas a
+nuestra farmacia" (lo que escribe el personal no se le manda al cliente), y
+`{{4}}` es el nombre de la farmacia. En Meta, al dar de alta la plantilla, se
+pone un ejemplo para cada variable.
 
 (Los textos viven también en `app/whatsapp/cliente.py`; si se cambian allá,
 hay que cambiarlos y volver a aprobarlos en Meta.)

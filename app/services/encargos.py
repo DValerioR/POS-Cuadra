@@ -39,6 +39,17 @@ SIGUIENTES = {
     EstadoEncargo.ENTREGADO: set(),
     EstadoEncargo.CANCELADO: {EstadoEncargo.POR_PEDIR},
 }
+# Por qué no se pudo encargar: (texto para la farmacia, frase formal para el
+# cliente). La frase completa: "...no fue posible encargar X, <frase>."
+# En "otro" el detalle del personal NO se le manda al cliente.
+MOTIVOS = {
+    "sin_existencias": ("El proveedor no tiene existencias", "ya que nuestro proveedor no cuenta con existencias por el momento"),
+    "controlado": ("Es un medicamento controlado", "ya que se trata de un medicamento controlado"),
+    "proveedor_no_maneja": ("El proveedor no lo maneja", "ya que nuestro proveedor no maneja este producto"),
+    "no_manejamos": ("No lo manejamos en la farmacia", "ya que es un producto que no manejamos en nuestra farmacia"),
+    "otro": ("Otro motivo", "por causas ajenas a nuestra farmacia"),
+}
+
 # Cambios que se le avisan al cliente, con su plantilla de WhatsApp.
 PLANTILLA_DE = {
     EstadoEncargo.PEDIDO: "encargo_pedido",
@@ -90,19 +101,38 @@ def crear(db: Session, negocio_id: int, usuario: Usuario | None, cliente: str, p
     return e
 
 
-def cambiar_estado(db: Session, usuario: Usuario, encargo_id: int, estado: EstadoEncargo) -> Encargo:
-    """No hace commit."""
+def cambiar_estado(db: Session, usuario: Usuario, encargo_id: int, estado: EstadoEncargo,
+                   motivo: str | None = None, detalle: str | None = None) -> Encargo:
+    """`motivo` y `detalle`: por qué no se pudo encargar (obligatorio al pasar
+    a No se pudo encargar; con "otro", el detalle también). No hace commit."""
     _validar_rol(usuario)
     e = obtener(db, usuario.negocio_id, encargo_id)
     if estado == e.estado:
         return e
     if estado not in SIGUIENTES[e.estado]:
         raise OperacionInvalida(f"Un encargo {texto_estado(e.estado).lower()} no puede pasar a {texto_estado(estado).lower()}")
+    detalle = " ".join((detalle or "").split()) or None
+    if estado == EstadoEncargo.NO_DISPONIBLE:
+        if motivo not in MOTIVOS:
+            raise OperacionInvalida("Indica por qué no se pudo encargar")
+        if motivo == "otro" and not detalle:
+            raise OperacionInvalida("Escribe el motivo")
+        e.motivo_no_disponible, e.motivo_detalle = motivo, detalle
     e.estado = estado
     if estado == EstadoEncargo.POR_PEDIR:
         e.pedido_id = None
     db.flush()
     return e
+
+
+def texto_motivo(e: Encargo) -> str | None:
+    """El motivo para mostrarlo en la farmacia (ej. "Otro motivo: descontinuado")."""
+    if not e.motivo_no_disponible:
+        return None
+    base = MOTIVOS.get(e.motivo_no_disponible, ("Otro motivo", ""))[0]
+    if e.motivo_no_disponible == "otro" and e.motivo_detalle:
+        return e.motivo_detalle
+    return f"{base}: {e.motivo_detalle}" if e.motivo_detalle else base
 
 
 def marcar_avisado(db: Session, usuario: Usuario, encargo_id: int) -> Encargo:
@@ -135,7 +165,10 @@ def avisar(db: Session, e: Encargo) -> bool:
         plantilla = whatsapp.PLANTILLAS[PLANTILLA_DE[e.estado]]
         negocio = db.get(Negocio, e.negocio_id)
         cantidad = f"{e.cantidad.normalize():f} " if e.cantidad != 1 else ""
-        parametros = [e.cliente, f"{cantidad}{e.descripcion}", negocio.nombre]
+        parametros = [e.cliente, f"{cantidad}{e.descripcion}"]
+        if e.estado == EstadoEncargo.NO_DISPONIBLE:
+            parametros.append(MOTIVOS.get(e.motivo_no_disponible, MOTIVOS["otro"])[1])
+        parametros.append(negocio.nombre)
         try:
             whatsapp.cliente().enviar_plantilla(telefono, plantilla, parametros)
         except whatsapp.ErrorWhatsApp as err:

@@ -27,7 +27,8 @@ class Plantilla:
     texto: str  # con {{1}}, {{2}}... (para mostrar lo que se envió)
 
 
-# Redacción formal, igual que el bot. {{1}} cliente, {{2}} producto, {{3}} farmacia.
+# Redacción formal, igual que el bot. {{1}} cliente, {{2}} producto y el último,
+# la farmacia; en "no disponible", {{3}} es el motivo (frase formal) y {{4}} la farmacia.
 PLANTILLAS = {
     "encargo_pedido": Plantilla(
         "encargo_pedido",
@@ -41,9 +42,8 @@ PLANTILLAS = {
     ),
     "encargo_no_disponible": Plantilla(
         "encargo_no_disponible",
-        "Estimado(a) {{1}}, lamentamos informarle que por el momento no fue posible encargar {{2}}, ya que "
-        "nuestro proveedor no cuenta con existencias. Si lo desea, podemos intentarlo más adelante o sugerirle "
-        "una alternativa. Atentamente, {{3}}.",
+        "Estimado(a) {{1}}, lamentamos informarle que no fue posible encargar {{2}}, {{3}}. "
+        "Si lo desea, con gusto le sugerimos una alternativa. Atentamente, {{4}}.",
     ),
 }
 

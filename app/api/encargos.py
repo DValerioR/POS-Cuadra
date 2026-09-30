@@ -28,6 +28,10 @@ class EncargoIn(BaseModel):
 
 class EstadoIn(BaseModel):
     estado: EstadoEncargo
+    # Al pasar a No se pudo encargar: por qué (sin_existencias, controlado, proveedor_no_maneja,
+    # no_manejamos, otro; ver services/encargos.py) y el detalle.
+    motivo: str | None = None
+    detalle: str | None = Field(default=None, max_length=300)
 
 
 def _out(db: Session, e: Encargo) -> dict:
@@ -39,6 +43,7 @@ def _out(db: Session, e: Encargo) -> dict:
         "canal": e.canal, "notas": e.notas, "estado": e.estado.value, "estado_texto": encargos.texto_estado(e.estado),
         "pedido_id": e.pedido_id, "falta_avisar": encargos.falta_avisar(e), "avisado_at": e.avisado_at,
         "avisado_por": e.avisado_por, "aviso_texto": e.aviso_texto, "aviso_error": e.aviso_error,
+        "motivo": e.motivo_no_disponible, "motivo_texto": encargos.texto_motivo(e),
         "creado_por": (creo.nombre_completo or creo.nombre_usuario) if creo else ("Bot de WhatsApp" if e.canal == "whatsapp" else None),
         "created_at": e.created_at, "updated_at": e.updated_at,
     })
@@ -69,7 +74,7 @@ def crear(datos: EncargoIn, usuario: Usuario = Depends(usuario_actual), db: Sess
 @router.put("/{encargo_id}/estado")
 def cambiar_estado(encargo_id: int, datos: EstadoIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     try:
-        e = encargos.cambiar_estado(db, usuario, encargo_id, datos.estado)
+        e = encargos.cambiar_estado(db, usuario, encargo_id, datos.estado, datos.motivo, datos.detalle)
     except ERRORES_NEGOCIO as err:
         db.rollback()
         raise a_http(err)
