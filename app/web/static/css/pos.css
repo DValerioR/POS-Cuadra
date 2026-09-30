@@ -632,6 +632,11 @@ details.desglose table { margin-top: 8px; }
 .campo-porcentaje { position: relative; width: 110px; }
 .campo-porcentaje::after { content: "%"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--texto-suave); font-weight: 600; }
 .campo-porcentaje input { padding-right: 28px; text-align: right; }
+.margen-y-precio { display: grid; grid-template-columns: minmax(130px, 1fr) 2fr; gap: 0 20px; align-items: end; }
+.margen-y-precio .campo-porcentaje { width: auto; }
+.margen-y-precio .campo-porcentaje input { padding-right: 34px; }
+.margen-y-precio .campo-porcentaje::after { font-size: 20px; }
+@media (max-width: 560px) { .margen-y-precio { grid-template-columns: 1fr; } }
 .nueva-categoria { padding: 12px 14px; border-top: 1px solid var(--linea); }
 .categorias a { color: var(--primario); font-weight: 700; }
 

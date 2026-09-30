@@ -51,6 +51,7 @@ function pantallaCatalogo() {
     original: null,
     historial: [],
     proveedoresDelProducto: [],
+    margenEscrito: null, // lo que se está tecleando en Margen (mientras tiene el foco)
     guardando: false,
     errorEditor: "",
 
@@ -221,6 +222,7 @@ function pantallaCatalogo() {
       this.errorEditor = "";
       this.historial = [];
       this.proveedoresDelProducto = [];
+      this.margenEscrito = null;
       const vacio = {
         id: null, nombre: "", clave: "", categoria_id: null, laboratorio: "", requiere_receta: false,
         costo: "", precio_venta: "", precio_maximo_publico: "", iva_porcentaje: 0, ieps_porcentaje: 0,
@@ -283,6 +285,13 @@ function pantallaCatalogo() {
     get pasaDelMaximo() {
       const e = this.editor;
       return e && e.precio_venta !== "" && e.precio_maximo_publico !== "" && Number(e.precio_venta) > Number(e.precio_maximo_publico);
+    },
+    // Margen puesto a mano: calcula el precio de venta con costo + margen + impuestos.
+    ponerMargen(valor) {
+      this.margenEscrito = valor;
+      const costo = Number(this.editor.costo);
+      if (valor === "" || !costo) return;
+      this.editor.precio_venta = String(this.precioCon(costo * (1 + Number(valor) / 100)));
     },
     get margenReal() {
       const e = this.editor;
