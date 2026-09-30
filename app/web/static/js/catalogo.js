@@ -41,6 +41,14 @@ function pantallaCatalogo() {
     cargandoLista: false,
     seleccion: [], // ids
 
+    // Claves SAT sugeridas (pestaña "Claves SAT")
+    sugeridas: null, // lista de /productos/revision/claves-sat
+    cargandoSugeridas: false,
+    incluirDudosas: false, // también reemplazar claves que ya tienen pero no corresponden
+    elegidas: {}, // producto_id -> true
+    abiertos: {}, // clave sugerida -> grupo desplegado
+    aplicandoClaves: false,
+
     // Categorías
     categorias: [],
     edicionCategorias: {}, // id -> {nombre, margen, controla_lote}
@@ -406,6 +414,63 @@ function pantallaCatalogo() {
         this.error = err.message;
       }
     },
+    // --- Claves SAT sugeridas ---------------------------------------------
+
+    async abrirClavesSat() {
+      this.pestana = "claves";
+      if (this.sugeridas === null) await this.cargarSugeridas();
+    },
+    async cargarSugeridas() {
+      this.cargandoSugeridas = true;
+      try {
+        this.sugeridas = await API.get("/productos/revision/claves-sat");
+        this.elegidas = {};
+      } catch (err) {
+        this.error = err.message;
+      } finally {
+        this.cargandoSugeridas = false;
+      }
+    },
+    // Agrupadas por la clave sugerida, las más numerosas primero.
+    get gruposClaves() {
+      const grupos = {};
+      for (const s of this.sugeridas || []) {
+        if (s.caso === "dudosa" && !this.incluirDudosas) continue;
+        (grupos[s.sugerida] ||= { clave: s.sugerida, descripcion: s.descripcion, productos: [] }).productos.push(s);
+      }
+      return Object.values(grupos).sort((a, b) => b.productos.length - a.productos.length);
+    },
+    get cuantasDudosas() {
+      return (this.sugeridas || []).filter((s) => s.caso === "dudosa").length;
+    },
+    get cuantasSinClave() {
+      return (this.sugeridas || []).filter((s) => s.caso === "sin_clave").length;
+    },
+    grupoElegido(g) {
+      return g.productos.every((s) => this.elegidas[s.producto_id]);
+    },
+    elegirGrupo(g, si) {
+      for (const s of g.productos) this.elegidas[s.producto_id] = si;
+    },
+    get elegidasVisibles() {
+      return this.gruposClaves.flatMap((g) => g.productos).filter((s) => this.elegidas[s.producto_id]);
+    },
+    async aplicarClaves() {
+      const cambios = this.elegidasVisibles.map((s) => ({ producto_id: s.producto_id, clave_sat: s.sugerida }));
+      if (!cambios.length || this.aplicandoClaves) return;
+      this.aplicandoClaves = true;
+      this.error = "";
+      try {
+        const r = await API.post("/productos/claves-sat", { cambios });
+        this.avisar(`Listo: se puso la clave SAT a ${r.cambiados.toLocaleString("es-MX")} productos.`);
+        await this.cargarSugeridas();
+      } catch (err) {
+        this.error = err.message;
+      } finally {
+        this.aplicandoClaves = false;
+      }
+    },
+
     verProductosDe(c) {
       this.pestana = "productos";
       this.filtro = "todos";

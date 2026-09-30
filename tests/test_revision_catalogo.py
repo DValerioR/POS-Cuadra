@@ -104,3 +104,26 @@ def test_problemas_y_excel(como_admin, como_mostrador, db, negocio):
     assert len(filas) == 1 + len(revisiones)
     db.expire_all()
     assert db.get(Producto, bien.id).clave_sat == "51142100"  # no cambia nada
+
+
+def test_aplicar_claves_sugeridas(como_admin, como_mostrador, db, negocio):
+    shampoo = _producto(db, negocio, "SH CAPRICE CONTROL CASPA 200 ML", iva_porcentaje=D(16))
+    omeprazol = _producto(db, negocio, "ALBOZ CAPS 20MG C/14 (OMEPRAZOL)", clave_sat="51101500")
+    otro = _producto(db, negocio, "COLLAR JMP", clave_sat="11121900", iva_porcentaje=D(16))  # sin sugerencia
+    db.commit()
+
+    lista = {s["producto_id"]: s for s in como_admin.get("/productos/revision/claves-sat").json()}
+    assert (lista[shampoo.id]["sugerida"], lista[shampoo.id]["caso"]) == ("53131628", "sin_clave")
+    assert (lista[omeprazol.id]["sugerida"], lista[omeprazol.id]["caso"]) == ("51171900", "dudosa")
+    assert otro.id not in lista
+
+    assert como_mostrador.post("/productos/claves-sat", json={"cambios": [
+        {"producto_id": shampoo.id, "clave_sat": "53131628"}]}).status_code == 403
+    malo = como_admin.post("/productos/claves-sat", json={"cambios": [{"producto_id": shampoo.id, "clave_sat": "99999999"}]})
+    assert malo.status_code == 409 and "99999999" in malo.json()["detail"]
+    r = como_admin.post("/productos/claves-sat", json={"cambios": [{"producto_id": shampoo.id, "clave_sat": "53131628"}]})
+    assert r.json() == {"cambiados": 1}
+    db.expire_all()
+    assert db.get(Producto, shampoo.id).clave_sat == "53131628"
+    assert db.get(Producto, omeprazol.id).clave_sat == "51101500"  # no se eligió: se queda igual
+    assert shampoo.id not in {s["producto_id"] for s in como_admin.get("/productos/revision/claves-sat").json()}

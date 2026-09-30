@@ -38,6 +38,9 @@
           <button type="button" :class="{ activa: pestana === 'categorias' }" @click="pestana = 'categorias'">
             <svg class="ico"><use href="/static/iconos.svg#paquete"/></svg>Categorías
           </button>
+          <button type="button" :class="{ activa: pestana === 'claves' }" @click="abrirClavesSat()">
+            <svg class="ico"><use href="/static/iconos.svg#ticket"/></svg>Claves SAT
+          </button>
           <a class="boton" style="margin-left: auto" href="/productos/revision/excel" download
              title="Cada producto con algo que revisar (sin costo, sin clave SAT, IVA dudoso...) y la clave SAT que le correspondería. No cambia nada.">
             <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Reporte de revisión (Excel)
@@ -120,6 +123,65 @@
                 <button type="button" :disabled="pagina + 1 >= paginas || cargandoLista" @click="irPagina(1)">Siguientes →</button>
               </div>
             </div>
+          </div>
+        </template>
+
+        <!-- ============ Claves SAT sugeridas ============ -->
+        <template x-if="pestana === 'claves'">
+          <div class="pila" style="gap: 14px">
+            <p class="suave" style="margin: 0">
+              Claves SAT que le corresponderían a cada producto según su nombre (la sustancia activa o el tipo de producto).
+              Elige los grupos o productos que estén bien y aplica. Lo que no elijas se queda como está.
+            </p>
+            <p class="suave" x-show="cargandoSugeridas">Revisando el catálogo…</p>
+            <template x-if="sugeridas">
+              <div class="pila" style="gap: 12px">
+                <div class="fila" style="gap: 16px; flex-wrap: wrap; align-items: center">
+                  <span><strong x-text="cuantasSinClave.toLocaleString('es-MX')"></strong> productos sin clave tienen una sugerida.</span>
+                  <label class="casilla" style="margin: 0" x-show="cuantasDudosas">
+                    <input type="checkbox" x-model="incluirDudosas">
+                    <span x-text="`También reemplazar ${cuantasDudosas.toLocaleString('es-MX')} claves que ya tienen pero no parecen corresponder`"></span>
+                  </label>
+                </div>
+                <p class="suave" x-show="!gruposClaves.length">No hay claves por sugerir.</p>
+                <div class="panel" style="padding: 0; overflow: hidden" x-show="gruposClaves.length">
+                  <template x-for="g in gruposClaves" :key="g.clave">
+                    <div class="grupo-clave">
+                      <div class="fila encabezado-grupo">
+                        <input type="checkbox" :checked="grupoElegido(g)" @change="elegirGrupo(g, $event.target.checked)"
+                               :aria-label="`Elegir todos los de ${g.descripcion}`">
+                        <button type="button" class="texto-suave nombre-grupo" @click="abiertos[g.clave] = !abiertos[g.clave]">
+                          <strong x-text="g.descripcion"></strong> <span class="suave" x-text="g.clave"></span>
+                        </button>
+                        <span class="etiqueta gris" x-text="g.productos.length === 1 ? '1 producto' : `${g.productos.length.toLocaleString('es-MX')} productos`"></span>
+                        <button type="button" class="texto-suave" @click="abiertos[g.clave] = !abiertos[g.clave]"
+                                x-text="abiertos[g.clave] ? 'Ocultar' : 'Ver productos'"></button>
+                      </div>
+                      <template x-if="abiertos[g.clave]">
+                        <table class="tabla">
+                          <tbody>
+                            <template x-for="s in g.productos" :key="s.producto_id">
+                              <tr>
+                                <td class="ajustado"><input type="checkbox" x-model="elegidas[s.producto_id]" :aria-label="`Elegir ${s.nombre}`"></td>
+                                <td><div x-text="s.nombre"></div><div class="suave" style="font-size: 13px" x-text="s.clave || 'sin código'"></div></td>
+                                <td class="suave" style="font-size: 13px" x-text="s.motivo"></td>
+                                <td class="suave" style="font-size: 13px"
+                                    x-text="s.clave_actual ? `Hoy: ${s.clave_actual} ${s.descripcion_actual || ''}` : 'Hoy: sin clave'"></td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+                <div class="fila acciones-pegadas" style="justify-content: flex-end; gap: 12px" x-show="gruposClaves.length">
+                  <span class="suave" x-text="`${elegidasVisibles.length.toLocaleString('es-MX')} productos elegidos`"></span>
+                  <button type="button" class="primario" :disabled="!elegidasVisibles.length || aplicandoClaves" @click="aplicarClaves()"
+                          x-text="aplicandoClaves ? 'Aplicando…' : 'Aplicar las claves elegidas'"></button>
+                </div>
+              </div>
+            </template>
           </div>
         </template>
 

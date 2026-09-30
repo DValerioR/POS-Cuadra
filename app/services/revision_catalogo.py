@@ -31,6 +31,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Categoria, Producto
+from app.services.errores import NoEncontrado, OperacionInvalida
 from app.services.parecidos import normalizar
 
 CATALOGO_SAT = Path(__file__).resolve().parents[1] / "facturacion" / "datos" / "claves_prod_serv.csv.gz"
@@ -383,3 +384,39 @@ def excel(db: Session, negocio_id: int) -> bytes:
     salida = BytesIO()
     wb.save(salida)
     return salida.getvalue()
+
+
+# --- Aplicar claves SAT sugeridas ------------------------------------------------------
+
+
+def claves_sugeridas(db: Session, negocio_id: int) -> list[dict]:
+    """Productos con clave SAT sugerida que no tienen clave o la tienen dudosa."""
+    revisiones, _ = revisar_catalogo(db, negocio_id)
+    return [{
+        "producto_id": r.producto.id, "nombre": r.producto.nombre, "clave": r.producto.clave,
+        "clave_actual": (r.producto.clave_sat or "").strip() or None,
+        "descripcion_actual": claves_sat().get((r.producto.clave_sat or "").strip()),
+        "sugerida": r.sugerencia.clave, "descripcion": r.sugerencia.descripcion, "motivo": r.sugerencia.motivo,
+        "caso": "sin_clave" if r.marcas.get("sin_clave_sat") else "dudosa",
+    } for r in revisiones
+        if r.sugerencia.clave and (r.marcas.get("sin_clave_sat") or r.marcas.get("clave_sat_dudosa"))]
+
+
+def aplicar_claves(db: Session, negocio_id: int, cambios: list[tuple[int, str]]) -> int:
+    """Pone la clave SAT elegida a cada producto. Solo claves que existen en el
+    catálogo del SAT. Regresa cuántos cambiaron. No hace commit."""
+    claves = claves_sat()
+    malas = sorted({c for _, c in cambios if c not in claves})
+    if malas:
+        raise OperacionInvalida(f"Estas claves no existen en el catálogo del SAT: {', '.join(malas)}")
+    productos = {p.id: p for p in db.scalars(select(Producto).where(
+        Producto.negocio_id == negocio_id, Producto.id.in_([pid for pid, _ in cambios])))}
+    if len(productos) != len({pid for pid, _ in cambios}):
+        raise NoEncontrado("Algún producto no existe")
+    cambiados = 0
+    for pid, clave in cambios:
+        if productos[pid].clave_sat != clave:
+            productos[pid].clave_sat = clave
+            cambiados += 1
+    db.flush()
+    return cambiados

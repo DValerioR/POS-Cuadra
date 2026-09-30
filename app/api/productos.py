@@ -103,6 +103,33 @@ def revision_excel(usuario: Usuario = Depends(solo_admin), db: Session = Depends
     )
 
 
+@router.get("/revision/claves-sat")
+def claves_sat_sugeridas(usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Productos sin clave SAT o con clave dudosa que tienen una sugerida por su nombre."""
+    return revision_catalogo.claves_sugeridas(db, usuario.negocio_id)
+
+
+class ClaveSatIn(BaseModel):
+    producto_id: int
+    clave_sat: str = Field(pattern=r"^\d{8}$")
+
+
+class AplicarClavesIn(BaseModel):
+    cambios: list[ClaveSatIn] = Field(min_length=1, max_length=20000)
+
+
+@router.post("/claves-sat")
+def aplicar_claves_sat(datos: AplicarClavesIn, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Pone las claves SAT elegidas (las sugeridas que aprobó el administrador)."""
+    try:
+        n = revision_catalogo.aplicar_claves(db, usuario.negocio_id, [(c.producto_id, c.clave_sat) for c in datos.cambios])
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return {"cambiados": n}
+
+
 class CambioEnGrupoIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=500)
     categoria_id: int | None = None
