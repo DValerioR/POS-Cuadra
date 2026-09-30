@@ -138,12 +138,11 @@ a.marca:hover { opacity: 0.9; }
 }
 @media (prefers-reduced-motion: reduce) { .campana.con-pendientes { animation: none; } }
 
-@media (max-width: 1440px) {
-  /* Solo ícono, salvo "Inicio" y la pantalla actual; el nombre sale al pasar el ratón. */
-  .barra { gap: 14px; }
-  .barra nav a:not(.activo):not([href="/inicio"]) span { display: none; }
-  .barra .usuario > span:last-child { display: none; }
-}
+/* Si los enlaces no caben (lo mide compactarBarra), quedan solo con ícono,
+   salvo "Inicio" y la pantalla actual; el nombre sale al pasar el ratón. */
+.barra.compacta { gap: 14px; }
+.barra.compacta nav a:not(.activo):not([href="/inicio"]) span { display: none; }
+.barra.compacta .usuario > span:last-child { display: none; }
 @media (max-width: 760px) {
   .barra { gap: 10px; padding: 0 12px; }
   .barra .marca > span:last-child, .barra .salir span { display: none; }

@@ -296,6 +296,19 @@ async function pintarBarra() {
   } catch {
     /* sin sesión: API ya manda al login */
   }
+  compactarBarra(barra);
+  window.addEventListener("resize", () => compactarBarra(barra));
+}
+
+// Deja los enlaces solo con ícono cuando con su nombre no caben, para que no
+// se encimen sobre la campana y el usuario ni corten el nombre del negocio.
+function compactarBarra(barra) {
+  barra.classList.remove("compacta");
+  const nav = barra.querySelector("nav");
+  const marca = barra.querySelector("[data-negocio]");
+  if (nav.scrollWidth > nav.clientWidth + 1 || marca.scrollWidth > marca.clientWidth + 1) {
+    barra.classList.add("compacta");
+  }
 }
 
 // --- Campana de notificaciones (solo administradores) ----------------------
@@ -407,6 +420,13 @@ function montarAsistente() {
   document.body.append(raiz);
 
   const boton = raiz.querySelector(".asistente-boton");
+  // Si la pantalla tiene barra de estado abajo (Inicio), el botón va encima de ella.
+  const pie = document.querySelector(".barra-estado");
+  if (pie) {
+    const subir = () => { boton.style.bottom = `${pie.offsetHeight + 12}px`; };
+    subir();
+    new ResizeObserver(subir).observe(pie);
+  }
   const panel = raiz.querySelector(".asistente-panel");
   const zona = raiz.querySelector(".asistente-mensajes");
   const form = raiz.querySelector("form");
