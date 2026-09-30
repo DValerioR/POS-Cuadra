@@ -26,6 +26,8 @@ function pantallaEntradas() {
 
     vista: "lista", // lista | nueva | revision | hecha
     recientes: [],
+    pedidosAbiertos: [], // pedidos enviados del proveedor de la entrada
+    pedidosDe: "", // de qué proveedor son
     proveedores: [],
     leyendo: null, // "xml" | "ia" mientras se lee el archivo
     resultado: null,
@@ -119,11 +121,13 @@ function pantallaEntradas() {
 
     cargarBorrador(b) {
       const aTexto = (v) => (v === null || v === undefined ? "" : String(Number(v)));
+      this.pedidosDe = null; // que se vuelvan a buscar los pedidos del proveedor
       this.e = {
         origen: b.origen,
         archivo_id: b.archivo_id || null,
         archivo_nombre: b.archivo_nombre || null,
         proveedor_id: b.proveedor_id || "",
+        pedido_id: "",
         proveedor_leido: b.proveedor_id ? null : (b.proveedor_nombre || b.proveedor_rfc ? { nombre: b.proveedor_nombre || "", rfc: b.proveedor_rfc || "" } : null),
         folio: b.folio || "",
         fecha_factura: b.fecha_factura || "",
@@ -164,6 +168,24 @@ function pantallaEntradas() {
       const leido = this.e.proveedor_leido;
       this.nuevoProveedor = { nombre: leido ? leido.nombre : "", rfc: leido ? leido.rfc : "" };
       this.$nextTick(() => document.getElementById("proveedor-nombre").focus());
+    },
+
+    // Pedidos enviados del proveedor elegido, para ligar la factura a uno
+    // (se propone el más reciente). Lo llama un x-effect al cambiar de proveedor.
+    async cargarPedidos(proveedorId) {
+      if (String(proveedorId || "") === this.pedidosDe) return;
+      this.pedidosDe = String(proveedorId || "");
+      this.pedidosAbiertos = [];
+      if (this.e) this.e.pedido_id = "";
+      if (!proveedorId) return;
+      try {
+        const lista = await API.get(`/compras/pedidos?estado=enviado&proveedor_id=${proveedorId}`);
+        if (this.pedidosDe !== String(proveedorId)) return;
+        this.pedidosAbiertos = lista;
+        if (this.e && lista.length) this.e.pedido_id = String(lista[0].id);
+      } catch {
+        /* sin pedidos: la entrada se registra igual */
+      }
     },
 
     async guardarProveedor() {
@@ -372,6 +394,7 @@ function pantallaEntradas() {
           origen: e.origen,
           total_factura: e.total_factura === "" ? null : String(e.total_factura),
           archivo_id: e.archivo_id,
+          pedido_id: e.pedido_id ? Number(e.pedido_id) : null,
           renglones: e.renglones.map((r) => ({
             producto_id: r.producto.id,
             cantidad: String(r.cantidad),

@@ -295,6 +295,7 @@ p { margin: 0 0 12px; }
 }
 .etiqueta.peligro { background: var(--peligro-suave); color: var(--peligro); }
 .etiqueta.verde { background: var(--primario-suave); color: var(--primario-oscuro); }
+.etiqueta.gris { background: var(--linea); color: var(--texto-suave); }
 
 /* --- Inicio de sesión -------------------------------------------------- */
 
@@ -767,6 +768,41 @@ details.desglose table { margin-top: 8px; }
 .asistente-escribir button { flex: 0 0 auto; padding: 0 14px; }
 .asistente-pie { margin: 0; padding: 0 12px 8px; font-size: 12px; color: var(--texto-suave); }
 @media (max-width: 760px) { .asistente-boton span { display: none; } .asistente-boton { padding: 12px; } }
+
+/* --- Pedidos a proveedores ---------------------------------------------- */
+
+.pedidos { max-width: 1100px; margin: 0 auto; }
+.pedido-proveedor { max-width: 760px; margin: 0 auto; width: 100%; }
+.tabla-clic tbody tr { cursor: pointer; }
+.tabla-clic tbody tr:hover td { background: var(--primario-suave); }
+.tabla-armar td { vertical-align: middle; }
+.tabla-armar tr.apagado td { opacity: 0.55; }
+.etiquetas-renglon { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
+.cantidad-pedido { width: 90px; text-align: right; font-size: 18px; font-weight: 700; padding: 6px 10px; }
+.asistente-sugiere { font-size: 13px; color: var(--primario); white-space: nowrap; cursor: help; }
+button.solo-icono { padding: 6px 8px; border-color: transparent; background: transparent; color: var(--texto-suave); }
+button.solo-icono:hover { color: var(--peligro); background: var(--peligro-suave); }
+.buscador-pedido { position: relative; }
+.resultados-pedido {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5;
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); box-shadow: var(--sombra-alta);
+  max-height: 320px; overflow-y: auto;
+}
+.resultados-pedido button { display: flex; justify-content: space-between; gap: 12px; border: 0; border-radius: 0; text-align: left; padding: 10px 14px; background: transparent; }
+.resultados-pedido button:hover { background: var(--primario-suave); }
+.acciones-pedido { position: sticky; bottom: 12px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; box-shadow: var(--sombra-alta); }
+.pedido-hoja td.sube, .pedidos td.sube { color: var(--peligro); }
+.pedidos td.baja { color: var(--primario); }
+.envio-pedido { flex: 0 0 auto; gap: 8px; flex-wrap: wrap; }
+.envio-pedido > * { flex: 0 0 auto; white-space: nowrap; }
+
+@media print {
+  body { background: #fff; }
+  .barra, .no-imprimir, #asistente, .aviso-flotante { display: none !important; }
+  .contenido { padding: 0; }
+  .pedido-hoja { box-shadow: none; border: 0; padding: 0; }
+}
 
 /* --- Faltantes por proveedor --------------------------------------------- */
 

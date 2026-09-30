@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pedidos a proveedores · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/pedidos.js"></script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaPedidos()">
+
+  <header class="barra" data-pagina="pedidos"></header>
+
+  <main class="contenido pedidos" x-cloak x-show="!cargando">
+    <template x-if="usuario && !puedeUsar">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Los pedidos los hacen bodega y los administradores.</p></div>
+      </div></div>
+    </template>
+
+    <div class="mensaje error no-imprimir" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <!-- ===== Lista ===== -->
+    <template x-if="puedeUsar && vista === 'lista'">
+      <div class="pila" style="gap: 16px">
+        <div class="fila" style="justify-content: space-between; flex-wrap: wrap">
+          <div class="encabezado" style="margin: 0">
+            <span class="circulo"><svg><use href="/static/iconos.svg#portapapeles"/></svg></span>
+            <div><h1>Pedidos a proveedores</h1>
+              <p class="suave">Arma el pedido con los faltantes del proveedor, mándalo y compáralo con la factura cuando llegue.</p></div>
+          </div>
+          <button type="button" class="primario" style="flex: 0 0 auto" @click="nuevo()">+ Nuevo pedido</button>
+        </div>
+
+        <div class="pestanas">
+          <button type="button" :class="{ activa: filtro === 'curso' }" @click="filtro = 'curso'" x-text="`En curso (${cuantos('curso')})`"></button>
+          <button type="button" :class="{ activa: filtro === 'cerrados' }" @click="filtro = 'cerrados'" x-text="`Cerrados (${cuantos('cerrados')})`"></button>
+        </div>
+
+        <div class="panel" style="padding: 0; overflow: hidden">
+          <table class="tabla tabla-clic" x-show="lista.length">
+            <thead><tr><th class="ajustado">Pedido</th><th>Proveedor</th><th>Estado</th><th class="derecha ajustado">Productos</th><th class="derecha ajustado">Estimado</th><th class="ajustado">Fecha</th></tr></thead>
+            <tbody>
+              <template x-for="x in lista" :key="x.id">
+                <tr @click="abrir(x.id)">
+                  <td><strong x-text="`#${x.folio}`"></strong></td>
+                  <td x-text="x.proveedor"></td>
+                  <td><span class="etiqueta" :class="estado(x.estado).clase" x-text="estado(x.estado).texto"></span></td>
+                  <td class="derecha" x-text="x.productos"></td>
+                  <td class="derecha" x-text="dinero(x.total_estimado)"></td>
+                  <td class="suave" style="white-space: nowrap" x-text="fecha(x.enviado_at || x.created_at)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p class="suave" style="padding: 18px; margin: 0" x-show="!lista.length"
+             x-text="filtro === 'curso' ? 'No hay pedidos en curso. Empieza uno con «Nuevo pedido».' : 'Todavía no hay pedidos cerrados.'"></p>
+        </div>
+      </div>
+    </template>
+
+    <!-- ===== Nuevo: elegir proveedor ===== -->
+    <template x-if="puedeUsar && vista === 'proveedor'">
+      <div class="panel pedido-proveedor">
+        <a href="#" class="volver" @click.prevent="volver()">← Volver <kbd>Esc</kbd></a>
+        <h1 style="margin-top: 8px">Nuevo pedido</h1>
+        <div class="paso">1. ¿A qué proveedor?</div>
+        <div class="proveedores-faltantes">
+          <template x-for="prov in proveedores" :key="prov.id">
+            <button type="button" class="opcion" :disabled="preparando" @click="elegirProveedor(prov)" x-text="prov.nombre"></button>
+          </template>
+          <p class="suave" x-show="!proveedores.length" style="margin: 0">Todavía no hay proveedores. Se dan de alta al registrar una entrada de mercancía.</p>
+        </div>
+        <label class="casilla sugerencias-ia" :class="{ apagada: !iaLista }" style="margin-top: 16px">
+          <input type="checkbox" x-model="conSugerencias" :disabled="!iaLista">
+          <span><strong>Sugerencias del asistente</strong><span class="ayuda" x-show="iaLista">: la IA revisa las ventas de las últimas 12 semanas y propone la cantidad de cada producto.</span><span class="ayuda" x-show="!iaLista">: para usarlas, un administrador debe poner la clave en Configuración → Asistente de IA.</span></span>
+        </label>
+        <div class="panel leyendo" x-show="preparando" style="margin-top: 12px"><span class="girando"></span>
+          <span x-text="conSugerencias && iaLista ? 'El asistente está revisando las ventas…' : 'Cargando los faltantes…'"></span></div>
+        <p class="ayuda" style="margin-top: 14px">Se cargan los productos que ese proveedor ha surtido y están en su mínimo o menos, con la cantidad para llegar a su máximo. Luego los puedes cambiar, quitar o agregar otros.</p>
+      </div>
+    </template>
+
+    <!-- ===== Armar el pedido ===== -->
+    <template x-if="puedeUsar && vista === 'armar' && arm">
+      <div class="pila" style="gap: 16px">
+        <div>
+          <a href="#" class="volver" @click.prevent="arm.pedido_id ? abrir(arm.pedido_id) : volver()">← Volver <kbd>Esc</kbd></a>
+          <h1 style="margin: 8px 0 0" x-text="arm.pedido_id ? `Editar pedido para ${arm.proveedor}` : `Pedido para ${arm.proveedor}`"></h1>
+          <p class="suave" style="margin: 0">Cambia las cantidades (en piezas); con 0 el producto no se pide.</p>
+        </div>
+
+        <div class="panel" style="padding: 0; overflow: hidden">
+          <table class="tabla tabla-armar" x-show="arm.renglones.length">
+            <thead><tr><th>Producto</th><th class="derecha ajustado">Hay</th><th class="derecha ajustado">Mín / máx</th><th class="derecha ajustado">Sugerido</th><th class="ajustado">Pedir</th><th class="derecha ajustado">Costo</th><th class="ajustado"></th></tr></thead>
+            <tbody>
+              <template x-for="(r, i) in arm.renglones" :key="r.producto_id">
+                <tr :class="{ apagado: !(Number(r.cantidad) > 0) }">
+                  <td>
+                    <div class="nombre" x-text="r.nombre"></div>
+                    <div class="etiquetas-renglon">
+                      <span class="suave" x-text="r.clave || 'sin clave'"></span>
+                      <template x-for="o in r.ya_pedido"><span class="etiqueta" x-text="`Ya pedido en #${o.folio} (${o.proveedor})`"></span></template>
+                      <span class="etiqueta" x-show="r.mejor_proveedor" x-text="`Más barato con ${r.mejor_proveedor}: ${dinero(r.mejor_costo)}`"></span>
+                    </div>
+                  </td>
+                  <td class="derecha" x-text="r.existencia === null || r.existencia === undefined ? '—' : cantidad(r.existencia)"></td>
+                  <td class="derecha suave" x-text="r.maximo ? `${cantidad(r.minimo || 0)} / ${cantidad(r.maximo)}` : '—'"></td>
+                  <td class="derecha">
+                    <span x-text="r.sugerido === null || r.sugerido === undefined ? '—' : cantidad(r.sugerido)"></span>
+                    <div class="asistente-sugiere" x-show="r.sugerencia_asistente !== null && r.sugerencia_asistente !== undefined" :title="r.motivo_asistente"
+                         x-text="`Asistente: ${r.sugerencia_asistente}`"></div>
+                  </td>
+                  <td><input class="cantidad-pedido" type="number" min="0" step="1" x-model="r.cantidad"></td>
+                  <td class="derecha" x-text="r.costo === null || r.costo === undefined ? '—' : dinero(r.costo)"></td>
+                  <td><button type="button" class="solo-icono" title="Quitar" @click="quitar(i)"><svg class="ico"><use href="/static/iconos.svg#tache"/></svg></button></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p class="suave" style="padding: 18px; margin: 0" x-show="!arm.renglones.length">Este proveedor no tiene faltantes por ahora. Agrega productos abajo si quieres pedir algo.</p>
+        </div>
+
+        <div class="panel">
+          <label style="margin-top: 0" for="buscar-pedido">Agregar otro producto</label>
+          <div class="buscador-pedido">
+            <input id="buscar-pedido" x-model="buscar" @input.debounce.250ms="alBuscar()" placeholder="Nombre o código">
+            <div class="resultados-pedido" x-show="resultados.length">
+              <template x-for="p in resultados" :key="p.id">
+                <button type="button" @click="agregarBuscado(p)"><span x-text="p.nombre"></span><span class="suave" x-text="p.clave || ''"></span></button>
+              </template>
+            </div>
+          </div>
+
+          <details class="sin-proveedor" x-show="arm.sin_proveedor.length" style="margin-top: 16px">
+            <summary><strong x-text="`Faltantes sin proveedor registrado (${arm.sin_proveedor.length})`"></strong>
+              <span class="suave">: nadie los ha surtido todavía; agrégalos si este proveedor los tiene.</span></summary>
+            <table class="tabla" style="margin-top: 8px">
+              <tbody>
+                <template x-for="x in arm.sin_proveedor" :key="x.producto_id">
+                  <tr><td><span class="nombre" x-text="x.nombre"></span>
+                        <template x-for="o in x.ya_pedido"><span class="etiqueta" style="margin-left: 6px" x-text="`Ya pedido en #${o.folio}`"></span></template></td>
+                    <td class="derecha ajustado suave" x-text="`Hay ${cantidad(x.existencia)} · pedir ${cantidad(x.sugerido)}`"></td>
+                    <td class="ajustado"><button type="button" @click="agregarSinProveedor(x)">Agregar</button></td></tr>
+                </template>
+              </tbody>
+            </table>
+          </details>
+
+          <label for="notas-pedido">Notas <span class="ayuda">(opcional; salen en el pedido)</span></label>
+          <textarea id="notas-pedido" rows="2" x-model="arm.notas" placeholder="Ej. entregar en la mañana"></textarea>
+        </div>
+
+        <div class="panel acciones-pedido">
+          <div>
+            <strong x-text="`${productosArmados} productos`"></strong>
+            <span class="suave" x-text="` · costo estimado ${dinero(totalArmado)} sin impuestos`"></span>
+          </div>
+          <div class="fila" style="flex: 0 0 auto; gap: 8px">
+            <button type="button" :disabled="guardando" @click="guardarArmado(false)">Guardar borrador</button>
+            <button type="button" class="primario" :disabled="guardando" @click="guardarArmado(true)"
+                    x-text="guardando ? 'Guardando…' : 'Guardar y marcar enviado'"></button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ===== Detalle ===== -->
+    <template x-if="puedeUsar && vista === 'detalle' && p">
+      <div class="pila" style="gap: 16px">
+        <div class="no-imprimir">
+          <a href="#" class="volver" @click.prevent="volver()">← Todos los pedidos <kbd>Esc</kbd></a>
+        </div>
+
+        <div class="panel pedido-hoja">
+          <div class="fila" style="justify-content: space-between; align-items: flex-start; flex-wrap: wrap">
+            <div>
+              <h1 style="margin: 0" x-text="`Pedido #${p.folio} · ${p.proveedor}`"></h1>
+              <p class="suave" style="margin: 2px 0 0">
+                <span class="etiqueta no-imprimir" :class="estado(p.estado).clase" x-text="estado(p.estado).texto"></span>
+                <span x-text="`Hecho el ${fecha(p.created_at)}` + (p.enviado_at ? ` · enviado el ${fecha(p.enviado_at)}` : '')"></span>
+              </p>
+            </div>
+            <div class="fila no-imprimir envio-pedido" x-show="p.estado === 'borrador' || p.estado === 'enviado'">
+              <button type="button" @click="imprimir()"><svg class="ico"><use href="/static/iconos.svg#impresora"/></svg>Imprimir</button>
+              <button type="button" @click="copiarWhatsApp()"><svg class="ico"><use href="/static/iconos.svg#enviar"/></svg>Copiar para WhatsApp</button>
+              <a class="boton" :href="`/compras/pedidos/${p.id}/excel`"><svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Excel</a>
+            </div>
+          </div>
+          <p x-show="p.notas" style="margin: 12px 0 0"><strong>Notas:</strong> <span x-text="p.notas"></span></p>
+
+          <table class="tabla" style="margin-top: 14px">
+            <thead><tr><th class="derecha ajustado">Piezas</th><th>Producto</th><th class="ajustado">Clave</th><th class="derecha ajustado">Costo esperado</th><th class="derecha ajustado">Importe</th></tr></thead>
+            <tbody>
+              <template x-for="r in p.renglones" :key="r.producto_id">
+                <tr><td class="derecha"><strong x-text="cantidad(r.cantidad)"></strong></td><td x-text="r.nombre"></td>
+                  <td class="suave" x-text="r.clave || ''"></td>
+                  <td class="derecha" x-text="r.costo_esperado === null ? '—' : dinero(r.costo_esperado)"></td>
+                  <td class="derecha" x-text="r.importe === null ? '—' : dinero(r.importe)"></td></tr>
+              </template>
+            </tbody>
+          </table>
+          <p class="suave" style="text-align: right; margin: 10px 0 0"
+             x-text="`${p.productos} productos · ${cantidad(p.piezas)} piezas · estimado ${dinero(p.total_estimado)} sin impuestos`"></p>
+        </div>
+
+        <!-- Qué sigue según el estado -->
+        <div class="panel no-imprimir" x-show="p.estado === 'borrador'">
+          <p style="margin-top: 0">Cuando se lo mandes al proveedor (por teléfono, WhatsApp, su portal o con el agente), márcalo como enviado.</p>
+          <div class="fila" style="gap: 8px; flex-wrap: wrap">
+            <button type="button" class="primario" :disabled="guardando" @click="accion('enviar', 'Pedido marcado como enviado.')">Marcar como enviado</button>
+            <button type="button" :disabled="guardando" @click="editar()">Cambiar el pedido</button>
+            <button type="button" class="texto-peligro" :disabled="guardando" @click="accion('cancelar', 'Pedido cancelado.')">Cancelar pedido</button>
+          </div>
+        </div>
+
+        <div class="panel no-imprimir" x-show="p.estado === 'enviado'">
+          <div class="paso" style="margin-top: 0">¿Ya llegó la mercancía?</div>
+          <p style="margin-top: 0">Al registrar la factura en <a href="/mercancia">Entradas de mercancía</a>, elige este pedido y la comparación sale aquí. Si ya la registraste, lígala:</p>
+          <div class="fila" style="gap: 8px; flex-wrap: wrap" x-show="p.entradas_disponibles.length">
+            <select x-model="entradaElegida" style="flex: 1 1 240px">
+              <template x-for="e in p.entradas_disponibles" :key="e.id">
+                <option :value="String(e.id)" x-text="`Factura ${e.folio} · ${fecha(e.fecha_recepcion)}`"></option>
+              </template>
+            </select>
+            <button type="button" class="primario" style="flex: 0 0 auto" :disabled="guardando" @click="ligarEntrada()">Ligar al pedido</button>
+          </div>
+          <p class="suave" x-show="!p.entradas_disponibles.length" style="margin: 0">No hay facturas de este proveedor registradas después del pedido.</p>
+          <div class="fila separado" style="gap: 8px; flex-wrap: wrap">
+            <button type="button" style="flex: 0 0 auto" :disabled="guardando" @click="accion('cerrar', 'Pedido cerrado.')" x-show="p.entradas.length">Ya no se espera más: cerrar pedido</button>
+            <button type="button" class="texto-peligro" :disabled="guardando" x-show="!p.entradas.length" @click="accion('cancelar', 'Pedido cancelado.')">Cancelar pedido</button>
+          </div>
+        </div>
+
+        <!-- Comparación -->
+        <template x-if="p.comparacion">
+          <div class="panel no-imprimir">
+            <div class="paso" style="margin-top: 0">Lo pedido contra lo que llegó</div>
+            <p class="suave" style="margin-top: 0" x-text="`Facturas: ${p.entradas.map((e) => e.folio).join(', ')}`"></p>
+            <div class="mensaje ok" x-show="!p.comparacion.faltantes && !p.comparacion.cambios_de_costo">
+              <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span>Llegó todo lo pedido y al costo esperado.</span></div>
+            <div class="mensaje aviso" x-show="p.comparacion.faltantes || p.comparacion.cambios_de_costo">
+              <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+              <span x-text="resumenComparacion"></span></div>
+            <table class="tabla" style="margin-top: 12px">
+              <thead><tr><th>Producto</th><th class="ajustado"></th><th class="derecha ajustado">Pedidas</th><th class="derecha ajustado">Llegaron</th><th class="derecha ajustado">Costo esperado</th><th class="derecha ajustado">Costo factura</th></tr></thead>
+              <tbody>
+                <template x-for="c in p.comparacion.renglones" :key="c.producto_id">
+                  <tr>
+                    <td x-text="c.nombre"></td>
+                    <td><span class="etiqueta" :class="comparacionEstado(c.estado).clase"
+                              x-text="comparacionEstado(c.estado).texto + (c.estado === 'incompleto' ? ` (faltan ${cantidad(c.faltan)})` : '')"></span></td>
+                    <td class="derecha" x-text="cantidad(c.pedidas)"></td>
+                    <td class="derecha" x-text="cantidad(c.llegaron)"></td>
+                    <td class="derecha" x-text="c.costo_esperado === null ? '—' : dinero(c.costo_esperado)"></td>
+                    <td class="derecha" :class="{ sube: Number(c.cambio_costo_porcentaje) > 0, baja: Number(c.cambio_costo_porcentaje) < 0 }">
+                      <span x-text="c.costo_real === null ? '—' : dinero(c.costo_real)"></span>
+                      <div style="font-size: 13px" x-show="c.cambio_costo_porcentaje !== null"
+                           x-text="`${Number(c.cambio_costo_porcentaje) > 0 ? 'subió' : 'bajó'} ${Math.abs(Number(c.cambio_costo_porcentaje))}%`"></div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

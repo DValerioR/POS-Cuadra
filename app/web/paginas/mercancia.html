@@ -139,6 +139,16 @@
                 <div><label>Fecha de la factura</label><input type="date" x-model="e.fecha_factura"></div>
                 <div><label>Fecha de recepción</label><input type="date" x-model="e.fecha_recepcion"></div>
               </div>
+              <div x-effect="cargarPedidos(e.proveedor_id)" x-show="pedidosAbiertos.length">
+                <label>¿Es de un pedido? <span class="ayuda">(para comparar lo pedido contra lo que llegó)</span></label>
+                <select x-model="e.pedido_id">
+                  <option value="">No es de un pedido</option>
+                  <template x-for="pd in pedidosAbiertos" :key="pd.id">
+                    <option :value="String(pd.id)" :selected="String(pd.id) === e.pedido_id"
+                            x-text="`Pedido #${pd.folio} · ${pd.productos} productos · enviado el ${new Date(pd.enviado_at).toLocaleDateString('es-MX')}`"></option>
+                  </template>
+                </select>
+              </div>
               <div class="mensaje info" x-show="e.proveedor_leido && !e.proveedor_id && !nuevoProveedor">
                 <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
                 <span>La factura es de <strong x-text="e.proveedor_leido && e.proveedor_leido.nombre"></strong>
@@ -260,6 +270,8 @@
             <p class="suave" x-text="`${resultado.proveedor} · factura ${resultado.folio}`"></p>
             <p><strong x-text="`${cantidad(resultado.piezas)} piezas`"></strong> de <span x-text="resultado.productos"></span> productos ya están en el inventario.
               <span x-show="resultado.precios_cambiados" x-text="resultado.precios_cambiados === 1 ? 'Se cambió el precio de venta de 1 producto.' : `Se cambiaron los precios de venta de ${resultado.precios_cambiados} productos.`"></span></p>
+            <p x-show="resultado.pedido"><a :href="resultado.pedido && `/pedidos?id=${resultado.pedido.id}`"
+               x-text="resultado.pedido && (resultado.pedido.estado === 'recibido' ? `Llegó todo el pedido #${resultado.pedido.folio}: ver la comparación` : `Ver qué faltó del pedido #${resultado.pedido.folio}`)"></a></p>
             <div class="fila separado">
               <button type="button" class="grande" @click="volverALista()">Ver entradas</button>
               <button type="button" class="primario grande" @click="nueva()">Otra entrada</button>

@@ -12,8 +12,8 @@ from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.importador import ia_facturas
 from app.importador.cfdi import XmlInvalido, leer_cfdi
-from app.models import ArchivoFactura, Entrada, Producto, Proveedor, Usuario
-from app.services import entradas
+from app.models import ArchivoFactura, Entrada, Pedido, PedidoEntrada, Producto, Proveedor, Usuario
+from app.services import entradas, pedidos
 from app.services.errores import ERRORES_NEGOCIO, NoEncontrado, OperacionInvalida, a_http
 
 router = APIRouter(tags=["entradas de mercancía"])
@@ -142,7 +142,15 @@ class EntradaIn(BaseModel):
     total_factura: Decimal | None = None
     archivo_id: int | None = None
     notas: str | None = Field(default=None, max_length=500)
+    pedido_id: int | None = None  # el pedido que surte esta factura, si hay
     renglones: list[RenglonIn] = Field(min_length=1, max_length=500)
+
+
+def _pedido_de(db: Session, e: Entrada) -> dict | None:
+    """El pedido que surtió esta entrada, si se ligó a uno."""
+    p = db.scalar(select(Pedido).join(PedidoEntrada, PedidoEntrada.pedido_id == Pedido.id)
+                  .where(PedidoEntrada.entrada_id == e.id))
+    return {"id": p.id, "folio": p.folio, "estado": p.estado.value} if p else None
 
 
 def _resumen(db: Session, e: Entrada) -> dict:
@@ -153,6 +161,7 @@ def _resumen(db: Session, e: Entrada) -> dict:
         "piezas": sum((r.piezas for r in e.renglones), Decimal(0)),
         "precios_cambiados": sum(1 for r in e.renglones if r.precio_nuevo is not None),
         "archivo_id": db.scalar(select(ArchivoFactura.id).where(ArchivoFactura.entrada_id == e.id)),
+        "pedido": _pedido_de(db, e),
         "created_at": e.created_at,
     }
 
@@ -166,6 +175,8 @@ def registrar(datos: EntradaIn, usuario: Usuario = Depends(usuario_actual), db: 
             [entradas.RenglonEntrada(**r.model_dump()) for r in datos.renglones],
             datos.origen, datos.fecha_factura, datos.total_factura, datos.archivo_id, datos.notas,
         )
+        if datos.pedido_id is not None:
+            pedidos.ligar_entrada(db, usuario, datos.pedido_id, entrada.id)
     except ERRORES_NEGOCIO as e:
         db.rollback()
         raise a_http(e)

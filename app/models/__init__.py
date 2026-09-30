@@ -15,6 +15,7 @@ from app.models.aviso_inventario import AvisoInventario, EstadoAviso
 from app.models.precio_historial import PrecioHistorial
 from app.models.entrada import ArchivoFactura, Entrada, EntradaRenglon, Proveedor, ProveedorEquivalencia
 from app.models.asistente import ConversacionAsistente, MensajeAsistente
+from app.models.pedido import EstadoPedido, Pedido, PedidoEntrada, PedidoRenglon
 
 __all__ = [
     "Negocio",
@@ -52,4 +53,8 @@ __all__ = [
     "ProveedorEquivalencia",
     "ConversacionAsistente",
     "MensajeAsistente",
+    "EstadoPedido",
+    "Pedido",
+    "PedidoEntrada",
+    "PedidoRenglon",
 ]
