@@ -38,6 +38,10 @@
           <button type="button" :class="{ activa: pestana === 'categorias' }" @click="pestana = 'categorias'">
             <svg class="ico"><use href="/static/iconos.svg#paquete"/></svg>Categorías
           </button>
+          <a class="boton" style="margin-left: auto" href="/productos/revision/excel" download
+             title="Cada producto con algo que revisar (sin costo, sin clave SAT, IVA dudoso...) y la clave SAT que le correspondería. No cambia nada.">
+            <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Reporte de revisión (Excel)
+          </a>
         </div>
 
         <div class="mensaje error" x-show="error" style="margin: 0">

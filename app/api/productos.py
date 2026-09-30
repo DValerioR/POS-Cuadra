@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +11,7 @@ from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Categoria, Negocio, PrecioHistorial, Producto, Usuario
 from app.schemas.producto import ProductoCreate, ProductoOut, ProductoUpdate
-from app.services import catalogo
+from app.services import catalogo, revision_catalogo
 from app.services.errores import ERRORES_NEGOCIO, a_http
 from app.services.precios import redondear_precio_venta
 
@@ -88,6 +88,19 @@ def listar_productos(
 def contar_productos(filtros: Filtros = Depends(), usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     """Cuántos productos cumplen los filtros (para paginar)."""
     return {"total": db.scalar(filtros.aplicar(select(func.count()).select_from(Producto), usuario.negocio_id))}
+
+
+@router.get("/revision/excel")
+def revision_excel(usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Reporte de revisión del catálogo en Excel: cada producto con algún
+    problema (sin costo, sin clave SAT, IVA dudoso...) y la clave SAT que le
+    correspondería. No cambia nada."""
+    fecha = datetime.now().strftime("%Y%m%d")
+    return Response(
+        revision_catalogo.excel(db, usuario.negocio_id),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="revision_catalogo_{fecha}.xlsx"'},
+    )
 
 
 class CambioEnGrupoIn(BaseModel):
