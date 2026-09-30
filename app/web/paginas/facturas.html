@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Facturar un ticket · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Facturar un ticket (admin y mostrador): se busca por folio, se capturan
+    // (o se recuerdan por RFC) los datos fiscales del cliente y se timbra.
+    function pantallaFacturas() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        cat: { regimenes: {}, usos: {}, formas_pago: {}, pac: null },
+        folio: "",
+        t: null, // ticket preparado
+        c: { rfc: "", nombre: "", codigo_postal: "", regimen_fiscal: "", uso_cfdi: "G03", email: "" },
+        tarjeta: "04",
+        clienteGuardado: false,
+        timbrando: false,
+        hecha: null,
+        recientes: [],
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (!this.puedeUsar) return;
+            [this.cat, this.recientes] = await Promise.all([API.get("/cfdi/catalogos"), API.get("/cfdi?limite=15")]);
+            const folio = new URLSearchParams(location.search).get("folio");
+            if (folio) { this.folio = folio; await this.buscar(); }
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+            this.$nextTick(() => { const i = document.getElementById("folio-ticket"); if (i) i.focus(); });
+          }
+        },
+        get puedeUsar() {
+          return this.usuario && (this.usuario.rol === "admin" || this.usuario.rol === "mostrador");
+        },
+        get dePrueba() {
+          return this.cat.pac === "simulado";
+        },
+        async buscar() {
+          const folio = String(this.folio).trim();
+          if (!folio) return;
+          this.error = "";
+          this.hecha = null;
+          this.t = null;
+          try {
+            this.t = await API.get(`/cfdi/ticket/${encodeURIComponent(folio)}`);
+            this.tarjeta = "04";
+            if (this.t.puede_facturar) this.$nextTick(() => document.getElementById("rfc-cliente").focus());
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        async alEscribirRfc() {
+          this.c.rfc = this.c.rfc.toUpperCase().replace(/\s/g, "");
+          this.clienteGuardado = false;
+          if (this.c.rfc.length < 12) return;
+          try {
+            const g = await API.get(`/cfdi/clientes/${encodeURIComponent(this.c.rfc)}`);
+            Object.assign(this.c, { nombre: g.nombre, codigo_postal: g.codigo_postal, regimen_fiscal: g.regimen_fiscal,
+                                    uso_cfdi: g.uso_cfdi, email: g.email || "" });
+            this.clienteGuardado = true;
+          } catch {
+            /* cliente nuevo: se capturan sus datos */
+          }
+        },
+        get personaMoral() {
+          return this.c.rfc.length === 12;
+        },
+        async timbrar() {
+          const c = this.c;
+          if (!c.rfc || !c.nombre.trim() || !c.codigo_postal || !c.regimen_fiscal || !c.uso_cfdi) {
+            return (this.error = "Llena RFC, razón social, código postal, régimen y uso del CFDI.");
+          }
+          this.timbrando = true;
+          this.error = "";
+          try {
+            this.hecha = await API.post("/cfdi", { folio_ticket: Number(this.t.folio), ...c, email: c.email || null, tarjeta: this.tarjeta });
+            this.recientes = await API.get("/cfdi?limite=15");
+            this.t = null;
+            this.folio = "";
+            this.c = { rfc: "", nombre: "", codigo_postal: "", regimen_fiscal: "", uso_cfdi: "G03", email: "" };
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.timbrando = false;
+          }
+        },
+        otra() {
+          this.hecha = null;
+          this.$nextTick(() => document.getElementById("folio-ticket").focus());
+        },
+        imprimir(id) {
+          window.open(`/factura-imprimir?id=${id}`, "_blank");
+        },
+        fecha(f) {
+          return new Date(f).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+        },
+        dinero,
+        cantidad,
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaFacturas()">
+
+  <header class="barra" data-pagina="facturas"></header>
+
+  <main class="contenido facturas" x-cloak x-show="!cargando">
+    <template x-if="usuario && !puedeUsar">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Facturan los administradores y mostrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="puedeUsar">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#ticket"/></svg></span>
+          <div><h1>Facturar un ticket</h1><p class="suave">Busca el ticket por su folio y captura los datos fiscales del cliente.</p></div>
+        </div>
+
+        <div class="mensaje aviso" x-show="dePrueba" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+          <span><strong>Modo de prueba:</strong> las facturas salen marcadas "PRUEBA" y <strong>no tienen validez fiscal</strong> hasta conectar un PAC. Mientras, las facturas reales se siguen haciendo en PVWin.</span>
+        </div>
+        <div class="mensaje error" x-show="!cat.pac" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span>Todavía no hay un PAC configurado para timbrar facturas.</span>
+        </div>
+
+        <div class="mensaje error" x-show="error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+        <!-- Factura hecha -->
+        <template x-if="hecha">
+          <div class="panel factura-hecha">
+            <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
+            <h2 x-text="`Factura ${hecha.serie}-${hecha.folio} timbrada`"></h2>
+            <p class="suave" x-text="`${hecha.receptor_nombre} · ${hecha.receptor_rfc} · ${dinero(hecha.total)}`"></p>
+            <p class="uuid"><span class="suave">Folio fiscal (UUID)</span><br><strong x-text="hecha.uuid"></strong></p>
+            <span class="etiqueta peligro" x-show="hecha.de_prueba">PRUEBA · SIN VALIDEZ FISCAL</span>
+            <div class="fila separado" style="justify-content: center; flex-wrap: wrap; gap: 8px">
+              <button type="button" class="primario" @click="imprimir(hecha.id)"><svg class="ico"><use href="/static/iconos.svg#impresora"/></svg>Imprimir</button>
+              <a class="boton" :href="`/cfdi/${hecha.id}/xml`"><svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>XML</a>
+              <button type="button" @click="otra()">Facturar otro ticket</button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Buscar ticket -->
+        <form class="panel buscar-ticket" x-show="!hecha" @submit.prevent="buscar()">
+          <label for="folio-ticket" style="margin-top: 0">Folio del ticket</label>
+          <div class="fila" style="gap: 8px">
+            <input id="folio-ticket" x-model="folio" inputmode="numeric" placeholder="Ej. 1234" autocomplete="off">
+            <button class="primario" style="flex: 0 0 auto">Buscar</button>
+          </div>
+        </form>
+
+        <template x-if="t && !hecha">
+          <div class="rejilla-factura">
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <div class="paso" style="margin: 14px 16px 4px" x-text="`Ticket ${t.folio} · ${fecha(t.fecha)}`"></div>
+              <table class="tabla">
+                <thead><tr><th>Producto</th><th class="derecha ajustado">Cant.</th><th class="ajustado">Clave SAT</th><th class="derecha ajustado">Importe</th></tr></thead>
+                <tbody>
+                  <template x-for="(c, i) in t.conceptos" :key="i">
+                    <tr><td x-text="c.descripcion"></td><td class="derecha" x-text="cantidad(c.cantidad)"></td>
+                      <td class="suave" :class="{ generica: c.clave_prod_serv === '01010101' }" x-text="c.clave_prod_serv"></td>
+                      <td class="derecha" x-text="dinero(c.importe)"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+              <div class="totales-factura">
+                <span>Subtotal</span><strong x-text="dinero(t.subtotal)"></strong>
+                <span x-show="Number(t.ieps) > 0">IEPS</span><strong x-show="Number(t.ieps) > 0" x-text="dinero(t.ieps)"></strong>
+                <span>IVA</span><strong x-text="dinero(t.iva)"></strong>
+                <span class="total">Total</span><strong class="total" x-text="dinero(t.total)"></strong>
+              </div>
+              <template x-for="a in t.avisos"><p class="aviso-factura" x-text="a"></p></template>
+            </div>
+
+            <div class="panel">
+              <template x-if="!t.puede_facturar">
+                <div class="mensaje error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="t.motivo"></span></div>
+              </template>
+              <template x-if="t.puede_facturar">
+                <form @submit.prevent="timbrar()">
+                  <div class="paso" style="margin-top: 0">Datos fiscales del cliente</div>
+                  <label style="margin-top: 0">RFC</label>
+                  <input id="rfc-cliente" x-model="c.rfc" @input.debounce.300ms="alEscribirRfc()" maxlength="13" autocapitalize="characters" autocomplete="off">
+                  <p class="ayuda" x-show="clienteGuardado" style="margin: 4px 0 0">Cliente guardado: revisa que sus datos sigan igual.</p>
+                  <label>Razón social <span class="ayuda">(como en su constancia de situación fiscal, sin "S.A. de C.V.")</span></label>
+                  <input x-model="c.nombre" maxlength="254">
+                  <div class="rejilla-2">
+                    <div><label>Código postal</label><input x-model="c.codigo_postal" maxlength="5" inputmode="numeric"></div>
+                    <div><label>Correo <span class="ayuda">(opcional)</span></label><input type="email" x-model="c.email"></div>
+                  </div>
+                  <label>Régimen fiscal</label>
+                  <select x-model="c.regimen_fiscal">
+                    <option value="">Elige…</option>
+                    <template x-for="(texto, clave) in cat.regimenes" :key="clave">
+                      <option :value="clave" x-text="`${clave} - ${texto}`" :selected="clave === c.regimen_fiscal"></option>
+                    </template>
+                  </select>
+                  <label>Uso del CFDI</label>
+                  <select x-model="c.uso_cfdi">
+                    <template x-for="(texto, clave) in cat.usos" :key="clave">
+                      <option :value="clave" x-text="`${clave} - ${texto}`" :selected="clave === c.uso_cfdi"></option>
+                    </template>
+                  </select>
+                  <template x-if="t.con_tarjeta">
+                    <div>
+                      <label>¿Con qué tarjeta pagó?</label>
+                      <div class="interruptor">
+                        <button type="button" :class="{ activo: tarjeta === '04' }" @click="tarjeta = '04'">Crédito</button>
+                        <button type="button" :class="{ activo: tarjeta === '28' }" @click="tarjeta = '28'">Débito</button>
+                      </div>
+                    </div>
+                  </template>
+                  <button class="primario grande separado" :disabled="timbrando || !cat.pac"
+                          x-text="timbrando ? 'Timbrando…' : (dePrueba ? 'Timbrar factura de prueba' : 'Timbrar factura')"></button>
+                </form>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <div class="panel" style="padding: 0; overflow: hidden" x-show="recientes.length">
+          <div class="paso" style="margin: 14px 16px 4px">Facturas recientes</div>
+          <table class="tabla tabla-clic">
+            <thead><tr><th class="ajustado">Factura</th><th>Cliente</th><th class="ajustado">Ticket</th><th class="derecha ajustado">Total</th><th class="ajustado">Fecha</th></tr></thead>
+            <tbody>
+              <template x-for="f in recientes" :key="f.id">
+                <tr @click="imprimir(f.id)">
+                  <td><strong x-text="`${f.serie}-${f.folio}`"></strong> <span class="etiqueta peligro" x-show="f.de_prueba">Prueba</span></td>
+                  <td><span x-text="f.receptor_nombre"></span><div class="suave" style="font-size: 13px" x-text="f.receptor_rfc"></div></td>
+                  <td x-text="f.folio_ticket"></td>
+                  <td class="derecha" x-text="dinero(f.total)"></td>
+                  <td class="suave" style="white-space: nowrap" x-text="fecha(f.fecha_timbrado)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+  </main>
+</body>
+</html>

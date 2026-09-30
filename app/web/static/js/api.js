@@ -238,6 +238,7 @@ const SECCIONES = [
   { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin", "mostrador"] },
   { id: "notificaciones", texto: "Notificaciones", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
+  { id: "facturas", texto: "Facturar un ticket", icono: "ticket", grupo: "Ventas", ruta: "/facturas", existe: true, roles: ["admin", "mostrador"] },
   { id: "precio", texto: "Consultar precio", icono: "precio", grupo: "Ventas", accion: "consultarPrecio", existe: true, roles: TODOS, tecla: "F8" },
   { id: "inventario", texto: "Inventario y caducidades", icono: "paquete", grupo: "Inventario", ruta: "/inventario", existe: true, roles: ["admin", "bodega"], tecla: "F3" },
   { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/mercancia", existe: true, roles: ["admin", "bodega"], tecla: "F4" },

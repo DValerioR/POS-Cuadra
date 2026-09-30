@@ -16,6 +16,7 @@ from app.models.precio_historial import PrecioHistorial
 from app.models.entrada import ArchivoFactura, Entrada, EntradaRenglon, Proveedor, ProveedorEquivalencia
 from app.models.asistente import ConversacionAsistente, MensajeAsistente
 from app.models.pedido import EstadoPedido, Pedido, PedidoEntrada, PedidoRenglon
+from app.models.factura import ClienteFiscal, EstadoFactura, Factura
 
 __all__ = [
     "Negocio",
@@ -57,4 +58,7 @@ __all__ = [
     "Pedido",
     "PedidoEntrada",
     "PedidoRenglon",
+    "ClienteFiscal",
+    "EstadoFactura",
+    "Factura",
 ]

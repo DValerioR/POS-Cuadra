@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Factura · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Representación impresa de una factura (tamaño carta), leída del XML timbrado.
+    function pantallaFactura() {
+      return {
+        f: null,
+        cat: { regimenes: {}, usos: {}, formas_pago: {} },
+        error: "",
+        async init() {
+          try {
+            const id = new URLSearchParams(location.search).get("id");
+            [this.f, this.cat] = await Promise.all([API.get(`/cfdi/${id}`), API.get("/cfdi/catalogos")]);
+            document.title = `Factura ${this.f.serie}-${this.f.folio} · POS`;
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        texto(catalogo, clave) {
+          const t = this.cat[catalogo][clave];
+          return t ? `${clave} - ${t}` : clave;
+        },
+        dinero,
+        cantidad,
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body class="hoja-factura" x-data="pantallaFactura()">
+  <div class="mensaje error" x-show="error" x-cloak><span x-text="error"></span></div>
+
+  <div class="acciones-hoja no-imprimir" x-show="f" x-cloak>
+    <button type="button" class="primario" onclick="window.print()"><svg class="ico"><use href="/static/iconos.svg#impresora"/></svg>Imprimir o guardar en PDF</button>
+    <a class="boton" :href="f && `/cfdi/${f.id}/xml`">Bajar XML</a>
+    <a class="boton" x-show="f && f.tiene_pdf" :href="f && `/cfdi/${f.id}/pdf`">PDF del PAC</a>
+  </div>
+
+  <template x-if="f">
+    <article class="factura-papel" :class="{ prueba: f.de_prueba }">
+      <div class="marca-agua" x-show="f.de_prueba">PRUEBA · SIN VALIDEZ FISCAL</div>
+      <header class="factura-cabeza">
+        <div class="factura-emisor">
+          <img x-show="f.marca_url" :src="f.marca_url" alt="">
+          <div>
+            <strong x-text="f.emisor_nombre"></strong>
+            <div x-text="`RFC ${f.emisor_rfc}`"></div>
+            <div x-text="`Régimen: ${texto('regimenes', f.emisor_regimen)}`"></div>
+            <div x-text="`Lugar de expedición: C.P. ${f.lugar_expedicion}`"></div>
+          </div>
+        </div>
+        <div class="factura-folio">
+          <div class="tipo">FACTURA</div>
+          <div class="numero" x-text="`${f.serie}-${f.folio}`"></div>
+          <div x-text="`Fecha: ${f.fecha.replace('T', ' ')}`"></div>
+          <div x-text="`Ticket: ${f.folio_ticket}`"></div>
+          <div>Tipo: I - Ingreso · CFDI 4.0</div>
+        </div>
+      </header>
+
+      <section class="factura-receptor">
+        <div class="titulo">Receptor</div>
+        <strong x-text="f.receptor_nombre"></strong>
+        <div x-text="`RFC ${f.receptor_rfc} · C.P. ${f.receptor_codigo_postal}`"></div>
+        <div x-text="`Régimen: ${texto('regimenes', f.receptor_regimen)}`"></div>
+        <div x-text="`Uso del CFDI: ${texto('usos', f.uso_cfdi)}`"></div>
+      </section>
+
+      <table class="factura-conceptos">
+        <thead><tr><th>Clave</th><th class="derecha">Cant.</th><th>Unidad</th><th>Descripción</th><th class="derecha">Valor unitario</th><th class="derecha">Importe</th></tr></thead>
+        <tbody>
+          <template x-for="(c, i) in f.conceptos" :key="i">
+            <tr><td x-text="c.ClaveProdServ"></td><td class="derecha" x-text="c.Cantidad"></td><td x-text="c.ClaveUnidad"></td>
+              <td><span x-text="c.Descripcion"></span><div class="suave" x-show="c.NoIdentificacion" x-text="c.NoIdentificacion"></div></td>
+              <td class="derecha" x-text="dinero(c.ValorUnitario)"></td><td class="derecha" x-text="dinero(c.Importe)"></td></tr>
+          </template>
+        </tbody>
+      </table>
+
+      <div class="factura-pie">
+        <div class="factura-pago">
+          <div x-text="`Forma de pago: ${texto('formas_pago', f.forma_pago)}`"></div>
+          <div>Método de pago: PUE - Pago en una sola exhibición</div>
+          <div>Moneda: MXN</div>
+        </div>
+        <div class="factura-totales">
+          <span>Subtotal</span><strong x-text="dinero(f.subtotal)"></strong>
+          <span x-show="Number(f.ieps) > 0">IEPS</span><strong x-show="Number(f.ieps) > 0" x-text="dinero(f.ieps)"></strong>
+          <span>IVA</span><strong x-text="dinero(f.iva)"></strong>
+          <span class="total">Total</span><strong class="total" x-text="dinero(f.total)"></strong>
+        </div>
+      </div>
+
+      <section class="factura-timbre">
+        <div><span class="titulo">Folio fiscal (UUID):</span> <strong x-text="f.uuid"></strong></div>
+        <div><span class="titulo">Fecha de timbrado:</span> <span x-text="f.fecha_timbrado"></span>
+          · <span class="titulo">No. certificado SAT:</span> <span x-text="f.no_certificado_sat"></span>
+          · <span class="titulo">RFC del PAC:</span> <span x-text="f.rfc_prov_certif"></span></div>
+        <div class="sello"><span class="titulo">Sello digital del CFDI:</span> <span x-text="f.sello_cfd"></span></div>
+        <div class="sello"><span class="titulo">Sello del SAT:</span> <span x-text="f.sello_sat"></span></div>
+        <p class="leyenda">Este documento es una representación impresa de un CFDI.</p>
+      </section>
+    </article>
+  </template>
+</body>
+</html>

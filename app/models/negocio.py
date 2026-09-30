@@ -34,6 +34,8 @@ class Negocio(Base):
     rfc: Mapped[str | None] = mapped_column(default=None)
     regimen_fiscal: Mapped[str | None] = mapped_column(default=None)  # clave del SAT, ej. "612"
     codigo_postal: Mapped[str | None] = mapped_column(default=None)  # lugar de expedición
+    # Serie de las facturas que salen del POS (distinta de la de PVWin para no chocar).
+    factura_serie: Mapped[str] = mapped_column(default="C", server_default="C")
     # Líneas del ticket arriba (dirección, teléfono, RFC) y abajo (agradecimiento).
     ticket_encabezado: Mapped[str | None] = mapped_column(default=None)
     ticket_pie: Mapped[str | None] = mapped_column(default=None)

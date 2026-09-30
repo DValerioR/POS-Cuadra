@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # opción queda desactivada y lo demás funciona igual.
     anthropic_api_key: str | None = None
     modelo_ia: str = "claude-opus-5-5"
+    # PAC para timbrar facturas. "simulado" = de prueba, sin validez fiscal
+    # (ver app/facturacion/pac.py); vacío = facturación apagada.
+    pac: str = "simulado"
 
 
 settings = Settings()
