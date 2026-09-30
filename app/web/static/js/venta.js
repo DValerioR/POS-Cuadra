@@ -51,6 +51,10 @@ function pantallaVenta() {
     tarjeta: "", // solo se captura en pago mixto
     cobrando: false,
     ultimaVenta: null,
+    // Ofertas: el servidor calcula los descuentos del carrito (el mismo
+    // cálculo que al cobrar). Solo vale si su firma es la del carrito actual.
+    cotizacion: null, // { firma, renglones: [{ descuento, oferta }] }
+    _cotizaTimer: null,
 
     // Ventas en espera
     guardadas: [],
@@ -74,6 +78,7 @@ function pantallaVenta() {
       } finally {
         this.cargando = false;
       }
+      this.$watch("firmaCarrito", () => this.programarCotizacion());
       window.addEventListener("keydown", (ev) => this.atajo(ev));
       setInterval(() => this.turno && this.cargarSolicitudes(), 15000);
       Salida.bloquear(() => {
@@ -247,7 +252,46 @@ function pantallaVenta() {
     },
 
     importe(renglon) {
-      return Math.round(centavos(renglon.producto.precio_venta || 0) * Number(renglon.cantidad || 0)) / 100;
+      const bruto = Math.round(centavos(renglon.producto.precio_venta || 0) * Number(renglon.cantidad || 0));
+      return (bruto - this.descuentoCentavos(renglon)) / 100;
+    },
+
+    // --- Ofertas ----------------------------------------------------------
+
+    get firmaCarrito() {
+      return this.carrito.map((r) => `${r.producto.id}:${Number(r.cantidad || 0)}`).join(",");
+    },
+    get cotizacionVigente() {
+      return this.cotizacion && this.cotizacion.firma === this.firmaCarrito ? this.cotizacion : null;
+    },
+    ofertaDe(renglon) {
+      const c = this.cotizacionVigente;
+      const i = this.carrito.indexOf(renglon);
+      return c && i >= 0 && c.renglones[i] && Number(c.renglones[i].descuento) > 0 ? c.renglones[i] : null;
+    },
+    descuentoCentavos(renglon) {
+      const o = this.ofertaDe(renglon);
+      return o ? centavos(o.descuento) : 0;
+    },
+    get ahorroCentavos() {
+      return this.carrito.reduce((s, r) => s + this.descuentoCentavos(r), 0);
+    },
+    programarCotizacion() {
+      clearTimeout(this._cotizaTimer);
+      if (!this.carrito.length) return;
+      this._cotizaTimer = setTimeout(() => this.cotizar(), 150);
+    },
+    async cotizar() {
+      const firma = this.firmaCarrito;
+      if (!this.carrito.length || this.carrito.some((r) => !(Number(r.cantidad) > 0))) return;
+      try {
+        const r = await API.post("/ventas/cotizar", {
+          renglones: this.carrito.map((x) => ({ producto_id: x.producto.id, cantidad: String(x.cantidad) })),
+        });
+        if (firma === this.firmaCarrito) this.cotizacion = { firma, renglones: r.renglones };
+      } catch {
+        // Sin cotización se muestran precios normales; el cobro vuelve a intentarlo.
+      }
     },
 
     // Lote que se sugiere entregar (FEFO) o el que eligió el vendedor.
@@ -355,6 +399,16 @@ function pantallaVenta() {
       this.cobrando = true;
       this.error = "";
       try {
+        // Que el total que se cobra sea el de las ofertas de este momento.
+        if (!this.cotizacionVigente) {
+          const antes = this.totalCentavos;
+          await this.cotizar();
+          if (this.cotizacionVigente && this.totalCentavos !== antes) {
+            this.error = "El total cambió por una oferta; revísalo y vuelve a cobrar.";
+            if (this.formaPago !== "tarjeta") this.efectivo = "";
+            return;
+          }
+        }
         const venta = await API.post("/ventas", {
           caja_id: this.cajaId,
           renglones: this.carrito.map((r) => ({

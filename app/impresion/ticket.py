@@ -53,7 +53,9 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
 
     for r in venta.renglones:
         t.linea(r.nombre)
-        t.columnas_izq_der(f"  {_cantidad(r.cantidad)} x {_dinero(r.precio_unitario)}", _dinero(r.importe))
+        t.columnas_izq_der(f"  {_cantidad(r.cantidad)} x {_dinero(r.precio_unitario)}", _dinero(r.importe + r.descuento))
+        if r.descuento:
+            t.columnas_izq_der(f"  {r.oferta_texto or 'Oferta'}", f"-{_dinero(r.descuento)}")
         for asignacion in r.lotes:
             lote = asignacion.lote
             if lote.caducidad is None and lote.numero_lote is None:
@@ -73,6 +75,9 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
         t.columnas_izq_der("IEPS", _dinero(venta.ieps))
     t.columnas_izq_der("IVA", _dinero(venta.iva))
     t.columnas_izq_der("TOTAL", _dinero(venta.total), negrita=True)
+    ahorro = sum((r.descuento for r in venta.renglones), Decimal(0))
+    if ahorro:
+        t.columnas_izq_der("Usted ahorró", _dinero(ahorro), negrita=True)
     t.separador()
 
     for pago in venta.pagos:

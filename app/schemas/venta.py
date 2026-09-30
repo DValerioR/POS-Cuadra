@@ -22,6 +22,10 @@ class VentaIn(BaseModel):
     efectivo_recibido: Decimal = Field(default=Decimal(0), ge=0)
 
 
+class CotizarIn(BaseModel):
+    renglones: list[RenglonIn]
+
+
 class LoteVendidoOut(BaseModel):
     lote_id: int
     cantidad: Decimal
@@ -37,6 +41,8 @@ class RenglonOut(BaseModel):
     cantidad: Decimal
     precio_unitario: Decimal
     importe: Decimal
+    descuento: Decimal = Decimal(0)
+    oferta_texto: str | None = None
     subtotal: Decimal
     ieps: Decimal
     iva: Decimal

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ofertas sugeridas · POS</title>
+  <title>Ofertas · POS</title>
   <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="/static/app/icono-180.png">
@@ -12,21 +12,55 @@
   <link rel="stylesheet" href="/static/css/pos.css">
   <script src="/static/js/api.js"></script>
   <script>
-    // Ofertas sugeridas (solo admin): el sistema muestra cuántos productos
-    // conviene poner en oferta (caducan pronto, sin ventas, de más, o con buen
-    // margen y poca venta) y el asistente propone la oferta de los más
-    // urgentes. Solo recomienda: ningún precio cambia; se baja en Excel.
+    // Ofertas (solo admin). Arriba, las ofertas que se están aplicando al
+    // vender (con "Quitar") y el alta de una oferta a mano. Abajo, las
+    // sugerencias del asistente para lo que caduca pronto, no se vende o
+    // sobra; cada una se puede aplicar (ajustando precio y fecha de fin).
+    // El servidor revisa siempre el precio mínimo y que un producto tenga una
+    // sola oferta a la vez.
     const RAZONES = {
       caduca: "Caduca pronto",
       sin_movimiento: "Sin ventas",
       sobreinventario: "De más",
       poca_venta: "Buen margen, poca venta",
     };
+    const TIPOS = [
+      { id: "descuento", texto: "Descuento" },
+      { id: "precio_especial", texto: "Precio especial" },
+      { id: "2x1", texto: "2x1" },
+      { id: "3x2", texto: "3x2" },
+      { id: "paquete", texto: "Paquete" },
+    ];
+    const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+    function isoLocal(fecha) {
+      const d = new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60000);
+      return d.toISOString().slice(0, 10);
+    }
+    function enDias(n) {
+      const d = new Date();
+      d.setDate(d.getDate() + n);
+      return isoLocal(d);
+    }
+    function fechaCorta(iso) {
+      const [a, m, d] = iso.split("-").map(Number);
+      return `${d} ${MESES[m - 1]} ${a}`;
+    }
+
     function pantallaOfertas() {
       return {
         usuario: null,
         cargando: true,
         error: "",
+        // Ofertas aplicadas
+        activas: [],
+        terminadas: [],
+        verTerminadas: false,
+        porQuitar: null,
+        quitando: false,
+        // Oferta a mano
+        nueva: null,
+        // Sugerencias del asistente
         datos: null,
         iaLista: false,
         pidiendo: false,
@@ -37,7 +71,9 @@
           try {
             this.usuario = await API.get("/auth/yo");
             if (this.puedeUsar) {
-              const [datos, ia] = await Promise.all([API.get("/reportes/ofertas/candidatos"), API.get("/ia/estado")]);
+              const [datos, ia] = await Promise.all([
+                API.get("/reportes/ofertas/candidatos"), API.get("/ia/estado"), this.cargarActivas(),
+              ]);
               this.datos = datos;
               this.iaLista = ia.configurada;
             }
@@ -50,6 +86,120 @@
         get puedeUsar() {
           return this.usuario && this.usuario.rol === "admin";
         },
+        fechaCorta,
+
+        // --- Ofertas aplicadas ------------------------------------------------
+        async cargarActivas() {
+          const r = await API.get("/ofertas/activas");
+          this.activas = r.activas;
+          this.terminadas = r.terminadas;
+        },
+        detalle(o) {
+          if (o.tipo === "2x1" || o.tipo === "3x2") return `Precio normal ${dinero(o.precio_normal)}`;
+          if (o.tipo === "paquete") {
+            return `Los dos por ${dinero(o.precio)} (normal ${dinero(Number(o.precio_normal) + Number(o.paquete_con.precio_normal))})`;
+          }
+          return `${dinero(o.precio)} en vez de ${dinero(o.precio_normal)}`;
+        },
+        async quitar(o) {
+          if (this.quitando) return;
+          this.quitando = true;
+          this.error = "";
+          try {
+            await API.post(`/ofertas/${o.id}/quitar`);
+            this.porQuitar = null;
+            await this.cargarActivas();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.quitando = false;
+          }
+        },
+
+        // --- Oferta a mano ----------------------------------------------------
+        abrirNueva() {
+          this.nueva = {
+            buscar: "", encontrados: [], producto: null, info: null, tipo: "descuento", precio: "",
+            buscarOtro: "", encontradosOtro: [], otro: null, infoOtro: null,
+            fin: enDias(14), motivo: "", error: "", guardando: false,
+          };
+          this.$nextTick(() => document.getElementById("buscar-producto").focus());
+        },
+        async buscarProductos(texto) {
+          texto = (texto || "").trim();
+          if (texto.length < 2) return [];
+          const porClave = await API.get(`/productos?solo_activos=true&limite=2&clave=${encodeURIComponent(texto)}`);
+          if (porClave.length) return porClave;
+          return API.get(`/productos?solo_activos=true&limite=8&q=${encodeURIComponent(texto)}`);
+        },
+        async buscarNueva(cual) {
+          const n = this.nueva;
+          const texto = cual === "otro" ? n.buscarOtro : n.buscar;
+          try {
+            const lista = await this.buscarProductos(texto);
+            if (cual === "otro") n.encontradosOtro = lista;
+            else n.encontrados = lista;
+          } catch (e) {
+            n.error = e.message;
+          }
+        },
+        async elegir(p, cual) {
+          const n = this.nueva;
+          n.error = "";
+          try {
+            const info = await API.get(`/ofertas/minimo?producto_id=${p.id}`);
+            if (cual === "otro") {
+              n.otro = p; n.infoOtro = info; n.encontradosOtro = []; n.buscarOtro = "";
+            } else {
+              n.producto = p; n.info = info; n.encontrados = []; n.buscar = "";
+              if (info.requiere_receta && !["descuento", "precio_especial"].includes(n.tipo)) n.tipo = "descuento";
+            }
+          } catch (e) {
+            n.error = e.message;
+          }
+        },
+        tiposPara(info) {
+          return info && info.requiere_receta ? TIPOS.filter((t) => ["descuento", "precio_especial"].includes(t.id)) : TIPOS;
+        },
+        get minimoNueva() {
+          const n = this.nueva;
+          if (!n || !n.info) return null;
+          if (n.tipo === "paquete") return n.infoOtro ? Number(n.info.precio_minimo) + Number(n.infoOtro.precio_minimo) : null;
+          return Number(n.info.precio_minimo);
+        },
+        get normalNueva() {
+          const n = this.nueva;
+          if (!n || !n.info) return null;
+          if (n.tipo === "paquete") return n.infoOtro ? Number(n.info.precio_normal) + Number(n.infoOtro.precio_normal) : null;
+          return Number(n.info.precio_normal);
+        },
+        get pideprecio() {
+          return this.nueva && !["2x1", "3x2"].includes(this.nueva.tipo);
+        },
+        descuentoTexto(precio, normal) {
+          if (!precio || !normal || Number(precio) >= normal) return "";
+          return `${Math.round((1 - Number(precio) / normal) * 100)}% menos`;
+        },
+        async guardarNueva() {
+          const n = this.nueva;
+          if (!n.producto || n.guardando) return;
+          n.guardando = true;
+          n.error = "";
+          try {
+            await API.post("/ofertas", {
+              producto_id: n.producto.id, tipo: n.tipo, precio: this.pideprecio && n.precio !== "" ? String(n.precio) : null,
+              paquete_con_id: n.tipo === "paquete" && n.otro ? n.otro.id : null, fin: n.fin, motivo: n.motivo || null,
+            });
+            this.nueva = null;
+            await this.cargarActivas();
+          } catch (e) {
+            n.error = e.message;
+          } finally {
+            n.guardando = false;
+          }
+        },
+
+        // --- Sugerencias del asistente ----------------------------------------
         get total() {
           return this.datos ? this.datos.candidatos.length : 0;
         },
@@ -62,11 +212,44 @@
           this.error = "";
           this.resultado = null;
           try {
-            this.resultado = await API.post("/reportes/ofertas");
+            const r = await API.post("/reportes/ofertas");
+            // Estado de "Aplicar" de cada sugerencia.
+            r.ofertas.forEach((o) => Object.assign(o, { abierta: false, aplicada: false, errorAplicar: "", aplicando: false,
+              precioAplicar: o.tipo === "2x1" || o.tipo === "3x2" ? "" : o.precio_oferta, finAplicar: this.finSugerido(o) }));
+            this.resultado = r;
           } catch (e) {
             this.error = e.message;
           } finally {
             this.pidiendo = false;
+          }
+        },
+        // Dos semanas, pero sin pasar del día antes de que caduque.
+        finSugerido(o) {
+          const fin = enDias(14);
+          if (!o.caducidad) return fin;
+          const d = new Date(o.caducidad + "T12:00");
+          d.setDate(d.getDate() - 1);
+          const antes = isoLocal(d);
+          return antes < fin ? antes : fin;
+        },
+        async aplicar(o) {
+          if (o.aplicando) return;
+          o.aplicando = true;
+          o.errorAplicar = "";
+          try {
+            await API.post("/ofertas", {
+              producto_id: o.producto_id, tipo: o.tipo,
+              precio: o.tipo === "2x1" || o.tipo === "3x2" ? null : String(o.precioAplicar),
+              paquete_con_id: o.paquete_con ? o.paquete_con.producto_id : null,
+              fin: o.finAplicar, motivo: o.motivo, origen: "asistente",
+            });
+            o.aplicada = true;
+            o.abierta = false;
+            await this.cargarActivas();
+          } catch (e) {
+            o.errorAplicar = e.message;
+          } finally {
+            o.aplicando = false;
           }
         },
         async descargar() {
@@ -105,8 +288,7 @@
         caducidad(o) {
           if (!o.caducidad) return "";
           const [a, m] = o.caducidad.split("-");
-          const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-          return `Caducan ${Number(o.piezas_por_caducar)} en ${meses[Number(m) - 1]} ${a}`;
+          return `Caducan ${Number(o.piezas_por_caducar)} en ${MESES[Number(m) - 1]} ${a}`;
         },
         razon(r) {
           return RAZONES[r] || r;
@@ -127,16 +309,154 @@
     <template x-if="usuario && !puedeUsar">
       <div class="panel"><div class="encabezado">
         <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
-        <div><h2>Sin acceso</h2><p class="suave">Las ofertas las revisan los administradores.</p></div>
+        <div><h2>Sin acceso</h2><p class="suave">Las ofertas las manejan los administradores.</p></div>
       </div></div>
     </template>
 
-    <template x-if="puedeUsar && datos">
+    <div class="mensaje error" x-show="error" style="margin-bottom: 12px"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <!-- Ofertas que se están aplicando al vender -->
+    <template x-if="puedeUsar">
       <div class="panel">
         <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#precio"/></svg></span>
+          <div><h1>Ofertas</h1>
+            <p class="suave">Las ofertas activas se aplican solas al cobrar, salen en el ticket y terminan en su fecha.</p></div>
+        </div>
+
+        <div class="paso">Activas hoy</div>
+        <p class="suave" x-show="!activas.length" style="margin: 0 0 12px">No hay ofertas activas.</p>
+        <div class="lista-ofertas">
+          <template x-for="o in activas" :key="o.id">
+            <div class="oferta">
+              <div class="oferta-producto">
+                <strong x-text="o.nombre"></strong>
+                <div class="etiquetas-renglon">
+                  <span class="etiqueta verde" x-text="o.texto"></span>
+                  <span class="suave" x-text="detalle(o)"></span>
+                  <span class="etiqueta gris" x-show="o.origen === 'asistente'">Del asistente</span>
+                </div>
+                <p class="oferta-motivo suave" x-show="o.motivo" x-text="o.motivo"></p>
+              </div>
+              <div class="oferta-precio">
+                <strong x-text="`Hasta el ${fechaCorta(o.fin)}`"></strong>
+                <span class="suave" x-text="`Puesta por ${o.creada_por}`"></span>
+                <button type="button" class="texto-peligro" x-show="porQuitar !== o.id" @click="porQuitar = o.id">Quitar</button>
+                <div class="fila" x-show="porQuitar === o.id" style="gap: 8px">
+                  <span>¿Quitarla ya?</span>
+                  <button type="button" class="peligro" :disabled="quitando" @click="quitar(o)">Sí, quitar</button>
+                  <button type="button" @click="porQuitar = null">No</button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <button type="button" class="separado" x-show="!nueva" @click="abrirNueva()">
+          <svg class="ico"><use href="/static/iconos.svg#precio"/></svg> Poner una oferta a mano
+        </button>
+
+        <!-- Alta a mano -->
+        <template x-if="nueva">
+          <div class="nueva-oferta separado">
+            <div class="paso">Nueva oferta</div>
+            <template x-if="!nueva.producto">
+              <div>
+                <input id="buscar-producto" x-model="nueva.buscar" @input.debounce.250ms="buscarNueva()" placeholder="Escanea o escribe el nombre del producto">
+                <div class="resultados-oferta">
+                  <template x-for="p in nueva.encontrados" :key="p.id">
+                    <button type="button" class="opcion" @click="elegir(p)"><span x-text="p.nombre"></span><span class="suave" x-text="p.precio_venta ? dinero(p.precio_venta) : 'Sin precio'"></span></button>
+                  </template>
+                </div>
+              </div>
+            </template>
+            <template x-if="nueva.producto && nueva.info">
+              <div>
+                <div class="fila" style="justify-content: space-between; gap: 12px; flex-wrap: wrap">
+                  <strong x-text="nueva.producto.nombre"></strong>
+                  <button type="button" class="texto" @click="nueva.producto = null; nueva.info = null">Cambiar producto</button>
+                </div>
+                <p class="suave" style="margin: 4px 0 12px" x-text="`Precio normal ${dinero(nueva.info.precio_normal)} · lo más bajo permitido ${dinero(nueva.info.precio_minimo)}${nueva.info.caduca_pronto ? ' (caduca pronto: al costo)' : ' (costo + 10%)'}`"></p>
+                <div class="chips tipos-oferta">
+                  <template x-for="t in tiposPara(nueva.info)" :key="t.id">
+                    <button type="button" class="opcion" :class="{ activa: nueva.tipo === t.id }" @click="nueva.tipo = t.id" x-text="t.texto"></button>
+                  </template>
+                </div>
+                <p class="ayuda" x-show="nueva.info.requiere_receta">Pide receta: solo descuento o precio especial.</p>
+
+                <template x-if="nueva.tipo === 'paquete'">
+                  <div class="separado">
+                    <label>¿Con qué otro producto?</label>
+                    <template x-if="!nueva.otro">
+                      <div>
+                        <input x-model="nueva.buscarOtro" @input.debounce.250ms="buscarNueva('otro')" placeholder="Nombre o código del otro producto">
+                        <div class="resultados-oferta">
+                          <template x-for="p in nueva.encontradosOtro" :key="p.id">
+                            <button type="button" class="opcion" @click="elegir(p, 'otro')"><span x-text="p.nombre"></span><span class="suave" x-text="p.precio_venta ? dinero(p.precio_venta) : 'Sin precio'"></span></button>
+                          </template>
+                        </div>
+                      </div>
+                    </template>
+                    <div class="fila" x-show="nueva.otro" style="gap: 12px">
+                      <strong x-text="nueva.otro && nueva.otro.nombre"></strong>
+                      <span class="suave" x-text="nueva.infoOtro && dinero(nueva.infoOtro.precio_normal)"></span>
+                      <button type="button" class="texto" @click="nueva.otro = null; nueva.infoOtro = null">Cambiar</button>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="campos-oferta separado">
+                  <label x-show="pideprecio">
+                    <span x-text="nueva.tipo === 'paquete' ? 'Precio de los dos juntos' : 'Precio de oferta por pieza'"></span>
+                    <input type="number" min="0" step="0.5" x-model="nueva.precio">
+                    <small class="ayuda" x-text="minimoNueva !== null ? `Entre ${dinero(minimoNueva)} y ${dinero(normalNueva - 0.01)} · ${descuentoTexto(nueva.precio, normalNueva)}` : ''"></small>
+                  </label>
+                  <label>
+                    <span>Termina el</span>
+                    <input type="date" x-model="nueva.fin" :min="enDias(0)">
+                  </label>
+                  <label class="ancho">
+                    <span>Nota (opcional)</span>
+                    <input x-model="nueva.motivo" placeholder="Ej. caducan en diciembre">
+                  </label>
+                </div>
+              </div>
+            </template>
+            <div class="mensaje error" x-show="nueva.error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="nueva.error"></span></div>
+            <div class="fila separado" style="gap: 10px; justify-content: flex-end">
+              <button type="button" @click="nueva = null">Cancelar</button>
+              <button type="button" class="primario" :disabled="!nueva.producto || nueva.guardando" @click="guardarNueva()"
+                x-text="nueva.guardando ? 'Guardando…' : 'Poner la oferta desde hoy'"></button>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="terminadas.length">
+          <div class="separado">
+            <button type="button" class="texto" @click="verTerminadas = !verTerminadas"
+              x-text="verTerminadas ? 'Ocultar las que ya terminaron' : `Ver las que terminaron en los últimos 30 días (${terminadas.length})`"></button>
+            <table class="tabla" x-show="verTerminadas" style="margin-top: 8px">
+              <tbody>
+                <template x-for="o in terminadas" :key="o.id">
+                  <tr>
+                    <td><span class="nombre" x-text="o.nombre"></span><div class="suave" x-text="`${o.texto} · ${detalle(o)}`"></div></td>
+                    <td class="derecha suave" x-text="o.quitada_por ? `Quitada por ${o.quitada_por}` : `Terminó el ${fechaCorta(o.fin)}`"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- Sugerencias del asistente -->
+    <template x-if="puedeUsar && datos">
+      <div class="panel separado">
+        <div class="encabezado">
           <span class="circulo"><svg><use href="/static/iconos.svg#chispa"/></svg></span>
-          <div><h1>Ofertas sugeridas</h1>
-            <p class="suave">El asistente propone ofertas para lo que caduca pronto, no se vende o sobra. Solo son sugerencias: ningún precio cambia.</p></div>
+          <div><h2>Ofertas sugeridas</h2>
+            <p class="suave">El asistente propone ofertas para lo que caduca pronto, no se vende o sobra. Tú decides cuáles aplicar.</p></div>
         </div>
 
         <div class="paso">1. Productos que conviene poner en oferta</div>
@@ -167,8 +487,6 @@
           </button>
         </div>
 
-        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
-
         <template x-if="resultado && !resultado.ofertas.length">
           <div class="mensaje info"><svg class="ico"><use href="/static/iconos.svg#info"/></svg>
             <span>El asistente no encontró ofertas que convengan por ahora.</span></div>
@@ -179,7 +497,7 @@
             <div class="paso separado" x-text="`3. ${plural(resultado.ofertas.length, 'oferta sugerida', 'ofertas sugeridas')}`"></div>
             <div class="lista-ofertas">
               <template x-for="o in resultado.ofertas" :key="o.producto_id">
-                <div class="oferta">
+                <div class="oferta" :class="{ aplicada: o.aplicada }">
                   <div class="oferta-producto">
                     <strong x-text="o.nombre"></strong>
                     <div class="etiquetas-renglon">
@@ -191,12 +509,29 @@
                       <span class="suave" x-text="`Hay ${Number(o.existencia)} · vendió ${o.vendidas_12_semanas} en 12 semanas`"></span>
                     </div>
                     <p class="oferta-motivo" x-text="o.motivo"></p>
+
+                    <!-- Aplicar: se puede ajustar precio y fecha de fin -->
+                    <div class="aplicar-oferta" x-show="o.abierta">
+                      <label x-show="o.tipo !== '2x1' && o.tipo !== '3x2'">
+                        <span x-text="o.tipo === 'paquete' ? 'Precio de los dos' : 'Precio por pieza'"></span>
+                        <input type="number" min="0" step="0.5" x-model="o.precioAplicar">
+                      </label>
+                      <label>
+                        <span>Termina el</span>
+                        <input type="date" x-model="o.finAplicar">
+                      </label>
+                      <button type="button" class="primario" :disabled="o.aplicando" @click="aplicar(o)" x-text="o.aplicando ? 'Aplicando…' : 'Aplicar desde hoy'"></button>
+                      <button type="button" @click="o.abierta = false">Cancelar</button>
+                    </div>
+                    <div class="mensaje error" x-show="o.errorAplicar"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="o.errorAplicar"></span></div>
                   </div>
                   <div class="oferta-precio">
                     <span class="suave tachado" x-text="dinero(o.precio_normal)"></span>
                     <strong x-text="textoOferta(o)"></strong>
                     <span class="suave" x-text="`−${o.descuento_porcentaje}% · te deja ${dinero(o.ganancia)} sin impuestos`"></span>
                     <span class="etiqueta" x-show="o.ajustada" title="El asistente propuso menos; se subió al precio mínimo">Subida al mínimo</span>
+                    <button type="button" class="primario" x-show="!o.abierta && !o.aplicada" @click="o.abierta = true">Aplicar</button>
+                    <span class="etiqueta verde" x-show="o.aplicada">Aplicada</span>
                   </div>
                 </div>
               </template>
@@ -206,7 +541,7 @@
 
         <p class="ayuda" style="margin-top: 16px">
           Una oferta nunca baja del costo en lo que caduca pronto, ni de costo + 10% en lo demás (con impuestos), ni pasa del
-          precio máximo al público. A los productos con receta solo se les sugiere descuento, nunca 2x1 ni paquetes.
+          precio máximo al público. A los productos con receta solo se les pone descuento o precio especial, nunca 2x1 ni paquetes.
         </p>
       </div>
     </template>

@@ -25,7 +25,7 @@ from app.models import (
     AvisoInventario, Lote, MetodoPago, Negocio, Pago, Producto, RolUsuario, Usuario, Venta,
     VentaRenglon, VentaRenglonLote,
 )
-from app.services import inventario, turnos
+from app.services import inventario, ofertas_venta, turnos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 CENTAVO = Decimal("0.01")
@@ -126,6 +126,40 @@ def _pagos(total: Decimal, tarjeta: Decimal, efectivo_recibido: Decimal) -> list
     return pagos
 
 
+def validar_renglon(db: Session, negocio_id: int, r: RenglonSolicitado) -> Producto:
+    producto = inventario.obtener_producto(db, negocio_id, r.producto_id)
+    if not producto.activo:
+        raise OperacionInvalida(f"{producto.nombre} está desactivado")
+    if producto.precio_venta is None:
+        raise OperacionInvalida(f"{producto.nombre} no tiene precio de venta")
+    if r.cantidad <= 0:
+        raise OperacionInvalida(f"Cantidad inválida para {producto.nombre}")
+    return producto
+
+
+def cotizar(db: Session, negocio_id: int, renglones: list[RenglonSolicitado]) -> dict:
+    """Lo que costaría el carrito con las ofertas de hoy, sin registrar nada.
+    Es el mismo cálculo del cobro, para que la pantalla muestre lo que se cobrará."""
+    productos = [validar_renglon(db, negocio_id, r) for r in renglones]
+    aplicadas = ofertas_venta.calcular(db, negocio_id, [(p, r.cantidad) for p, r in zip(productos, renglones)])
+    lista = []
+    for r, p, a in zip(renglones, productos, aplicadas):
+        bruto = (p.precio_venta * r.cantidad).quantize(CENTAVO)
+        lista.append({"producto_id": p.id, "cantidad": r.cantidad, "precio_unitario": p.precio_venta,
+                      "descuento": a.descuento, "importe": bruto - a.descuento,
+                      "oferta": a.texto if a.descuento else None})
+    return {"renglones": lista, "descuento": sum((x["descuento"] for x in lista), Decimal(0)),
+            "total": sum((x["importe"] for x in lista), Decimal(0))}
+
+
+def importe_de_piezas(renglon: VentaRenglon, cantidad: Decimal) -> Decimal:
+    """Lo que se cobró por `cantidad` piezas del renglón (con su parte del
+    descuento de la oferta), para devolverlas."""
+    if not renglon.descuento:
+        return (renglon.precio_unitario * cantidad).quantize(CENTAVO)
+    return (renglon.importe * cantidad / renglon.cantidad).quantize(CENTAVO)
+
+
 def registrar_venta(
     db: Session,
     usuario: Usuario,
@@ -159,15 +193,10 @@ def registrar_venta(
     avisos: list[str] = []
     sin_existencia: list[tuple[Producto, Decimal, Decimal]] = []  # producto, vendidas, faltantes
 
-    for r in renglones:
-        producto = inventario.obtener_producto(db, usuario.negocio_id, r.producto_id)
-        if not producto.activo:
-            raise OperacionInvalida(f"{producto.nombre} está desactivado")
-        if producto.precio_venta is None:
-            raise OperacionInvalida(f"{producto.nombre} no tiene precio de venta")
-        if r.cantidad <= 0:
-            raise OperacionInvalida(f"Cantidad inválida para {producto.nombre}")
+    productos = [validar_renglon(db, usuario.negocio_id, r) for r in renglones]
+    aplicadas = ofertas_venta.calcular(db, usuario.negocio_id, [(p, r.cantidad) for p, r in zip(productos, renglones)])
 
+    for r, producto, oferta in zip(renglones, productos, aplicadas):
         lote_id = r.lote_id
         if r.caducidad is not None and lote_id is None:
             lote_id = _capturar_en_venta(db, usuario, producto, r)
@@ -181,11 +210,13 @@ def registrar_venta(
             piezas = "1 pieza" if faltantes == 1 else f"{faltantes.normalize():f} piezas"
             avisos.append(f"{producto.nombre}: el sistema no tenía {piezas}; se avisó al administrador para revisarlo")
 
-        importe = (producto.precio_venta * r.cantidad).quantize(CENTAVO)
+        importe = (producto.precio_venta * r.cantidad).quantize(CENTAVO) - oferta.descuento
         subtotal, ieps, iva = desglosar(importe, producto.iva_porcentaje, producto.ieps_porcentaje)
         venta.renglones.append(VentaRenglon(
             producto_id=producto.id, nombre=producto.nombre, cantidad=r.cantidad,
             precio_unitario=producto.precio_venta, importe=importe,
+            descuento=oferta.descuento, oferta_id=oferta.oferta.id if oferta.oferta and oferta.descuento else None,
+            oferta_texto=oferta.texto if oferta.descuento else None,
             iva_porcentaje=producto.iva_porcentaje, ieps_porcentaje=producto.ieps_porcentaje,
             subtotal=subtotal, ieps=ieps, iva=iva,
             lotes=[VentaRenglonLote(lote_id=lote.id, cantidad=cantidad) for lote, cantidad in asignados],

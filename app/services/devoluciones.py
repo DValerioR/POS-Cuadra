@@ -138,7 +138,7 @@ def _piezas_solicitadas(venta: Venta, solicitadas: list[PiezaDevuelta]) -> Pieza
             libre = asignacion.cantidad - asignacion.cantidad_devuelta - ya_pedido[asignacion.id]
             tomar = min(libre, pendiente)
             if tomar > 0:
-                piezas.append((asignacion, tomar, (renglon.precio_unitario * tomar).quantize(CENTAVO)))
+                piezas.append((asignacion, tomar, ventas.importe_de_piezas(renglon, tomar)))
                 ya_pedido[asignacion.id] += tomar
                 pendiente -= tomar
     return piezas
@@ -170,7 +170,7 @@ def cancelar_venta(db: Session, usuario: Usuario, venta_id: int, caja_id: int, m
         for asignacion in renglon.lotes:
             pendiente = asignacion.cantidad - asignacion.cantidad_devuelta
             if pendiente > 0:
-                piezas.append((asignacion, pendiente, (renglon.precio_unitario * pendiente).quantize(CENTAVO)))
+                piezas.append((asignacion, pendiente, ventas.importe_de_piezas(renglon, pendiente)))
     if not piezas and _por_regresar(db, venta) == 0:
         raise OperacionInvalida("Todo lo de esta venta ya se devolvió")
     # El dinero es todo lo que falta por regresar (así no se pierden centavos).

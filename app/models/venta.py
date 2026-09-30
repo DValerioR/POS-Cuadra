@@ -69,7 +69,13 @@ class VentaRenglon(Base):
     nombre: Mapped[str]  # como se llamaba al vender (va en el ticket)
     cantidad: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     precio_unitario: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # con impuestos
-    importe: Mapped[Decimal] = mapped_column(Numeric(12, 2))  # cantidad × precio, con impuestos
+    # cantidad × precio − descuento, con impuestos: lo que de verdad se cobró.
+    importe: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    # Descuento por oferta (con impuestos) y cómo se llama en el ticket
+    # ("Oferta 2x1", "Paquete con ..."). Sin oferta: 0 y None.
+    descuento: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=0, server_default="0")
+    oferta_id: Mapped[int | None] = mapped_column(ForeignKey("ofertas.id"), default=None)
+    oferta_texto: Mapped[str | None] = mapped_column(default=None)
     iva_porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2))
     ieps_porcentaje: Mapped[Decimal] = mapped_column(Numeric(5, 2))
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2))

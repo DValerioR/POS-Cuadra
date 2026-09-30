@@ -163,6 +163,9 @@
                       <span class="etiqueta"><svg class="ico"><use href="/static/iconos.svg#receta"/></svg>Pide receta</span>
                     </template>
                   </div>
+                  <div class="lote" x-show="ofertaDe(r)">
+                    <span class="etiqueta verde"><svg class="ico"><use href="/static/iconos.svg#precio"/></svg><span x-text="ofertaDe(r) ? `${ofertaDe(r).oferta} · −${dinero(ofertaDe(r).descuento)}` : ''"></span></span>
+                  </div>
                   <!-- Qué lote entregar; si se entregó otro, se elige aquí. -->
                   <div class="lote" x-show="r.existencia.lotes.length">
                     <span>Entrega: <strong x-text="textoLote(loteAEntregar(r))"></strong></span>
@@ -220,6 +223,7 @@
           <span x-text="articulos === 1 ? '1 artículo' : `${articulos} artículos`"></span>
         </div>
         <div class="total" x-text="dinero(totalCentavos / 100)"></div>
+        <div class="ahorro" x-show="ahorroCentavos > 0" x-text="`Ahorra ${dinero(ahorroCentavos / 100)} con ofertas`"></div>
       </div>
 
       <div class="cuerpo">

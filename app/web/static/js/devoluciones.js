@@ -44,6 +44,8 @@ function pantallaDevoluciones() {
 
     // Cambio: lo que se lleva el cliente y cómo paga la diferencia
     nuevos: [], // [{ producto, cantidad }]
+    cotizacion: null, // ofertas de lo nuevo: { firma, renglones } (ver venta.js)
+    _cotizaTimer: null,
     buscar: "",
     encontrados: [],
     _buscado: "", // texto al que corresponde `encontrados`
@@ -65,6 +67,7 @@ function pantallaDevoluciones() {
           this.cajaNombre = caja ? caja.nombre : "";
           this.turno = caja ? await API.get(`/turnos/abierto?caja_id=${this.cajaId}`) : null;
         }
+        this.$watch("firmaNuevos", () => this.programarCotizacion());
         await this.cargarRecientes();
       } catch (e) {
         this.error = e.message;
@@ -214,6 +217,11 @@ function pantallaDevoluciones() {
       this.piezas[renglon.id] = this.disponible(renglon);
     },
 
+    // Lo que se cobró por pieza: con oferta, su parte del descuento (igual que el servidor).
+    precioPagado(r) {
+      return Number(r.descuento) > 0 ? Number(r.importe) / Number(r.cantidad) : Number(r.precio_unitario);
+    },
+
     get piezasElegidas() {
       return this.venta.renglones.filter((r) => this.cuantas(r) > 0);
     },
@@ -221,7 +229,7 @@ function pantallaDevoluciones() {
     get totalARegresar() {
       if (this.modo === "cancelar") return this.porRegresar;
       const suma = this.piezasElegidas.reduce(
-        (s, r) => s + Math.round(centavos(r.precio_unitario) * this.cuantas(r)),
+        (s, r) => s + Math.round(this.precioPagado(r) * 100 * this.cuantas(r)),
         0
       );
       return Math.min(suma, this.porRegresar);
@@ -333,7 +341,36 @@ function pantallaDevoluciones() {
       this.nuevos = this.nuevos.filter((n) => n !== nuevo);
     },
     importeNuevo(nuevo) {
-      return Math.round(centavos(nuevo.producto.precio_venta) * Number(nuevo.cantidad || 0));
+      return Math.round(centavos(nuevo.producto.precio_venta) * Number(nuevo.cantidad || 0)) - this.descuentoNuevo(nuevo);
+    },
+    get firmaNuevos() {
+      return this.nuevos.map((n) => `${n.producto.id}:${Number(n.cantidad || 0)}`).join(",");
+    },
+    ofertaNuevo(nuevo) {
+      const c = this.cotizacion && this.cotizacion.firma === this.firmaNuevos ? this.cotizacion : null;
+      const i = this.nuevos.indexOf(nuevo);
+      return c && i >= 0 && c.renglones[i] && Number(c.renglones[i].descuento) > 0 ? c.renglones[i] : null;
+    },
+    descuentoNuevo(nuevo) {
+      const o = this.ofertaNuevo(nuevo);
+      return o ? centavos(o.descuento) : 0;
+    },
+    programarCotizacion() {
+      clearTimeout(this._cotizaTimer);
+      if (!this.nuevos.length) return;
+      this._cotizaTimer = setTimeout(() => this.cotizar(), 150);
+    },
+    async cotizar() {
+      const firma = this.firmaNuevos;
+      if (!this.nuevos.length || this.nuevos.some((n) => !(Number(n.cantidad) > 0))) return;
+      try {
+        const r = await API.post("/ventas/cotizar", {
+          renglones: this.nuevos.map((n) => ({ producto_id: n.producto.id, cantidad: String(n.cantidad) })),
+        });
+        if (firma === this.firmaNuevos) this.cotizacion = { firma, renglones: r.renglones };
+      } catch {
+        // Sin cotización se muestran precios normales.
+      }
     },
 
     // Todo en centavos.

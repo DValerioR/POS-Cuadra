@@ -239,6 +239,14 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   urgentes y el código las revisa (nunca debajo del costo si caduca, ni de
   costo + 10% lo demás). Solo recomienda. `POST /reportes/ofertas/excel` con
   `{"ofertas": [...]}` las baja en Excel junto con todos los candidatos.
+- Ofertas en la venta (solo admin): `GET /ofertas/activas` (vigentes y las
+  de los últimos 30 días), `GET /ofertas/minimo?producto_id=` (precio normal
+  y el más bajo permitido), `POST /ofertas` (`producto_id`, `tipo`, `precio`,
+  `paquete_con_id`, `fin`, `motivo`, `origen`) y `POST /ofertas/{id}/quitar`.
+  `GET /ofertas/producto/{id}` (cualquier usuario) da la oferta de hoy.
+- `POST /ventas/cotizar` — el carrito con las ofertas de hoy (descuento e
+  importe por renglón y total), sin registrar nada; es el mismo cálculo del
+  cobro.
 
 ### Asistente de IA: chat para administradores
 
@@ -360,9 +368,11 @@ funcione sin internet.
 - `/faltantes` — faltantes por proveedor (admin y bodega; Inventario →
   Faltantes por proveedor): se elige el proveedor; lo que otro proveedor dio
   más barato en su última compra sale en amarillo; Excel e imprimir.
-- `/ofertas` — ofertas sugeridas por el asistente (solo admin; Inicio →
-  Reportes): cuántos candidatos hay de cada tipo, botón para pedir las
-  ofertas y lista con precio normal, oferta, ganancia y motivo; Excel.
+- `/ofertas` — ofertas (solo admin; Inicio → Inventario → Ofertas): las
+  activas con "Quitar", poner una a mano (producto, tipo, precio, fecha de
+  fin) y las sugeridas por el asistente (cuántos candidatos hay de cada
+  tipo, pedir las ofertas, "Aplicar" cada una ajustando precio y fecha;
+  Excel). En Vender, la oferta sale en el producto y el ahorro junto al total.
 - `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
   autorizar (autorizar o rechazar con motivo) y ventas sin existencia
   registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una

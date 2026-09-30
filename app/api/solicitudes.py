@@ -8,7 +8,7 @@ from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.models import EstadoSolicitud, SolicitudDevolucion, TipoDevolucion, Usuario
 from app.schemas.solicitud import PiezaSolicitadaOut, RechazoIn, SolicitudIn, SolicitudOut
-from app.services import solicitudes
+from app.services import solicitudes, ventas
 from app.services.devoluciones import PiezaDevuelta
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
@@ -27,7 +27,7 @@ def _out(s: SolicitudDevolucion) -> SolicitudOut:
         cantidad = Decimal(p["cantidad"])
         piezas.append(PiezaSolicitadaOut(
             renglon_id=p["renglon_id"], nombre=renglon.nombre if renglon else "?", cantidad=cantidad,
-            importe=(renglon.precio_unitario * cantidad).quantize(Decimal("0.01")) if renglon else Decimal(0),
+            importe=ventas.importe_de_piezas(renglon, cantidad) if renglon else Decimal(0),
         ))
     return SolicitudOut(
         id=s.id, venta_id=s.venta_id, folio=s.venta.folio, fecha_venta=s.venta.created_at, total_venta=s.venta.total,

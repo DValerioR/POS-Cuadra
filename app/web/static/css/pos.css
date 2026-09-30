@@ -843,6 +843,19 @@ button.solo-icono:hover { color: var(--peligro); background: var(--peligro-suave
 .oferta-precio { flex: 0 0 260px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
 .oferta-precio strong { font-size: 18px; color: var(--primario-oscuro); }
 .tachado { text-decoration: line-through; }
+.ofertas > .panel + .panel { margin-top: 16px; }
+.ofertas button.texto { background: transparent; border-color: transparent; color: var(--primario-oscuro); text-decoration: underline; padding: 4px 6px; }
+.ofertas .oferta.aplicada { background: var(--primario-suave); }
+.nueva-oferta { border: 1px solid var(--linea); border-radius: var(--radio-chico); padding: 16px; }
+.resultados-oferta { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.resultados-oferta .opcion { flex-direction: row; justify-content: space-between; padding: 10px 14px; font-size: 16px; text-align: left; }
+.tipos-oferta { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+.campos-oferta, .aplicar-oferta { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.campos-oferta label, .aplicar-oferta label { display: flex; flex-direction: column; gap: 4px; flex: 0 1 220px; }
+.campos-oferta label.ancho { flex: 1 1 260px; }
+.aplicar-oferta { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--linea); }
+.consulta-oferta { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 10px 14px; border-radius: var(--radio-chico); background: var(--primario-suave); color: var(--primario-oscuro); font-weight: 700; }
+.caja-total .ahorro { font-size: 15px; font-weight: 700; opacity: 0.9; margin-top: 2px; }
 @media (max-width: 760px) {
   .ofertas-cifras { grid-template-columns: 1fr 1fr; }
   .oferta { flex-direction: column; }

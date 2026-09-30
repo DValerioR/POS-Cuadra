@@ -17,6 +17,7 @@ from app.models.entrada import ArchivoFactura, Entrada, EntradaRenglon, Proveedo
 from app.models.asistente import ConversacionAsistente, MensajeAsistente
 from app.models.pedido import EstadoPedido, Pedido, PedidoEntrada, PedidoRenglon
 from app.models.factura import ClienteFiscal, EstadoFactura, Factura
+from app.models.oferta import Oferta
 
 __all__ = [
     "Negocio",
@@ -61,4 +62,5 @@ __all__ = [
     "ClienteFiscal",
     "EstadoFactura",
     "Factura",
+    "Oferta",
 ]

@@ -7,12 +7,13 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.entradas import _exacto
 from app.core.auth import usuario_actual
 from app.core.config import settings
 from app.core.database import get_db
 from app.models import RolUsuario, Usuario, Venta
 from app.schemas.venta import (
-    CambioIn, CambioOut, CancelarIn, DevolucionOut, DevolverIn, ImpresionOut, LoteVendidoOut, PagoOut, ReimprimirIn, RenglonOut, VentaIn,
+    CambioIn, CambioOut, CancelarIn, CotizarIn, DevolucionOut, DevolverIn, ImpresionOut, LoteVendidoOut, PagoOut, ReimprimirIn, RenglonOut, VentaIn,
     VentaOut, VentaResumenOut,
 )
 from app.services import devoluciones, impresion, turnos, ventas
@@ -34,6 +35,7 @@ def _venta_out(venta: Venta, avisos: list[str] | None = None, impreso: Impresion
             RenglonOut(
                 id=r.id, producto_id=r.producto_id, nombre=r.nombre, cantidad=r.cantidad,
                 precio_unitario=r.precio_unitario, importe=r.importe,
+                descuento=r.descuento, oferta_texto=r.oferta_texto,
                 subtotal=r.subtotal, ieps=r.ieps, iva=r.iva,
                 cantidad_devuelta=sum((l.cantidad_devuelta for l in r.lotes), Decimal(0)),
                 lotes=[
@@ -75,6 +77,19 @@ def registrar_venta(datos: VentaIn, usuario: Usuario = Depends(usuario_actual), 
     db.refresh(venta)
     r = impresion.imprimir_venta(db, venta)
     return _venta_out(venta, avisos, ImpresionOut(impreso=r.impreso, error=r.error))
+
+
+@router.post("/cotizar")
+def cotizar(datos: CotizarIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Precio del carrito con las ofertas de hoy, sin registrar nada (el mismo
+    cálculo que al cobrar)."""
+    if usuario.rol == RolUsuario.BODEGA:
+        raise HTTPException(status_code=403, detail="Tu usuario no puede vender")
+    try:
+        r = ventas.cotizar(db, usuario.negocio_id, [RenglonSolicitado(**x.model_dump()) for x in datos.renglones])
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+    return _exacto(r)
 
 
 @router.get("/{venta_id}", response_model=VentaOut)

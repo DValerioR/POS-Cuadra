@@ -127,7 +127,10 @@
                         </div>
                       </template>
                     </td>
-                    <td class="derecha" x-text="dinero(r.precio_unitario)"></td>
+                    <td class="derecha">
+                      <span x-text="dinero(precioPagado(r))"></span>
+                      <div class="ayuda" x-show="Number(r.descuento) > 0" x-text="r.oferta_texto"></div>
+                    </td>
                     <td class="centro" x-text="cantidad(r.cantidad)"></td>
                     <td class="centro" x-show="eligePiezas">
                       <template x-if="disponible(r) > 0">
@@ -229,7 +232,8 @@
                       <tbody>
                         <template x-for="n in nuevos" :key="n.producto.id">
                           <tr>
-                            <td><div class="nombre" x-text="n.producto.nombre"></div></td>
+                            <td><div class="nombre" x-text="n.producto.nombre"></div>
+                              <span class="etiqueta verde" x-show="ofertaNuevo(n)" x-text="ofertaNuevo(n) ? `${ofertaNuevo(n).oferta} · −${dinero(ofertaNuevo(n).descuento)}` : ''"></span></td>
                             <td class="centro" style="width: 150px">
                               <div class="contador">
                                 <button type="button" @click="cambiarNuevo(n, -1)" title="Una menos">−</button>

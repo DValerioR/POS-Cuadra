@@ -244,11 +244,11 @@ const SECCIONES = [
   { id: "entradas", texto: "Entradas de mercancía", icono: "camion", grupo: "Inventario", ruta: "/mercancia", existe: true, roles: ["admin", "bodega"], tecla: "F4" },
   { id: "pedidos", texto: "Pedidos a proveedores", icono: "portapapeles", grupo: "Inventario", ruta: "/pedidos", existe: true, roles: ["admin", "bodega"] },
   { id: "productos", texto: "Productos y precios", icono: "precio", grupo: "Inventario", ruta: "/catalogo", existe: true, roles: ["admin"] },
+  { id: "ofertas", texto: "Ofertas", icono: "precio", grupo: "Inventario", ruta: "/ofertas", existe: true, roles: ["admin"] },
 
   { id: "reporte-ventas", texto: "Ventas del día", icono: "grafica", grupo: "Reportes", ruta: "/reporte-ventas", existe: true, roles: ["admin"] },
   { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/inventario?vista=por-caducar", existe: true, roles: ["admin", "bodega"] },
   { id: "faltantes", texto: "Faltantes por proveedor (Excel)", icono: "camion", grupo: "Reportes", ruta: "/faltantes", existe: true, roles: ["admin", "bodega"] },
-  { id: "ofertas", texto: "Ofertas sugeridas (asistente)", icono: "chispa", grupo: "Reportes", ruta: "/ofertas", existe: true, roles: ["admin"] },
 
   { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: true, roles: ["admin"] },
   { id: "mi-password", texto: "Cambiar mi contraseña", icono: "candado", grupo: "Configuración", accion: "miPassword", existe: true, roles: TODOS },
@@ -495,9 +495,19 @@ function montarConsultaPrecio() {
     c.value = "";
     c.focus();
     let existencia = null;
+    let oferta = null;
     try {
-      existencia = await API.get(`/inventario/productos/${p.id}`);
+      [existencia, oferta] = await Promise.all([
+        API.get(`/inventario/productos/${p.id}`),
+        API.get(`/ofertas/producto/${p.id}`).catch(() => null),
+      ]);
     } catch { /* el precio se muestra aunque no se pueda leer la existencia */ }
+    let textoOferta = "";
+    if (oferta) {
+      const fin = new Date(oferta.fin + "T12:00").toLocaleDateString("es-MX", { day: "numeric", month: "long" });
+      const detalle = oferta.precio ? `: ${dinero(oferta.precio)} por pieza` : oferta.paquete_precio ? `: ${dinero(oferta.paquete_precio)} los dos` : "";
+      textoOferta = `<p class="consulta-oferta">${icono("precio")} ${escapar(oferta.texto)}${detalle} · hasta el ${fin}</p>`;
+    }
     const exist = existencia ? Number(existencia.existencia_registrada) : null;
     ficha(`
       <div class="consulta-nombre">${escapar(p.nombre)}</div>
@@ -508,6 +518,7 @@ function montarConsultaPrecio() {
         <div><span>Existencia</span><strong class="${exist !== null && exist <= 0 ? "agotado" : ""}">${exist === null ? "—" : cantidad(exist)}</strong>
           <small>${exist !== null && exist <= 0 ? "sin existencia registrada" : "&nbsp;"}</small></div>
       </div>
+      ${textoOferta}
       ${p.requiere_receta ? `<p class="consulta-receta">${icono("receta")} Pide receta médica</p>` : ""}`);
   }
 
