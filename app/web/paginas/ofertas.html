@@ -176,6 +176,12 @@
         get pideprecio() {
           return this.nueva && !["2x1", "3x2"].includes(this.nueva.tipo);
         },
+        ayudaPrecio() {
+          if (this.minimoNueva === null) return "";
+          const rango = `Entre ${dinero(this.minimoNueva)} y ${dinero(this.normalNueva - 0.01)}`;
+          const menos = this.descuentoTexto(this.nueva.precio, this.normalNueva);
+          return menos ? `${rango} · ${menos}` : rango;
+        },
         descuentoTexto(precio, normal) {
           if (!precio || !normal || Number(precio) >= normal) return "";
           return `${Math.round((1 - Number(precio) / normal) * 100)}% menos`;
@@ -283,7 +289,7 @@
         textoOferta(o) {
           if (o.tipo === "2x1" || o.tipo === "3x2") return `${o.tipo}: lleva ${o.piezas} y paga ${dinero(o.precio_oferta)}`;
           if (o.tipo === "paquete") return `Paquete con ${o.paquete_con.nombre}: ${dinero(o.precio_oferta)}`;
-          return `${o.tipo === "descuento" ? "Descuento" : "Precio especial"}: ${dinero(o.precio_oferta)}`;
+          return `${o.tipo === "descuento" ? "Queda en" : "Precio especial"}: ${dinero(o.precio_oferta)}`;
         },
         caducidad(o) {
           if (!o.caducidad) return "";
@@ -342,8 +348,8 @@
                 <strong x-text="`Hasta el ${fechaCorta(o.fin)}`"></strong>
                 <span class="suave" x-text="`Puesta por ${o.creada_por}`"></span>
                 <button type="button" class="texto-peligro" x-show="porQuitar !== o.id" @click="porQuitar = o.id">Quitar</button>
-                <div class="fila" x-show="porQuitar === o.id" style="gap: 8px">
-                  <span>¿Quitarla ya?</span>
+                <div class="fila" x-show="porQuitar === o.id" style="gap: 8px; white-space: nowrap">
+                  <span>¿Quitarla?</span>
                   <button type="button" class="peligro" :disabled="quitando" @click="quitar(o)">Sí, quitar</button>
                   <button type="button" @click="porQuitar = null">No</button>
                 </div>
@@ -379,7 +385,7 @@
                 <p class="suave" style="margin: 4px 0 12px" x-text="`Precio normal ${dinero(nueva.info.precio_normal)} · lo más bajo permitido ${dinero(nueva.info.precio_minimo)}${nueva.info.caduca_pronto ? ' (caduca pronto: al costo)' : ' (costo + 10%)'}`"></p>
                 <div class="chips tipos-oferta">
                   <template x-for="t in tiposPara(nueva.info)" :key="t.id">
-                    <button type="button" class="opcion" :class="{ activa: nueva.tipo === t.id }" @click="nueva.tipo = t.id" x-text="t.texto"></button>
+                    <button type="button" class="opcion" :class="{ activa: nueva.tipo === t.id }" @click="nueva.tipo = t.id; nueva.error = ''" x-text="t.texto"></button>
                   </template>
                 </div>
                 <p class="ayuda" x-show="nueva.info.requiere_receta">Pide receta: solo descuento o precio especial.</p>
@@ -409,7 +415,7 @@
                   <label x-show="pideprecio">
                     <span x-text="nueva.tipo === 'paquete' ? 'Precio de los dos juntos' : 'Precio de oferta por pieza'"></span>
                     <input type="number" min="0" step="0.5" x-model="nueva.precio">
-                    <small class="ayuda" x-text="minimoNueva !== null ? `Entre ${dinero(minimoNueva)} y ${dinero(normalNueva - 0.01)} · ${descuentoTexto(nueva.precio, normalNueva)}` : ''"></small>
+                    <small class="ayuda" x-text="ayudaPrecio()"></small>
                   </label>
                   <label>
                     <span>Termina el</span>

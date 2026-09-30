@@ -58,7 +58,8 @@ class Ticket:
     def columnas_izq_der(self, izquierda: str, derecha: str, negrita: bool = False) -> "Ticket":
         """Texto a la izquierda e importe pegado a la derecha en el mismo renglón."""
         espacio = self.columnas - len(derecha) - 1
-        partes = textwrap.wrap(izquierda, espacio) or [""]
+        sangria = izquierda[: len(izquierda) - len(izquierda.lstrip())]
+        partes = textwrap.wrap(izquierda, espacio, subsequent_indent=sangria) or [""]
         for parte in partes[:-1]:
             self._escribir(parte, negrita=negrita)
         self._escribir(partes[-1].ljust(espacio) + " " + derecha, negrita=negrita)

@@ -161,6 +161,7 @@ function pantallaVenta() {
     abrirBusqueda() {
       this.modoCobro = false;
       this.buscandoNombre = true;
+      this.error = "";
       this.busqueda = "";
       this.resultados = [];
       this.$nextTick(() => document.getElementById("busqueda").focus());

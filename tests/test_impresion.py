@@ -97,6 +97,11 @@ def test_texto_largo_se_parte_en_renglones():
     assert t.texto().splitlines() == ["uno dos", "tres", "cuatro"]
 
 
+def test_columnas_largas_conservan_la_sangria():
+    t = Ticket(columnas=20).columnas_izq_der("  Paquete con crema", "-$5.00")
+    assert t.texto().splitlines() == ["  Paquete con", "  crema       -$5.00"]
+
+
 # --- Contenido del ticket ------------------------------------------------------------
 
 def test_contenido_del_ticket(como_admin, db, negocio, caja, amoxicilina):
