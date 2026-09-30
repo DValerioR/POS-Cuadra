@@ -117,7 +117,27 @@ def test_borrador_del_xml(como_bodega, catalogo, proveedor):
     assert (amox["producto"]["id"], amox["reconocido"]) == (catalogo["amox"].id, "codigo")
     assert amox["producto"]["margen"] == "20.00"
     assert shampoo["producto"] is None  # la clave del proveedor no es código de barras
+    # ...pero se propone el de nombre parecido, para elegirlo con un clic.
+    assert [x["id"] for x in shampoo["sugerencias"]] == [catalogo["shampoo"].id]
+    assert amox["sugerencias"] == []  # ya reconocido: no hace falta
     assert como_bodega.get(f"/entradas/archivos/{b['archivo_id']}").content == CFDI
+
+
+def test_parecidos_respetan_tamanos(db, negocio):
+    from app.services import parecidos
+    nombres = ["PASTA DENTAL COLGATE TRIPLE ACCION 50ML", "PASTA DENTAL COLGATE TRIPLE ACCION 75ML",
+               "SH CAPRICE CONTROL CASPA 200 ML", "SH SEDAL CERAMIDAS 200ML", "GASAS"]
+    db.add_all([Producto(negocio_id=negocio.id, nombre=n) for n in nombres])
+    db.commit()
+    (colgate,), (caprice, *_), nada = [
+        [s["nombre"] for s in lista] for lista in parecidos.sugerir(
+            db, negocio.id, ["PASTA COLGATE TRIPLE ACCION 75ML", "SHAMPOO CAPRICE CONTROL CASPA 200GRS", "KOLA LOKA 2GRS C/10"],
+            limite=1)
+    ]
+    assert parecidos.sugerir(db, negocio.id, ["PASTA COLGATE 90ML"]) == [[]]  # solo hay de 50 y 75 ml
+    assert colgate == "PASTA DENTAL COLGATE TRIPLE ACCION 75ML"  # no la de 50 ml
+    assert caprice == "SH CAPRICE CONTROL CASPA 200 ML"  # "SH" = shampoo, "GRS" = g
+    assert nada == []  # nada parecido: no se inventa
 
 
 def test_borrador_proveedor_desconocido(como_bodega, catalogo):

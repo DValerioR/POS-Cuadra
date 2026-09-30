@@ -1456,3 +1456,8 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
   body.hoja-factura { background: #fff; padding: 0; }
   .factura-papel { box-shadow: none; max-width: none; padding: 0; }
 }
+
+/* Entradas: productos parecidos para un renglón que no se reconoció */
+.sugerencias { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sugerencias .sugerencia { flex: 0 1 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 12px; }
+.sugerencias .sugerencia .suave { font-size: 12px; font-weight: 400; }

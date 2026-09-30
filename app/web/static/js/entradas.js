@@ -159,6 +159,7 @@ function pantallaEntradas() {
         nota: r.nota || null,
         producto: r.producto || null,
         reconocido: r.reconocido || null,
+        sugerencias: r.sugerencias || [],
         aplicar_precio: false,
       };
     },
@@ -353,6 +354,13 @@ function pantallaEntradas() {
       } catch (err) {
         this.error = err.message;
       }
+    },
+
+    // "¿Es alguno de estos?": elegir uno de los productos de nombre parecido.
+    async elegirSugerencia(indice, s) {
+      this.buscador = { renglon: indice };
+      await this.elegirProducto(s);
+      this.buscador = null;
     },
 
     // Producto que no existe: darlo de alta con lo que dice la factura

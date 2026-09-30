@@ -31,7 +31,7 @@ from app.models import (
     ArchivoFactura, Categoria, Entrada, EntradaRenglon, Lote, Producto, Proveedor, ProveedorEquivalencia,
     RolUsuario, Usuario,
 )
-from app.services import catalogo, inventario
+from app.services import catalogo, inventario, parecidos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 ROLES_ENTRADA = {RolUsuario.ADMIN, RolUsuario.BODEGA}
@@ -194,15 +194,20 @@ def borrador(db: Session, usuario: Usuario, leida: FacturaLeida, archivo: Archiv
             func.upper(Proveedor.nombre) == leida.proveedor_nombre.upper(),
         ))
     renglones = []
-    for r in leida.renglones:
-        producto, factor, como = reconocer(db, usuario.negocio_id, proveedor.id if proveedor else None, r.clave, r.descripcion)
+    reconocidos = [reconocer(db, usuario.negocio_id, proveedor.id if proveedor else None, r.clave, r.descripcion)
+                   for r in leida.renglones]
+    # Para lo que no se reconoció, los productos de nombre más parecido (para elegir con un clic).
+    faltan = [i for i, (producto, _, _) in enumerate(reconocidos) if producto is None]
+    sugerencias = dict(zip(faltan, parecidos.sugerir(db, usuario.negocio_id, [leida.renglones[i].descripcion for i in faltan])))
+    for i, r in enumerate(leida.renglones):
+        producto, factor, como = reconocidos[i]
         renglones.append({
             "descripcion": r.descripcion, "clave": r.clave, "unidad": r.unidad,
             "cantidad": r.cantidad, "costo_unitario": r.costo_unitario, "importe": r.importe,
             "iva": r.iva, "ieps": r.ieps, "numero_lote": r.numero_lote, "caducidad": r.caducidad,
             "dudoso": r.dudoso, "nota": r.nota,
             "producto": datos_producto(db, producto) if producto else None,
-            "factor": factor, "reconocido": como,
+            "factor": factor, "reconocido": como, "sugerencias": sugerencias.get(i, []),
         })
     return {
         "origen": leida.origen,

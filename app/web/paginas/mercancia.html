@@ -200,9 +200,19 @@
                     </div>
                   </template>
                   <template x-if="!r.producto">
+                    <div class="sugerencias" x-show="r.sugerencias.length">
+                      <span class="suave">¿Es alguno de estos?</span>
+                      <template x-for="s in r.sugerencias" :key="s.id">
+                        <button type="button" class="sugerencia" @click="elegirSugerencia(i, s)">
+                          <strong x-text="s.nombre"></strong><span class="suave" x-text="s.clave || 'sin clave'"></span>
+                        </button>
+                      </template>
+                    </div>
+                  </template>
+                  <template x-if="!r.producto">
                     <div class="fila" style="gap: 8px; flex-wrap: wrap">
                       <button type="button" class="primario" style="flex: 0 0 auto" @click="abrirBuscador(i)">
-                        <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg>¿Qué producto es? Elegirlo
+                        <svg class="ico"><use href="/static/iconos.svg#buscar"/></svg><span x-text="r.sugerencias.length ? 'Es otro: buscarlo' : '¿Qué producto es? Elegirlo'"></span>
                       </button>
                       <button type="button" style="flex: 0 0 auto" x-show="esAdmin && r.descripcion" @click="darDeAlta(i)">
                         + Es nuevo: darlo de alta con estos datos
