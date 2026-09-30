@@ -10,7 +10,7 @@ venv/
 *.log
 
 # Datos reales del negocio (exportaciones de PVWin, respaldos). Nunca a GitHub.
-datos/
+/datos/
 
 # Respaldos de la base (datos reales). Nunca a GitHub.
 backups/
