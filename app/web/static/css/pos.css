@@ -1316,3 +1316,36 @@ body.tableta { font-size: 18px; }
 code.token { font-size: 15px; padding: 6px 10px; background: var(--fondo); border-radius: 8px; word-break: break-all; }
 code.comando { display: block; margin-top: 6px; font-size: 13px; word-break: break-all; }
 @media (max-width: 600px) { .modos-impresora { grid-template-columns: 1fr; } }
+
+/* --- Reporte de ventas --------------------------------------------------- */
+
+.reporte-ventas { max-width: 1200px; margin: 0 auto; }
+.periodos-ventas { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.periodos-ventas .opcion { flex-direction: row; padding: 10px 16px; color: var(--texto); }
+.otro-periodo { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border: 2px solid transparent; border-radius: var(--radio); }
+.otro-periodo.activo { border-color: var(--primario); background: var(--primario-suave); }
+.otro-periodo input { width: auto; padding: 8px 10px; }
+.cifras-ventas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.cifra.ganancia { grid-column: span 2; }
+.cifra { background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radio); padding: 14px 16px; }
+.cifra span, .cifra small { display: block; color: var(--texto-suave); font-size: 14px; }
+.cifra strong { display: block; font-size: 28px; color: var(--primario-oscuro); line-height: 1.25; }
+.cifra.principal { grid-column: span 2; background: var(--primario-oscuro); border-color: var(--primario-oscuro); }
+.cifra.principal span, .cifra.principal small { color: rgba(255, 255, 255, 0.8); }
+.cifra.principal strong { color: #fff; font-size: 40px; }
+.cifra.ganancia strong { color: var(--primario); }
+.detalles-ventas { flex-wrap: wrap; gap: 6px 24px; color: var(--texto-suave); font-size: 15px; }
+.grafica-ventas { display: flex; align-items: flex-end; justify-content: center; gap: 6px; height: 220px; overflow-x: auto; padding-top: 22px; }
+.grafica-ventas .columna { flex: 1 0 44px; max-width: 90px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.grafica-ventas .barra-v { width: 70%; background: var(--primario); border-radius: 6px 6px 0 0; min-height: 2px; }
+.grafica-ventas .valor { font-size: 11px; color: var(--texto-suave); white-space: nowrap; }
+.grafica-ventas .etiqueta-eje { font-size: 12px; color: var(--texto-suave); white-space: nowrap; }
+.rejilla-ventas { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+.barra-h { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin-bottom: 10px; font-size: 15px; }
+.barra-h .relleno { grid-column: 1 / -1; height: 8px; background: var(--fondo); border-radius: 999px; overflow: hidden; }
+.barra-h .relleno div { height: 100%; background: var(--primario); border-radius: 999px; }
+@media (max-width: 900px) {
+  .rejilla-ventas { grid-template-columns: 1fr; }
+  .cifras-ventas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cifra.principal { grid-column: 1 / -1; }
+}

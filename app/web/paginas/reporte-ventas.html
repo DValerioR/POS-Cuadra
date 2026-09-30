@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ventas · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Reporte de ventas (solo administradores): del día o de un periodo, con
+    // totales, formas de pago, ganancia estimada y desgloses; se baja en Excel.
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    function periodos() {
+      const hoy = new Date();
+      const dia = (n) => { const d = new Date(hoy); d.setDate(d.getDate() + n); return d; };
+      const lunes = dia(-((hoy.getDay() + 6) % 7));
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      const mesPasado = [new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1), new Date(hoy.getFullYear(), hoy.getMonth(), 0)];
+      return [
+        { id: "hoy", texto: "Hoy", desde: iso(hoy), hasta: iso(hoy) },
+        { id: "ayer", texto: "Ayer", desde: iso(dia(-1)), hasta: iso(dia(-1)) },
+        { id: "semana", texto: "Esta semana", desde: iso(lunes), hasta: iso(hoy) },
+        { id: "mes", texto: "Este mes", desde: iso(inicioMes), hasta: iso(hoy) },
+        { id: "mes-pasado", texto: "Mes pasado", desde: iso(mesPasado[0]), hasta: iso(mesPasado[1]) },
+      ];
+    }
+
+    function pantallaReporteVentas() {
+      return {
+        usuario: null,
+        cargando: true,
+        leyendo: false,
+        error: "",
+        periodos: periodos(),
+        elegido: "hoy",
+        desde: "",
+        hasta: "",
+        r: null,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) await this.elegir(this.periodos[0]);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        async elegir(p) {
+          this.elegido = p.id;
+          this.desde = p.desde;
+          this.hasta = p.hasta;
+          await this.cargar();
+        },
+        async otroPeriodo() {
+          this.elegido = "otro";
+          if (this.desde && this.hasta) await this.cargar();
+        },
+        async cargar() {
+          this.leyendo = true;
+          this.error = "";
+          try {
+            this.r = await API.get(`/reportes/ventas?desde=${this.desde}&hasta=${this.hasta}`);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.leyendo = false;
+          }
+        },
+        get unDia() {
+          return this.r && this.r.desde === this.r.hasta;
+        },
+        get titulo() {
+          if (!this.r) return "";
+          const f = (d) => new Date(d + "T00:00:00").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+          return this.unDia ? f(this.r.desde) : `Del ${f(this.r.desde)} al ${f(this.r.hasta)}`;
+        },
+        // Barras: por hora (un día) o por día (periodo).
+        get barras() {
+          if (!this.r) return [];
+          const filas = this.unDia
+            ? this.r.por_hora.map((x) => ({ etiqueta: `${x.grupo}:00`, ...x }))
+            : this.r.por_dia.map((x) => ({ etiqueta: new Date(x.grupo + "T00:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" }), ...x }));
+          const max = Math.max(1, ...filas.map((x) => Number(x.vendido)));
+          return filas.map((x) => ({ ...x, alto: Math.max(2, Math.round((Number(x.vendido) / max) * 100)) }));
+        },
+        ancho(valor, lista) {
+          const max = Math.max(1, ...lista.map((x) => Number(x.vendido)));
+          return `${Math.round((Number(valor) / max) * 100)}%`;
+        },
+        dinero,
+        cantidad,
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaReporteVentas()">
+
+  <header class="barra" data-pagina="reporte-ventas"></header>
+
+  <main class="contenido reporte-ventas" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Los reportes de dinero los ven los administradores. Tu corte está en Turno y corte.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin">
+      <div class="pila" style="gap: 16px">
+        <div class="fila" style="justify-content: space-between; flex-wrap: wrap; align-items: flex-start">
+          <div class="encabezado" style="margin: 0">
+            <span class="circulo"><svg><use href="/static/iconos.svg#grafica"/></svg></span>
+            <div><h1>Ventas</h1><p class="suave" style="text-transform: none" x-text="titulo"></p></div>
+          </div>
+          <a class="boton" style="flex: 0 0 auto; white-space: nowrap" :href="`/reportes/ventas/excel?desde=${desde}&hasta=${hasta}`">
+            <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Excel</a>
+        </div>
+
+        <div class="periodos-ventas">
+          <template x-for="p in periodos" :key="p.id">
+            <button type="button" class="opcion" :class="{ activa: elegido === p.id }" @click="elegir(p)" x-text="p.texto"></button>
+          </template>
+          <div class="otro-periodo" :class="{ activo: elegido === 'otro' }">
+            <input type="date" x-model="desde" @change="otroPeriodo()" aria-label="Desde">
+            <span class="suave">a</span>
+            <input type="date" x-model="hasta" @change="otroPeriodo()" aria-label="Hasta">
+          </div>
+        </div>
+
+        <div class="panel leyendo" x-show="leyendo"><span class="girando"></span><span>Calculando…</span></div>
+
+        <template x-if="r && !leyendo">
+          <div class="pila" style="gap: 16px">
+            <p class="suave" x-show="!r.tickets && !r.canceladas && !r.devoluciones" style="margin: 0">No hubo ventas en este periodo.</p>
+
+            <div class="cifras-ventas">
+              <div class="cifra principal"><span>Venta neta</span><strong x-text="dinero(r.venta_neta)"></strong>
+                <small x-text="r.devuelto > 0 ? `${dinero(r.vendido)} vendido − ${dinero(r.devuelto)} devuelto` : 'Sin devoluciones'"></small></div>
+              <div class="cifra"><span>Tickets</span><strong x-text="r.tickets"></strong><small x-text="`${cantidad(r.piezas)} piezas`"></small></div>
+              <div class="cifra"><span>Ticket promedio</span><strong x-text="dinero(r.promedio_ticket)"></strong></div>
+              <div class="cifra"><span>Efectivo</span><strong x-text="dinero(r.efectivo)"></strong></div>
+              <div class="cifra"><span>Tarjeta</span><strong x-text="dinero(r.tarjeta)"></strong></div>
+              <div class="cifra ganancia"><span>Ganancia estimada</span><strong x-text="dinero(r.ganancia_estimada)"></strong>
+                <small x-text="Number(r.porcentaje_con_costo) >= 100 ? 'Venta sin impuestos − costo'
+                  : (Number(r.porcentaje_con_costo) > 0 ? `Solo de lo que tiene costo registrado (${r.porcentaje_con_costo}% de lo vendido)` : 'Sin costos registrados todavía')"></small></div>
+            </div>
+
+            <div class="fila detalles-ventas">
+              <span x-text="`Devoluciones y cambios: ${r.devoluciones} (${dinero(r.devuelto)})`"></span>
+              <span x-text="`Canceladas: ${r.canceladas} (${dinero(r.total_canceladas)})`"></span>
+              <span x-text="`Sin impuestos: ${dinero(r.subtotal)} · IVA ${dinero(r.iva)} · IEPS ${dinero(r.ieps)}`"></span>
+            </div>
+
+            <div class="panel" x-show="barras.length">
+              <div class="paso" style="margin-top: 0" x-text="unDia ? 'Ventas por hora' : 'Ventas por día'"></div>
+              <div class="grafica-ventas">
+                <template x-for="b in barras" :key="b.etiqueta">
+                  <div class="columna" :title="`${b.etiqueta}: ${dinero(b.vendido)} en ${b.tickets} tickets`">
+                    <span class="valor" x-text="dinero(b.vendido).replace('.00', '')"></span>
+                    <div class="barra-v" :style="`height: ${b.alto}%`"></div>
+                    <span class="etiqueta-eje" x-text="b.etiqueta"></span>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div class="rejilla-ventas">
+              <div class="panel" style="padding: 0; overflow: hidden">
+                <div class="paso" style="margin: 14px 16px 4px">Lo más vendido</div>
+                <table class="tabla">
+                  <thead><tr><th>Producto</th><th class="derecha ajustado">Piezas</th><th class="derecha ajustado">Vendido</th></tr></thead>
+                  <tbody>
+                    <template x-for="p in r.productos" :key="p.producto_id">
+                      <tr><td x-text="p.nombre"></td><td class="derecha" x-text="cantidad(p.piezas)"></td><td class="derecha" x-text="dinero(p.vendido)"></td></tr>
+                    </template>
+                  </tbody>
+                </table>
+                <p class="suave" style="padding: 0 16px 14px; margin: 0" x-show="!r.productos.length">Nada vendido.</p>
+              </div>
+
+              <div class="pila" style="gap: 16px">
+                <div class="panel">
+                  <div class="paso" style="margin-top: 0">Por categoría</div>
+                  <template x-for="c in r.por_categoria" :key="c.grupo">
+                    <div class="barra-h"><span class="nombre" x-text="c.grupo"></span><strong x-text="dinero(c.vendido)"></strong>
+                      <div class="relleno"><div :style="`width: ${ancho(c.vendido, r.por_categoria)}`"></div></div></div>
+                  </template>
+                  <p class="suave" style="margin: 0" x-show="!r.por_categoria.length">—</p>
+                </div>
+                <div class="panel">
+                  <div class="paso" style="margin-top: 0">Por cajero</div>
+                  <template x-for="c in r.por_cajero" :key="c.grupo">
+                    <div class="barra-h"><span class="nombre" x-text="`${c.grupo} (${c.tickets})`"></span><strong x-text="dinero(c.vendido)"></strong>
+                      <div class="relleno"><div :style="`width: ${ancho(c.vendido, r.por_cajero)}`"></div></div></div>
+                  </template>
+                  <p class="suave" style="margin: 0" x-show="!r.por_cajero.length">—</p>
+                </div>
+                <div class="panel" x-show="r.por_caja.length > 1">
+                  <div class="paso" style="margin-top: 0">Por caja</div>
+                  <template x-for="c in r.por_caja" :key="c.grupo">
+                    <div class="barra-h"><span class="nombre" x-text="`${c.grupo} (${c.tickets})`"></span><strong x-text="dinero(c.vendido)"></strong>
+                      <div class="relleno"><div :style="`width: ${ancho(c.vendido, r.por_caja)}`"></div></div></div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+</body>
+</html>
