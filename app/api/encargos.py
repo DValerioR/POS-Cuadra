@@ -38,6 +38,7 @@ def _out(db: Session, e: Encargo) -> dict:
         "producto_encargo": bool(p and p.encargo), "cantidad": e.cantidad, "cliente": e.cliente, "telefono": e.telefono,
         "canal": e.canal, "notas": e.notas, "estado": e.estado.value, "estado_texto": encargos.texto_estado(e.estado),
         "pedido_id": e.pedido_id, "falta_avisar": encargos.falta_avisar(e), "avisado_at": e.avisado_at,
+        "avisado_por": e.avisado_por, "aviso_texto": e.aviso_texto, "aviso_error": e.aviso_error,
         "creado_por": (creo.nombre_completo or creo.nombre_usuario) if creo else ("Bot de WhatsApp" if e.canal == "whatsapp" else None),
         "created_at": e.created_at, "updated_at": e.updated_at,
     })
@@ -72,6 +73,9 @@ def cambiar_estado(encargo_id: int, datos: EstadoIn, usuario: Usuario = Depends(
     except ERRORES_NEGOCIO as err:
         db.rollback()
         raise a_http(err)
+    db.commit()
+    # Ya guardado el cambio, el bot le avisa al cliente por WhatsApp (si falla, queda "Falta avisar").
+    encargos.avisar(db, e)
     db.commit()
     return _out(db, e)
 

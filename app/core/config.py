@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     respaldos_a_conservar: int = 30
     carpeta_respaldos_copia: str | None = None
     pg_bin: str | None = None
+    # WhatsApp Business (API oficial de Meta, "Cloud API"): token de acceso y
+    # el identificador del número. Sin ellos no se mandan avisos por WhatsApp
+    # (ver app/whatsapp/cliente.py).
+    whatsapp_token: str | None = None
+    whatsapp_numero_id: str | None = None
 
 
 settings = Settings()

@@ -122,4 +122,10 @@ from app.pagos import mercadopago  # noqa: E402  (después del candado de la bas
 mercadopago.activar_simulado()
 print("Terminal Mercado Pago: simulada (Mostrador 2 la tiene; no cobra nada).")
 
+# WhatsApp también simulado: los avisos de encargos "se envían" sin mandar nada.
+from app.whatsapp import cliente as whatsapp  # noqa: E402
+
+whatsapp.activar_simulado()
+print("WhatsApp: simulado (no envía mensajes).")
+
 uvicorn.run("app.main:app", host="127.0.0.1", port=8001)

@@ -4,7 +4,10 @@ entregado), que pasan solos a "pedido" al enviar el pedido al proveedor."""
 
 from decimal import Decimal as D
 
+import pytest
+
 from app.models import Encargo, EstadoEncargo, Producto, Proveedor
+from app.whatsapp import cliente as whatsapp
 
 
 def _producto(db, negocio, nombre, **extra):
@@ -84,3 +87,69 @@ def test_al_enviar_el_pedido_se_marcan(como_admin, db, negocio, admin):
     assert db.get(Encargo, e2.id).estado == EstadoEncargo.POR_PEDIR  # no iba en el pedido
     lista = {x["id"]: x for x in como_admin.get("/encargos/lista").json()}
     assert lista[e1.id]["creado_por"] == "Bot de WhatsApp"
+
+
+@pytest.fixture
+def wa():
+    simulado = whatsapp.activar_simulado()
+    yield simulado
+    whatsapp.desactivar_simulado()
+
+
+def test_numero_de_whatsapp():
+    assert whatsapp.numero("386 111 2233") == "523861112233"
+    assert whatsapp.numero("+52 1 386 111 2233") == "523861112233"
+    assert whatsapp.numero("12345") is None
+
+
+def test_el_bot_avisa_al_cambiar_de_estado(como_mostrador, db, negocio, wa):
+    p = _producto(db, negocio, "HUMIRA PLUMA 40MG", encargo=True)
+    e = como_mostrador.post("/encargos", json={"cliente": "Ana López", "telefono": "386 111 2233", "producto_id": p.id,
+                                               "cantidad": "2"}).json()
+    r = como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "pedido"}).json()
+    assert (r["falta_avisar"], r["avisado_por"], r["aviso_error"]) == (False, "whatsapp", None)
+    assert r["aviso_texto"].startswith("Estimado(a) Ana López, le informamos que su encargo de 2 HUMIRA PLUMA 40MG ya fue solicitado")
+    assert wa.enviados[-1] == {"telefono": "523861112233", "plantilla": "encargo_pedido",
+                               "parametros": ["Ana López", "2 HUMIRA PLUMA 40MG", negocio.nombre]}
+    r = como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "llego"}).json()
+    assert wa.enviados[-1]["plantilla"] == "encargo_disponible" and not r["falta_avisar"]
+
+
+def test_no_se_pudo_encargar(como_mostrador, db, negocio, wa):
+    p = _producto(db, negocio, "HUMIRA PLUMA 40MG", encargo=True)
+    e = como_mostrador.post("/encargos", json={"cliente": "Ana", "telefono": "3861112233", "producto_id": p.id}).json()
+    r = como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "no_disponible"}).json()
+    assert (r["estado"], r["estado_texto"], r["falta_avisar"]) == ("no_disponible", "No se pudo encargar", False)
+    assert wa.enviados[-1]["plantilla"] == "encargo_no_disponible"
+    assert "no cuenta con existencias" in r["aviso_texto"]
+    assert e["id"] in {x["id"] for x in como_mostrador.get("/encargos/lista").json()}  # sigue a la vista
+    # Se puede volver a intentar más adelante.
+    assert como_mostrador.put(f"/encargos/{e['id']}/estado", json={"estado": "por_pedir"}).json()["estado"] == "por_pedir"
+
+
+def test_si_no_se_puede_avisar_lo_hace_el_personal(como_mostrador, db, negocio, wa):
+    p = _producto(db, negocio, "HUMIRA PLUMA 40MG", encargo=True)
+    sin_tel = como_mostrador.post("/encargos", json={"cliente": "Luis", "producto_id": p.id}).json()
+    r = como_mostrador.put(f"/encargos/{sin_tel['id']}/estado", json={"estado": "pedido"}).json()
+    assert r["falta_avisar"] and "teléfono" in r["aviso_error"]
+    con_tel = como_mostrador.post("/encargos", json={"cliente": "Ana", "telefono": "3861112233", "producto_id": p.id}).json()
+    wa.falla = "No hay conexión con WhatsApp. ¿Hay internet?"
+    r = como_mostrador.put(f"/encargos/{con_tel['id']}/estado", json={"estado": "pedido"}).json()
+    assert r["falta_avisar"] and "internet" in r["aviso_error"]
+    r = como_mostrador.post(f"/encargos/{con_tel['id']}/avisado").json()
+    assert (r["falta_avisar"], r["avisado_por"], r["aviso_error"]) == (False, "personal", None)
+
+
+def test_al_enviar_el_pedido_el_bot_avisa(como_admin, db, negocio, wa):
+    from app.services import encargos
+    prov = Proveedor(negocio_id=negocio.id, nombre="Nadro")
+    db.add(prov)
+    p = _producto(db, negocio, "HUMIRA PLUMA 40MG", encargo=True)
+    e = encargos.crear(db, negocio.id, None, "Ana", p.id, telefono="3861112233", canal="whatsapp")
+    db.commit()
+    pedido = como_admin.post("/compras/pedidos", json={"proveedor_id": prov.id,
+                                                       "renglones": [{"producto_id": p.id, "cantidad": "1"}]}).json()
+    como_admin.post(f"/compras/pedidos/{pedido['id']}/enviar")
+    assert [m["plantilla"] for m in wa.enviados] == ["encargo_pedido"]
+    db.expire_all()
+    assert db.get(Encargo, e.id).avisado_por == "whatsapp"

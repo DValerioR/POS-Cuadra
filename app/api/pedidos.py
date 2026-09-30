@@ -12,7 +12,7 @@ from app.api.entradas import _exacto
 from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.models import Usuario
-from app.services import pedidos
+from app.services import encargos, pedidos
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
 # La pantalla es /pedidos; el API va aparte para no chocar con ella.
@@ -90,7 +90,11 @@ def actualizar(pedido_id: int, datos: PedidoIn, usuario: Usuario = Depends(usuar
 
 @router.post("/{pedido_id}/enviar")
 def enviar(pedido_id: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
-    return _hacer(db, usuario, lambda: pedidos.enviar(db, usuario, pedido_id))
+    resultado = _hacer(db, usuario, lambda: pedidos.enviar(db, usuario, pedido_id))
+    # Los encargos que iban en el pedido ya quedaron "pedidos": el bot les avisa a los clientes.
+    encargos.avisar_de_pedido(db, pedido_id)
+    db.commit()
+    return resultado
 
 
 @router.post("/{pedido_id}/cancelar")

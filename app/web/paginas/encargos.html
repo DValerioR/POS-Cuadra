@@ -13,13 +13,15 @@
   <script src="/static/js/api.js"></script>
   <script>
     // Encargos de clientes: productos que un cliente pidió en específico. El
-    // personal los encarga al proveedor (o se agregan en Pedidos), le avisa al
-    // cliente que ya se pidió y que ya llegó, y lo marca entregado.
-    // Ver services/encargos.py.
+    // personal los encarga al proveedor (o se agregan en Pedidos) y los marca
+    // pedidos, llegados o "no se pudo encargar"; el bot le avisa al cliente por
+    // WhatsApp en cada cambio (si no puede, queda "Falta avisar" para el
+    // personal). Ver services/encargos.py.
     const ESTADOS = [
       { id: "por_pedir", texto: "Por pedir", ayuda: "Falta encargarlo al proveedor (se puede agregar en Pedidos)." },
-      { id: "pedido", texto: "Pedidos al proveedor", ayuda: "Ya se encargaron; avisa al cliente que ya se pidió." },
-      { id: "llego", texto: "Ya llegaron", ayuda: "Avisa al cliente que pase por él." },
+      { id: "pedido", texto: "Pedidos al proveedor", ayuda: "Ya se encargaron; cuando lleguen, márcalos." },
+      { id: "llego", texto: "Ya llegaron", ayuda: "Esperando a que el cliente pase por ellos." },
+      { id: "no_disponible", texto: "No se pudieron encargar", ayuda: "El proveedor no los tenía. Se puede volver a intentar más adelante." },
     ];
 
     function pantallaEncargos() {
@@ -37,6 +39,7 @@
         guardando: false,
         verTerminados: false,
         terminados: [],
+        textoAbierto: null, // encargo cuyo mensaje enviado se está viendo
 
         async init() {
           try {
@@ -167,7 +170,8 @@
           <div class="encabezado" style="margin: 0">
             <span class="circulo"><svg><use href="/static/iconos.svg#portapapeles"/></svg></span>
             <div><h1>Encargos</h1>
-              <p class="suave">Productos que un cliente pidió en específico: encárgalos al proveedor y avísale cuando se pidió y cuando llegó.</p></div>
+              <p class="suave">Productos que un cliente pidió en específico. Márcalos al pedirlos, al llegar o si no se pudieron encargar:
+                el bot le avisa al cliente por WhatsApp.</p></div>
           </div>
           <button type="button" class="primario" style="flex: 0 0 auto" @click="abrirNuevo()" x-show="!nuevo">+ Nuevo encargo</button>
         </div>
@@ -228,17 +232,27 @@
                     <strong x-text="`${Number(e.cantidad) !== 1 ? Number(e.cantidad) + ' × ' : ''}${e.descripcion}`"></strong>
                     <span class="etiqueta gris" x-show="!e.producto_id">No está en el catálogo</span>
                     <span class="etiqueta" x-show="e.canal === 'whatsapp'">WhatsApp</span>
-                    <span class="etiqueta peligro" x-show="e.falta_avisar" x-text="e.estado === 'llego' ? 'Falta avisar que llegó' : 'Falta avisar que se pidió'"></span>
+                    <span class="etiqueta peligro" x-show="e.falta_avisar"
+                          x-text="{ pedido: 'Falta avisar que se pidió', llego: 'Falta avisar que llegó', no_disponible: 'Falta avisar que no se pudo' }[e.estado]"></span>
+                    <button type="button" class="etiqueta verde" style="border: 0; cursor: pointer"
+                            x-show="!e.falta_avisar && e.avisado_por === 'whatsapp' && e.aviso_texto"
+                            @click="textoAbierto = textoAbierto === e.id ? null : e.id">Avisado por WhatsApp</button>
                     <div class="suave" style="font-size: 14px">
                       <span x-text="e.cliente"></span><span x-show="e.telefono" x-text="` · ${e.telefono}`"></span>
                       <span x-text="` · ${fecha(e.created_at)}`"></span><span x-show="e.creado_por" x-text="` · ${e.creado_por}`"></span>
                     </div>
                     <div class="suave" style="font-size: 14px" x-show="e.notas" x-text="e.notas"></div>
+                    <div class="mensaje info" style="margin: 6px 0 0; font-size: 14px" x-show="textoAbierto === e.id" x-text="e.aviso_texto"></div>
+                    <div class="suave" style="font-size: 13px; color: var(--peligro)" x-show="e.falta_avisar && e.aviso_error"
+                         x-text="`No se pudo avisar por WhatsApp: ${e.aviso_error}. Avísale tú y márcalo.`"></div>
                   </div>
                   <div class="acciones">
-                    <button type="button" class="primario" x-show="e.falta_avisar" @click="avisado(e)" x-text="e.estado === 'llego' ? 'Ya le avisé que llegó' : 'Ya le avisé que se pidió'"></button>
+                    <button type="button" class="primario" x-show="e.falta_avisar" @click="avisado(e)">Ya le avisé</button>
                     <button type="button" x-show="e.estado === 'por_pedir'" @click="estado(e, 'pedido')">Ya se pidió</button>
                     <button type="button" x-show="e.estado === 'pedido'" @click="estado(e, 'llego')">Ya llegó</button>
+                    <button type="button" x-show="['por_pedir', 'pedido'].includes(e.estado)" @click="estado(e, 'no_disponible')"
+                            title="Por ejemplo, el proveedor no tiene existencias">No se encargó</button>
+                    <button type="button" x-show="e.estado === 'no_disponible'" @click="estado(e, 'por_pedir')">Volver a intentar</button>
                     <button type="button" x-show="e.estado === 'llego'" @click="estado(e, 'entregado')">Se entregó</button>
                     <button type="button" class="texto-peligro" @click="estado(e, 'cancelado')">Cancelar</button>
                   </div>

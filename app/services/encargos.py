@@ -1,8 +1,13 @@
 """Encargos de clientes: un producto que un cliente pidió en específico.
 
-Flujo: Por pedir -> Pedido al proveedor -> Llegó -> Entregado (o Cancelado).
-El personal le avisa al cliente cuando se pidió y cuando llegó ("Ya le
-avisé"); el sistema recuerda el último aviso para saber a quién falta avisar.
+Flujo: Por pedir -> Pedido al proveedor -> Llegó -> Entregado (o Cancelado,
+o No se pudo encargar si el proveedor no tiene existencias).
+
+Avisos al cliente: al pasar a "Pedido al proveedor", "Llegó" o "No se pudo
+encargar", el bot le manda por WhatsApp la plantilla formal que corresponde
+(app/whatsapp/cliente.py). Si no se puede (sin teléfono, WhatsApp sin
+configurar, falla el envío), queda "Falta avisar" y el personal le avisa y lo
+marca ("Ya le avisé").
 
 - Se registran en el mostrador (pantalla Encargos o Consultar precio) o, más
   adelante, por el bot de WhatsApp (sin usuario, `canal="whatsapp"`).
@@ -19,18 +24,26 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Encargo, EstadoEncargo, Pedido, Producto, RolUsuario, Usuario
+from app.models import Encargo, EstadoEncargo, Negocio, Pedido, Producto, RolUsuario, Usuario
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
+from app.whatsapp import cliente as whatsapp
 
 ROLES = {RolUsuario.ADMIN, RolUsuario.MOSTRADOR, RolUsuario.BODEGA}
-ABIERTOS = (EstadoEncargo.POR_PEDIR, EstadoEncargo.PEDIDO, EstadoEncargo.LLEGO)
+ABIERTOS = (EstadoEncargo.POR_PEDIR, EstadoEncargo.PEDIDO, EstadoEncargo.LLEGO, EstadoEncargo.NO_DISPONIBLE)
 # A qué estados se puede pasar desde cada uno.
 SIGUIENTES = {
-    EstadoEncargo.POR_PEDIR: {EstadoEncargo.PEDIDO, EstadoEncargo.CANCELADO},
-    EstadoEncargo.PEDIDO: {EstadoEncargo.LLEGO, EstadoEncargo.POR_PEDIR, EstadoEncargo.CANCELADO},
+    EstadoEncargo.POR_PEDIR: {EstadoEncargo.PEDIDO, EstadoEncargo.NO_DISPONIBLE, EstadoEncargo.CANCELADO},
+    EstadoEncargo.PEDIDO: {EstadoEncargo.LLEGO, EstadoEncargo.NO_DISPONIBLE, EstadoEncargo.POR_PEDIR, EstadoEncargo.CANCELADO},
     EstadoEncargo.LLEGO: {EstadoEncargo.ENTREGADO, EstadoEncargo.CANCELADO},
+    EstadoEncargo.NO_DISPONIBLE: {EstadoEncargo.POR_PEDIR, EstadoEncargo.CANCELADO},
     EstadoEncargo.ENTREGADO: set(),
     EstadoEncargo.CANCELADO: {EstadoEncargo.POR_PEDIR},
+}
+# Cambios que se le avisan al cliente, con su plantilla de WhatsApp.
+PLANTILLA_DE = {
+    EstadoEncargo.PEDIDO: "encargo_pedido",
+    EstadoEncargo.LLEGO: "encargo_disponible",
+    EstadoEncargo.NO_DISPONIBLE: "encargo_no_disponible",
 }
 
 
@@ -96,14 +109,48 @@ def marcar_avisado(db: Session, usuario: Usuario, encargo_id: int) -> Encargo:
     """El personal ya le avisó al cliente del estado actual. No hace commit."""
     _validar_rol(usuario)
     e = obtener(db, usuario.negocio_id, encargo_id)
-    e.avisado_at, e.avisado_estado = _ahora(), e.estado
+    e.avisado_at, e.avisado_estado, e.avisado_por = _ahora(), e.estado, "personal"
+    e.aviso_texto = e.aviso_error = None
     db.flush()
     return e
 
 
 def falta_avisar(e: Encargo) -> bool:
-    """Se pidió o llegó y todavía no se le dice al cliente."""
-    return e.estado in (EstadoEncargo.PEDIDO, EstadoEncargo.LLEGO) and e.avisado_estado != e.estado
+    """Se pidió, llegó o no se pudo encargar, y todavía no se le dice al cliente."""
+    return e.estado in PLANTILLA_DE and e.avisado_estado != e.estado
+
+
+def avisar(db: Session, e: Encargo) -> bool:
+    """Le manda al cliente por WhatsApp el aviso del estado actual (si hace
+    falta). Si no se puede, deja el motivo en `aviso_error` para que el
+    personal le avise. Regresa si se envió. No hace commit."""
+    if not falta_avisar(e):
+        return False
+    telefono = whatsapp.numero(e.telefono)
+    if telefono is None:
+        e.aviso_error = "El cliente no dejó un teléfono válido para WhatsApp"
+    elif not whatsapp.configurado():
+        e.aviso_error = "WhatsApp todavía no está configurado"
+    else:
+        plantilla = whatsapp.PLANTILLAS[PLANTILLA_DE[e.estado]]
+        negocio = db.get(Negocio, e.negocio_id)
+        cantidad = f"{e.cantidad.normalize():f} " if e.cantidad != 1 else ""
+        parametros = [e.cliente, f"{cantidad}{e.descripcion}", negocio.nombre]
+        try:
+            whatsapp.cliente().enviar_plantilla(telefono, plantilla, parametros)
+        except whatsapp.ErrorWhatsApp as err:
+            e.aviso_error = err.mensaje
+        else:
+            e.avisado_at, e.avisado_estado, e.avisado_por = _ahora(), e.estado, "whatsapp"
+            e.aviso_texto, e.aviso_error = whatsapp.texto(plantilla, parametros), None
+    db.flush()
+    return e.aviso_error is None
+
+
+def avisar_de_pedido(db: Session, pedido_id: int) -> None:
+    """Avisa a los clientes de los encargos que quedaron en un pedido recién enviado. No hace commit."""
+    for e in db.scalars(select(Encargo).where(Encargo.pedido_id == pedido_id)):
+        avisar(db, e)
 
 
 def listar(db: Session, negocio_id: int, abiertos: bool = True, limite: int = 200) -> list[Encargo]:
@@ -146,6 +193,7 @@ TEXTOS = {
     EstadoEncargo.POR_PEDIR: "Por pedir",
     EstadoEncargo.PEDIDO: "Pedido al proveedor",
     EstadoEncargo.LLEGO: "Llegó",
+    EstadoEncargo.NO_DISPONIBLE: "No se pudo encargar",
     EstadoEncargo.ENTREGADO: "Entregado",
     EstadoEncargo.CANCELADO: "Cancelado",
 }
