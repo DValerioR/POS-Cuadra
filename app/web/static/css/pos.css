@@ -773,6 +773,9 @@ details.desglose table { margin-top: 8px; }
 .proveedores-faltantes .opcion { flex-direction: row; padding: 10px 16px; color: var(--texto); }
 .faltantes .grande { display: flex; justify-content: center; gap: 10px; }
 .faltantes .mensaje { margin: 16px 0 0; }
+.sugerencias-ia { align-items: flex-start; margin: 0 0 14px; font-weight: 400; }
+.sugerencias-ia input { margin-top: 4px; }
+.sugerencias-ia.apagada { cursor: default; opacity: 0.7; }
 
 /* --- Centro de notificaciones ------------------------------------------ */
 

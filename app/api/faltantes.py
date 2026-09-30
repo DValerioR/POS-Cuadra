@@ -10,7 +10,7 @@ from app.api.entradas import _exacto
 from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.models import Producto, Usuario
-from app.services import faltantes
+from app.services import faltantes, sugerencias_pedido
 from app.services.entradas import _validar_rol
 from app.services.errores import ERRORES_NEGOCIO, NoEncontrado, a_http
 
@@ -29,11 +29,23 @@ def reporte(proveedor_id: int, usuario: Usuario = Depends(usuario_actual), db: S
 
 
 @router.get("/reportes/faltantes/excel")
-def reporte_excel(proveedor_id: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+def reporte_excel(proveedor_id: int, sugerencias: bool = False, usuario: Usuario = Depends(usuario_actual),
+                  db: Session = Depends(get_db)):
+    """El reporte en Excel. Con sugerencias=true, el asistente de IA propone
+    cuánto pedir de cada producto según sus ventas (columnas al final)."""
     try:
         r = faltantes.reporte(db, usuario, proveedor_id)
+        ia = sugerencias_pedido.sugerir(db, usuario.negocio_id, r["del_proveedor"] + r["sin_proveedor"]) if sugerencias else None
     except ERRORES_NEGOCIO as e:
         raise a_http(e)
+    extra = ["Sugerencia del asistente", "Motivo"] if ia is not None else []
+
+    def columnas_ia(x):
+        if ia is None:
+            return []
+        s = ia.get(x["producto_id"])
+        return [s["cantidad"], s["motivo"]] if s else ["", "sin sugerencia"]
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Pedido"
@@ -43,29 +55,31 @@ def reporte_excel(proveedor_id: int, usuario: Usuario = Depends(usuario_actual),
     ws["A1"].font = Font(bold=True, size=14)
     ws.append([])
     ws.append(["Clave", "Producto", "Existencia", "Mínimo", "Máximo", "Pedir", "Último costo aquí", "Fecha",
-               "Mejor precio con", "Su costo", "Fecha", "Diferencia %"])
+               "Mejor precio con", "Su costo", "Fecha", "Diferencia %", *extra])
     for celda in ws[3]:
         celda.font = negrita
     for x in r["del_proveedor"]:
         ws.append([x["clave"], x["nombre"], x["existencia"], x["minimo"], x["maximo"], x["sugerido"],
                    x["costo"], x["fecha_costo"], x["mejor_proveedor"], x["mejor_costo"], x["mejor_fecha"],
-                   x["diferencia_porcentaje"]])
+                   x["diferencia_porcentaje"], *columnas_ia(x)])
         if x["mejor_proveedor"]:
             for celda in ws[ws.max_row]:
                 celda.fill = amarillo
     ws.append([])
     ws.append(["", "Total estimado (sin impuestos)", "", "", "", "", r["total_estimado"]])
     ws[ws.max_row][1].font = negrita
-    for letra, ancho in zip("ABCDEFGHIJKL", (16, 50, 11, 9, 9, 8, 16, 12, 22, 10, 12, 12)):
+    if ia is not None:
+        ws["C1"] = "Con sugerencias del asistente según las ventas de las últimas 12 semanas"
+    for letra, ancho in zip("ABCDEFGHIJKLMN", (16, 50, 11, 9, 9, 8, 16, 12, 22, 10, 12, 12, 14, 50)):
         ws.column_dimensions[letra].width = ancho
     ws.freeze_panes = "A4"
     otra = wb.create_sheet("Sin proveedor registrado")
-    otra.append(["Clave", "Producto", "Existencia", "Mínimo", "Máximo", "Pedir"])
+    otra.append(["Clave", "Producto", "Existencia", "Mínimo", "Máximo", "Pedir", *extra])
     for celda in otra[1]:
         celda.font = negrita
     for x in r["sin_proveedor"]:
-        otra.append([x["clave"], x["nombre"], x["existencia"], x["minimo"], x["maximo"], x["sugerido"]])
-    for letra, ancho in zip("ABCDEF", (16, 50, 11, 9, 9, 8)):
+        otra.append([x["clave"], x["nombre"], x["existencia"], x["minimo"], x["maximo"], x["sugerido"], *columnas_ia(x)])
+    for letra, ancho in zip("ABCDEFGH", (16, 50, 11, 9, 9, 8, 14, 50)):
         otra.column_dimensions[letra].width = ancho
     otra.freeze_panes = "A2"
     salida = BytesIO()

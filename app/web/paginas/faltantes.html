@@ -15,7 +15,8 @@
     // Generador del reporte de faltantes: se elige el proveedor y se descarga
     // el Excel con lo que ese proveedor ha surtido y está en su mínimo o menos,
     // su último costo y, si otro proveedor lo dio más barato, cuál y a cuánto.
-    // En otra hoja van los faltantes sin proveedor registrado.
+    // En otra hoja van los faltantes sin proveedor registrado. Con la casilla
+    // "Sugerencias del asistente", la IA propone cuánto pedir según las ventas.
     function pantallaFaltantes() {
       return {
         usuario: null,
@@ -25,11 +26,17 @@
         proveedor: null,
         generando: false,
         resultado: null,
+        conSugerencias: false,
+        iaLista: false,
 
         async init() {
           try {
             this.usuario = await API.get("/auth/yo");
-            if (this.puedeUsar) this.proveedores = await API.get("/proveedores");
+            if (this.puedeUsar) {
+              const [proveedores, ia] = await Promise.all([API.get("/proveedores"), API.get("/ia/estado")]);
+              this.proveedores = proveedores;
+              this.iaLista = ia.configurada;
+            }
           } catch (e) {
             this.error = e.message;
           } finally {
@@ -56,15 +63,35 @@
               productos: r.del_proveedor.length,
               masBaratos: r.del_proveedor.filter((x) => x.mejor_proveedor).length,
               sinProveedor: r.sin_proveedor.length,
+              sugerencias: false,
             };
             if (this.resultado.productos || this.resultado.sinProveedor) {
-              window.location.href = `/reportes/faltantes/excel?proveedor_id=${this.proveedor.id}`;
+              const conIA = this.conSugerencias && this.iaLista;
+              await this.descargar(`/reportes/faltantes/excel?proveedor_id=${this.proveedor.id}&sugerencias=${conIA}`);
+              this.resultado.sugerencias = conIA;
             }
           } catch (e) {
             this.error = e.message;
           } finally {
             this.generando = false;
           }
+        },
+        // Se pide con fetch (y no con un enlace) para mostrar "Generando…"
+        // mientras el asistente responde y enseñar el error aquí si falla.
+        async descargar(ruta) {
+          const respuesta = await fetch(ruta, { credentials: "same-origin" });
+          if (!respuesta.ok) {
+            let datos = null;
+            try { datos = await respuesta.json(); } catch { /* sin detalle */ }
+            this.resultado = null;
+            throw new Error(mensajeDeError(datos, respuesta.status));
+          }
+          const nombre = decodeURIComponent((respuesta.headers.get("Content-Disposition") || "").split("''")[1] || "faltantes.xlsx");
+          const enlace = document.createElement("a");
+          enlace.href = URL.createObjectURL(await respuesta.blob());
+          enlace.download = nombre;
+          enlace.click();
+          setTimeout(() => URL.revokeObjectURL(enlace.href), 10000);
         },
         plural(n, uno, varios) {
           return `${n} ${n === 1 ? uno : varios}`;
@@ -105,9 +132,13 @@
         </div>
 
         <div class="paso separado">2. Genera el reporte</div>
+        <label class="casilla sugerencias-ia" :class="{ apagada: !iaLista }">
+          <input type="checkbox" x-model="conSugerencias" :disabled="!iaLista">
+          <span><strong>Sugerencias del asistente</strong><span class="ayuda" x-show="iaLista">: la IA revisa las ventas de las últimas 12 semanas y propone cuánto pedir de cada producto (tarda un poco más y usa la API de Claude).</span><span class="ayuda" x-show="!iaLista">: para usarlas, un administrador debe poner la clave en Configuración → Asistente de IA.</span></span>
+        </label>
         <button type="button" class="primario grande" :disabled="!proveedor || generando" @click="generar()">
           <svg class="ico"><use href="/static/iconos.svg#grafica"/></svg>
-          <span x-text="generando ? 'Generando…' : (proveedor ? `Generar Excel de ${proveedor.nombre}` : 'Generar Excel')"></span>
+          <span x-text="generando ? (conSugerencias && iaLista ? 'El asistente está revisando las ventas…' : 'Generando…') : (proveedor ? `Generar Excel de ${proveedor.nombre}` : 'Generar Excel')"></span>
         </button>
 
         <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
@@ -119,7 +150,8 @@
               Listo, se descargó el reporte de <strong x-text="resultado.proveedor"></strong>:
               <span x-text="plural(resultado.productos, 'producto por pedir', 'productos por pedir')"></span><span
                 x-show="resultado.masBaratos" x-text="` (${plural(resultado.masBaratos, 'lo dio', 'los dio')} más barato otro proveedor; van en amarillo)`"></span><span
-                x-show="resultado.sinProveedor" x-text="` y ${plural(resultado.sinProveedor, 'faltante', 'faltantes')} sin proveedor registrado en otra hoja`"></span>.
+                x-show="resultado.sinProveedor" x-text="` y ${plural(resultado.sinProveedor, 'faltante', 'faltantes')} sin proveedor registrado en otra hoja`"></span>.<span
+                x-show="resultado.sugerencias"> Las sugerencias del asistente van en las últimas columnas.</span>
             </span>
           </div>
         </template>

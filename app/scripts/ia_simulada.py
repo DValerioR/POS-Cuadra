@@ -1,5 +1,6 @@
 """IA simulada para el servidor de demostración (`--ia-simulada`): permite ver
-el chat del asistente y probar sus consultas sin clave ni costo.
+el chat del asistente, probar sus consultas y las sugerencias de pedido del
+reporte de faltantes sin clave ni costo.
 
 No es inteligente: elige una consulta por palabras clave de la pregunta y
 responde listando lo que regresó. Nunca se usa fuera del demo.
@@ -10,7 +11,7 @@ from datetime import timedelta
 
 from app.asistente import chat
 from app.asistente.consultas import hoy
-from app.services import configuracion_ia
+from app.services import configuracion_ia, sugerencias_pedido
 
 
 class _Bloque:
@@ -74,7 +75,21 @@ def _llamar(cliente, sistema, mensajes):
     return _Respuesta([_Bloque(type="tool_use", id="demo-1", name=nombre, input=entrada)], "tool_use")
 
 
+def _sugerencias(cliente, texto):
+    """Promedio de las últimas 4 semanas × 3 semanas, menos la existencia."""
+    sugerencias = []
+    for linea in texto.splitlines()[2:]:
+        pid, _, existencia, _, _, _, ventas = [c.strip() for c in linea.split("|")]
+        semanas = [int(v) for v in ventas.split(",") if v]
+        promedio = sum(semanas[-4:]) / 4
+        cantidad = max(0, round(promedio * 3 - float(existencia)))
+        motivo = f"Vende ~{promedio:.1f} por semana (simulado)" if promedio else "Sin ventas recientes (simulado)"
+        sugerencias.append({"producto_id": int(pid), "cantidad": cantidad, "motivo": motivo})
+    return json.dumps({"sugerencias": sugerencias})
+
+
 def activar() -> None:
     chat._llamar = _llamar
+    sugerencias_pedido._llamar = _sugerencias
     configuracion_ia.cliente = lambda: object()
     configuracion_ia.estado = lambda: {"configurada": True, "termina_en": "DEMO", "modelo": "IA simulada"}
