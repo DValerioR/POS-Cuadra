@@ -337,6 +337,8 @@
                placeholder="Escribe el nombre del producto" autocomplete="off">
       </div>
       <div class="lista-resultados">
+        <div class="suave vacio-busqueda" style="padding-bottom: 4px" x-show="quisoDecir && resultados.length">
+          No hay nada con ese nombre. <strong>¿Quiso decir…?</strong></div>
         <template x-for="(p, i) in resultados" :key="p.id">
           <div class="resultado" :class="{ elegido: i === elegido }" @click="agregarDesdeBusqueda(p)" @mouseenter="elegido = i">
             <div>

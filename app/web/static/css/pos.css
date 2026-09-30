@@ -1478,3 +1478,7 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 .encargo-fila { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; padding: 14px 18px; border-bottom: 1px solid var(--borde); }
 .encargo-fila:last-child { border-bottom: 0; }
 .encargo-fila .acciones { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; }
+
+/* Consultar precio: foto y "¿Quiso decir…?" */
+.consulta-precio .foto-consulta { flex: 0 0 auto; }
+.consulta-precio .consulta-titulo { margin: 10px 0 0; font-weight: 600; }

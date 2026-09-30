@@ -149,7 +149,7 @@
       <label for="clave-ia" style="margin-top: 0" x-text="ia && ia.configurada ? 'Cambiar por otra clave' : 'Clave de la API de Claude'"></label>
       <input id="clave-ia" type="password" x-model="claveIa" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
       <p class="ayuda">Se saca en console.anthropic.com (API Keys). Se cobra por uso: unos centavos por factura. El servidor necesita internet para usarla. Se guarda en el archivo .env del servidor y no se vuelve a mostrar.</p>
-      <div class="mensaje" :class="pruebaIa.ok ? 'ok' : 'error'" x-show="pruebaIa" x-cloak>
+      <div class="mensaje" :class="pruebaIa && pruebaIa.ok ? 'ok' : 'error'" x-show="pruebaIa" x-cloak>
         <svg class="ico"><use :href="'/static/iconos.svg#' + (pruebaIa && pruebaIa.ok ? 'palomita' : 'alerta')"/></svg>
         <span x-text="pruebaIa && pruebaIa.mensaje"></span>
       </div>

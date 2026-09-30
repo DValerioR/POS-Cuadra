@@ -40,6 +40,7 @@ function pantallaVenta() {
     modoCobro: false,
     busqueda: "",
     resultados: [],
+    quisoDecir: false, // los resultados son "¿Quiso decir…?" (nombres parecidos)
     elegido: 0,
     _temporizador: null,
     _consulta: 0,
@@ -196,12 +197,19 @@ function pantallaVenta() {
       this._temporizador = setTimeout(async () => {
         const numero = ++this._consulta;
         try {
-          const lista = await API.get(`/productos?solo_activos=true&limite=30&q=${encodeURIComponent(texto)}`);
+          let lista = await API.get(`/productos?solo_activos=true&limite=30&q=${encodeURIComponent(texto)}`);
+          let parecidos = false;
+          if (!lista.length && texto.length >= 4) {
+            // Mal escrito o suena parecido ("parasetamol"): se sugieren los parecidos.
+            lista = await API.get(`/productos/parecidos?q=${encodeURIComponent(texto)}`);
+            parecidos = lista.length > 0;
+          }
           // La oferta de hoy de cada uno, para verla en la lista antes de agregarlo.
           const ofertas = lista.length ? await API.get(`/ofertas/de-productos?ids=${lista.map((p) => p.id).join(",")}`) : {};
           if (numero !== this._consulta) return; // ignorar respuestas viejas
           lista.forEach((p) => { p.oferta = ofertas[p.id] || null; });
           this.resultados = lista;
+          this.quisoDecir = parecidos;
           this.elegido = 0;
         } catch (e) {
           this.error = e.message;

@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +11,7 @@ from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Categoria, Negocio, PrecioHistorial, Producto, Usuario
 from app.schemas.producto import ProductoCreate, ProductoOut, ProductoUpdate
-from app.services import catalogo, revision_catalogo
+from app.services import buscador, catalogo, entradas, revision_catalogo
 from app.services.errores import ERRORES_NEGOCIO, a_http
 from app.services.precios import redondear_precio_venta
 
@@ -92,6 +92,47 @@ def listar_productos(
 def contar_productos(filtros: Filtros = Depends(), usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
     """Cuántos productos cumplen los filtros (para paginar)."""
     return {"total": db.scalar(filtros.aplicar(select(func.count()).select_from(Producto), usuario.negocio_id))}
+
+
+def _sugeridos(db: Session, lista: list[buscador.Parecido]) -> list[dict]:
+    salida = []
+    for s in lista:
+        p = db.get(Producto, s.producto_id)
+        salida.append({**ProductoOut.model_validate(p).model_dump(mode="json"), "parecido": s.parecido, "por": s.por})
+    return salida
+
+
+@router.get("/parecidos")
+def parecidos(q: str = Query(min_length=2, max_length=120), limite: int = Query(5, ge=1, le=10),
+              usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """"¿Quiso decir…?": productos cuyo nombre se escribe o suena parecido a `q`
+    (errores de escritura, "parasetamol", la sustancia activa...)."""
+    return _sugeridos(db, buscador.parecidos(db, usuario.negocio_id, q, limite))
+
+
+MENSAJES_FOTO = {
+    "pastilla_suelta": "Es una pastilla o cápsula suelta: no se identifica un medicamento por su forma o color. "
+                       "Pide una foto de la caja, el frasco o la receta.",
+    "ilegible": "No se alcanza a leer la foto. Pide otra con más luz y enfocada al nombre.",
+    "otra_cosa": "La foto no parece de un medicamento ni de una receta.",
+}
+
+
+@router.post("/identificar-foto")
+async def identificar_foto(request: Request, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Lee con la IA la foto de una caja, frasco o receta y busca en el
+    catálogo lo que dice. El cuerpo es la imagen tal cual. Solo sugiere."""
+    datos = await request.body()
+    try:
+        lectura = buscador.leer_foto(datos, entradas.tipo_de_archivo(datos))
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+    candidatos = _sugeridos(db, buscador.buscar_lectura(db, usuario.negocio_id, lectura))
+    mensaje = MENSAJES_FOTO.get(lectura.tipo)
+    if mensaje is None and lectura.medicamentos and not candidatos:
+        mensaje = "Se leyó la foto, pero no hay nada parecido en el catálogo."
+    return {"tipo": lectura.tipo, "medicamentos": lectura.medicamentos, "nota": lectura.nota,
+            "mensaje": mensaje, "candidatos": candidatos}
 
 
 @router.get("/revision/excel")

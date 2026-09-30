@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from app.asistente import chat
 from app.asistente.consultas import hoy
-from app.services import configuracion_ia, ofertas, sugerencias_pedido
+from app.services import buscador, configuracion_ia, ofertas, sugerencias_pedido
 
 
 class _Bloque:
@@ -106,8 +106,28 @@ def _ofertas(cliente, texto):
     return json.dumps({"ofertas": propuestas})
 
 
+def _foto(datos, tipo):
+    """No ve la foto: "lee" el nombre de un producto del demo con un error de
+    escritura (c por s, v por b), para ver el buscador tolerante."""
+    import random
+
+    from sqlalchemy import select
+
+    from app.core.database import SessionLocal
+    from app.models import Producto
+
+    with SessionLocal() as db:
+        nombres = list(db.scalars(select(Producto.nombre).where(Producto.activo.is_(True)).limit(60)))
+    palabra = random.choice(nombres).split()[0] if nombres else "PARACETAMOL"
+    leido = palabra.lower().replace("c", "s").replace("v", "b").replace("z", "s")
+    return json.dumps({"tipo": "caja_o_frasco", "nota": "Lectura simulada del demo (no se vio la foto).",
+                       "medicamentos": [{"nombre_comercial": leido, "sustancia_activa": None, "concentracion": None,
+                                         "presentacion": None, "laboratorio": None}]})
+
+
 def activar() -> None:
     chat._llamar = _llamar
+    buscador._llamar_foto = _foto
     sugerencias_pedido._llamar = _sugerencias
     ofertas._llamar = _ofertas
     configuracion_ia.cliente = lambda: object()

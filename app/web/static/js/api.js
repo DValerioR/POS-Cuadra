@@ -408,7 +408,12 @@ function montarConsultaPrecio() {
           <div><h2>Consultar precio</h2><p class="suave">Escanea el código o escribe el nombre.</p></div>
           <button type="button" class="cerrar-consulta" title="Cerrar (Esc)">${icono("tache")}</button>
         </div>
-        <div class="buscador"><span class="lupa">${icono("codigo", "")}</span><input type="text" autocomplete="off" placeholder="Código de barras o nombre del producto"></div>
+        <div class="fila" style="gap: 8px">
+          <div class="buscador" style="flex: 1 1 auto"><span class="lupa">${icono("codigo", "")}</span><input type="text" autocomplete="off" placeholder="Código de barras o nombre del producto"></div>
+          <button type="button" class="foto-consulta" title="Identificar el producto con la foto que mandó el cliente (caja, frasco o receta)">${icono("camara")}<span>Foto</span></button>
+          <input type="file" class="archivo-foto" accept="image/*" hidden>
+        </div>
+        <p class="consulta-titulo suave" hidden></p>
         <div class="consulta-resultados"></div>
         <div class="consulta-ficha" hidden></div>
         <p class="consulta-pie"><kbd>↑</kbd> <kbd>↓</kbd> elegir · <kbd>Enter</kbd> ver precio · <kbd>Esc</kbd> cerrar</p>
@@ -435,6 +440,12 @@ function montarConsultaPrecio() {
         enter(campo.value);
       }
     });
+    const archivo = raiz.querySelector(".archivo-foto");
+    raiz.querySelector(".foto-consulta").addEventListener("click", () => archivo.click());
+    archivo.addEventListener("change", () => {
+      if (archivo.files[0]) identificarFoto(archivo.files[0]);
+      archivo.value = "";
+    });
     raiz.querySelector(".consulta-resultados").addEventListener("click", (ev) => {
       const boton = ev.target.closest("button[data-i]");
       if (boton) mostrar(resultados[Number(boton.dataset.i)]);
@@ -453,8 +464,55 @@ function montarConsultaPrecio() {
   const limpiarResultados = () => {
     resultados = [];
     elegido = -1;
+    titulo("");
     pintarResultados();
   };
+  // Texto arriba de la lista (ej. "¿Quiso decir…?"); vacío = sin título.
+  const titulo = (texto) => {
+    const t = raiz.querySelector(".consulta-titulo");
+    t.textContent = texto;
+    t.hidden = !texto;
+  };
+  // Nada con ese nombre: los que se escriben o suenan parecido.
+  async function quisoDecir(q) {
+    try {
+      const lista = await API.get(`/productos/parecidos?q=${encodeURIComponent(q)}`);
+      if (!lista.length) return false;
+      resultados = lista;
+      elegido = 0;
+      pintarResultados();
+      titulo("¿Quiso decir…?");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function identificarFoto(foto) {
+    limpiarResultados();
+    campo().value = "";
+    ficha(`<p class="suave">Leyendo la foto…</p>`);
+    try {
+      const respuesta = await fetch("/productos/identificar-foto", { method: "POST", body: foto, credentials: "same-origin" });
+      const d = await respuesta.json();
+      if (!respuesta.ok) throw new Error(d.detail || "No se pudo leer la foto");
+      const leido = d.medicamentos.map((m) => [m.nombre_comercial, m.sustancia_activa, m.concentracion, m.presentacion]
+        .filter(Boolean).join(" · ")).join("; ");
+      ficha([
+        leido ? `<p><strong>En la foto dice:</strong> ${escapar(leido)}</p>` : "",
+        d.mensaje ? `<div class="mensaje aviso">${icono("alerta")}<span>${escapar(d.mensaje)}</span></div>` : "",
+        d.nota ? `<p class="suave">${escapar(d.nota)}</p>` : "",
+      ].join(""));
+      if (d.candidatos.length) {
+        resultados = d.candidatos;
+        elegido = 0;
+        pintarResultados();
+        titulo("¿Es alguno de estos? Elige para ver su precio.");
+      }
+    } catch (e) {
+      ficha(`<div class="mensaje error">${icono("alerta")}<span>${escapar(e.message)}</span></div>`);
+    }
+  }
 
   async function buscar(texto) {
     const q = texto.trim();
@@ -464,7 +522,9 @@ function montarConsultaPrecio() {
       if (campo().value.trim() !== q) return; // ya se escribió otra cosa
       resultados = lista;
       elegido = lista.length ? 0 : -1;
+      titulo("");
       pintarResultados();
+      if (!lista.length && q.length >= 4) await quisoDecir(q);
     } catch { /* se reintenta al seguir escribiendo */ }
   }
 
@@ -481,7 +541,9 @@ function montarConsultaPrecio() {
       resultados = lista;
       elegido = lista.length ? 0 : -1;
       pintarResultados();
-      if (!lista.length) ficha(`<div class="mensaje aviso">${icono("alerta")}<span>No se encontró ningún producto con «${escapar(q)}».</span></div>`);
+      if (!lista.length && !(await quisoDecir(q))) {
+        ficha(`<div class="mensaje aviso">${icono("alerta")}<span>No se encontró ningún producto con «${escapar(q)}».</span></div>`);
+      }
     } catch (e) {
       ficha(`<div class="mensaje error">${icono("alerta")}<span>${escapar(e.message)}</span></div>`);
     }
