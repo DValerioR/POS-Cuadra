@@ -16,7 +16,21 @@ PAGINAS = {"login", "inicio", "venta", "turno", "devoluciones", "notificaciones"
 
 router = APIRouter(include_in_schema=False)
 mimetypes.add_type("application/manifest+json", ".webmanifest")  # Windows no lo conoce
-estaticos = StaticFiles(directory=WEB / "static")
+
+
+class EstaticosSinCache(StaticFiles):
+    """JS, CSS e íconos con "no-cache": el navegador los guarda, pero antes de
+    usarlos pregunta si cambiaron (si no, el servidor contesta 304 sin
+    mandarlos de nuevo). Así, al actualizar el sistema, las computadoras
+    toman la versión nueva sin tener que borrar nada."""
+
+    def file_response(self, *args, **kwargs):
+        respuesta = super().file_response(*args, **kwargs)
+        respuesta.headers["Cache-Control"] = "no-cache"
+        return respuesta
+
+
+estaticos = EstaticosSinCache(directory=WEB / "static")
 
 
 @router.get("/")

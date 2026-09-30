@@ -28,6 +28,16 @@ def test_estaticos(cliente, archivo):
     assert cliente.get(f"/static/{archivo}").status_code == 200
 
 
+def test_sin_cache_vieja_al_actualizar(cliente):
+    """Páginas y archivos se revalidan siempre: tras actualizar el sistema, las
+    computadoras toman la versión nueva; si no cambió, el servidor contesta 304."""
+    assert cliente.get("/venta").headers["cache-control"] == "no-cache"
+    r = cliente.get("/static/js/venta.js")
+    assert r.headers["cache-control"] == "no-cache" and r.headers["etag"]
+    otra = cliente.get("/static/js/venta.js", headers={"If-None-Match": r.headers["etag"]})
+    assert otra.status_code == 304
+
+
 def test_icono_y_manifiesto(cliente):
     r = cliente.get("/favicon.ico")
     assert r.status_code == 200
