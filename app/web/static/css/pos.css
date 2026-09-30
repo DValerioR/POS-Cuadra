@@ -1482,3 +1482,31 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 /* Consultar precio: foto y "¿Quiso decir…?" */
 .consulta-precio .foto-consulta { flex: 0 0 auto; }
 .consulta-precio .consulta-titulo { margin: 10px 0 0; font-weight: 600; }
+
+/* Barra de las pantallas con los menús desplegables de Inicio */
+.barra nav.menus { gap: 0; }
+.barra .menu-titulo {
+  height: 60px; padding: 0 16px;
+  border: 0; border-radius: 0;
+  background: transparent; color: #fff;
+  font-size: 17px; font-weight: 600;
+}
+.barra .menu-titulo.actual { box-shadow: inset 0 -4px 0 #7ee0c3; }
+.barra .menu-titulo:hover, .barra .menu-titulo.abierto { background: rgba(255, 255, 255, 0.14); }
+.barra .menu-titulo.abierto .flecha { transform: rotate(180deg); }
+.barra .menu-lista[hidden] { display: none; }
+.barra .menu-opcion {
+  border: 0; border-radius: var(--radio-chico);
+  color: var(--texto);
+  padding: 12px 14px;
+  white-space: normal;
+}
+.barra .menu-opcion:hover { background: var(--primario-suave); }
+.barra .menu-opcion.elegida { background: var(--primario-suave); font-weight: 700; }
+.barra .menu-opcion kbd { color: var(--texto-suave); }
+@media (max-width: 760px) {
+  .barra nav.menus .menu { width: 100%; }
+  .barra nav.menus .menu-titulo { width: 100%; height: 48px; justify-content: space-between; }
+  .barra nav.menus .menu-lista { position: static; min-width: 0; box-shadow: none; margin: 0 8px 8px; }
+}
+.barra.compacta .menu-titulo { padding: 0 10px; font-size: 16px; }

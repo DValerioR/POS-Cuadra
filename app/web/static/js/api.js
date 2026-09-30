@@ -291,9 +291,11 @@ function ponerLogo(contenedor, url) {
 
 // --- Barra superior de las pantallas ---------------------------------------
 // <header class="barra" data-pagina="venta"></header> se dibuja sola al cargar.
-// Lleva "Inicio" y las pantallas que ya existen y que el rol puede usar; en
-// ventanas angostas los enlaces quedan solo con ícono, y en muy angostas se
-// guardan en un botón "Menú".
+// Lleva los mismos menús desplegables que Inicio (Ventas, Inventario,
+// Reportes, Configuración, Ayuda) con lo que el rol puede usar; el logo
+// regresa a Inicio. Las opciones que en Inicio abren una ventana (clave de IA,
+// mi contraseña, teclas...) llevan a Inicio y la abren ahí. En ventanas muy
+// angostas los menús se guardan en un botón "Menú".
 
 async function pintarBarra() {
   const barra = document.querySelector("header.barra[data-pagina]");
@@ -317,9 +319,7 @@ async function pintarBarra() {
     const abierta = barra.classList.toggle("menu-abierto");
     botonMenu.setAttribute("aria-expanded", String(abierta));
   });
-  const enlace = (ruta, texto, nombreIcono, activo) =>
-    `<a href="${ruta}" class="${activo ? "activo" : ""}" title="${escapar(texto)}">${icono(nombreIcono)}<span>${escapar(texto)}</span></a>`;
-  nav.innerHTML = enlace("/inicio", "Inicio", "casa", actual === "inicio");
+  nav.className = "menus";
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
@@ -328,12 +328,7 @@ async function pintarBarra() {
       vigilarSolicitudes(barra.querySelector(".campana"));
       montarAsistente();
     }
-    nav.innerHTML += seccionesDe(usuario.rol)
-      // Notificaciones va en la campana; las rutas con "?" son vistas de otra
-      // pantalla, y los reportes se sacan desde Inicio.
-      .filter((s) => s.ruta && s.existe && s.id !== "notificaciones" && !s.ruta.includes("?") && s.grupo !== "Reportes")
-      .map((s) => enlace(s.ruta, s.texto, s.icono, s.id === actual))
-      .join("");
+    montarMenus(nav, seccionesDe(usuario.rol), actual);
     const nombre = usuario.nombre_completo || usuario.nombre_usuario;
     barra.querySelector("[data-usuario]").innerHTML =
       `<span class="avatar">${escapar(nombre.trim().charAt(0).toUpperCase())}</span>` +
@@ -343,6 +338,63 @@ async function pintarBarra() {
   }
   compactarBarra(barra);
   window.addEventListener("resize", () => compactarBarra(barra));
+}
+
+// Menús desplegables de la barra (los mismos de Inicio). Se abren con clic;
+// con uno abierto, pasar el ratón por otro lo abre; Esc o un clic fuera los cierra.
+function montarMenus(nav, secciones, actual) {
+  const grupos = GRUPOS.map((nombre) => ({ nombre, secciones: secciones.filter((s) => s.grupo === nombre) }))
+    .filter((g) => g.secciones.length);
+  nav.innerHTML = grupos.map((g, i) => `
+    <div class="menu">
+      <button type="button" class="menu-titulo ${g.secciones.some((s) => s.id === actual) ? "actual" : ""}" data-i="${i}" aria-expanded="false">
+        <span>${escapar(g.nombre)}</span>${icono("flecha-abajo", "ico flecha")}</button>
+      <div class="menu-lista panel" hidden>
+        ${g.secciones.map((s) => `
+          <button type="button" class="menu-opcion ${s.existe ? "" : "proximamente"} ${s.id === actual ? "elegida" : ""}" data-id="${s.id}">
+            ${icono(s.icono)}<span class="texto">${escapar(s.texto)}</span>
+            ${s.existe ? (s.tecla ? `<kbd>${s.tecla}</kbd>` : "") : `<span class="etiqueta">Próximamente</span>`}
+          </button>`).join("")}
+      </div>
+    </div>`).join("");
+  let abierto = null;
+  const cerrar = () => {
+    if (abierto === null) return;
+    const menu = nav.children[abierto];
+    menu.querySelector(".menu-lista").hidden = true;
+    menu.querySelector(".menu-titulo").classList.remove("abierto");
+    menu.querySelector(".menu-titulo").setAttribute("aria-expanded", "false");
+    abierto = null;
+  };
+  const abrir = (i) => {
+    cerrar();
+    const menu = nav.children[i];
+    menu.querySelector(".menu-lista").hidden = false;
+    menu.querySelector(".menu-titulo").classList.add("abierto");
+    menu.querySelector(".menu-titulo").setAttribute("aria-expanded", "true");
+    abierto = i;
+  };
+  nav.addEventListener("click", (ev) => {
+    const titulo = ev.target.closest(".menu-titulo");
+    if (titulo) {
+      const i = Number(titulo.dataset.i);
+      return abierto === i ? cerrar() : abrir(i);
+    }
+    const opcion = ev.target.closest(".menu-opcion");
+    if (!opcion) return;
+    const s = secciones.find((x) => x.id === opcion.dataset.id);
+    cerrar();
+    if (!s || !s.existe || !Salida.permitir()) return;
+    if (s.ruta) location.href = s.ruta;
+    else if (s.accion === "consultarPrecio") abrirConsultaPrecio();
+    else location.href = `/inicio?abrir=${encodeURIComponent(s.id)}`; // ventanas que viven en Inicio
+  });
+  nav.addEventListener("mouseover", (ev) => {
+    const titulo = ev.target.closest(".menu-titulo");
+    if (titulo && abierto !== null && Number(titulo.dataset.i) !== abierto) abrir(Number(titulo.dataset.i));
+  });
+  document.addEventListener("click", (ev) => { if (!ev.target.closest(".barra .menu")) cerrar(); });
+  window.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && abierto !== null) cerrar(); });
 }
 
 // Deja los enlaces solo con ícono cuando con su nombre no caben, para que no

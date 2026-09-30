@@ -61,6 +61,13 @@ function pantallaInicio() {
       } catch {
         return; // sin sesión: API ya manda al login
       }
+      // Desde el menú de otra pantalla: /inicio?abrir=ia abre esa ventana aquí.
+      const abrir = new URLSearchParams(location.search).get("abrir");
+      if (abrir) {
+        history.replaceState(null, "", "/inicio");
+        const s = seccionesDe(this.usuario.rol).find((x) => x.id === abrir);
+        if (s) this.$nextTick(() => this.usar(s));
+      }
       this.cargarCajaYTurno();
     },
 
