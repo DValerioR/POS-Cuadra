@@ -123,17 +123,23 @@
         <template x-if="pestana === 'categorias'">
           <div class="pila" style="gap: 14px">
             <p class="suave" style="margin: 0">
-              Las categorías "Depto N" vienen de los departamentos de PVWin: ponles un nombre claro. El margen se usa para el precio sugerido.
+              Las categorías "Depto N" vienen de los departamentos de PVWin: ponles un nombre claro. El margen se usa para el precio sugerido;
+              si quieres otro margen para lo caro, llena "Si el costo pasa de…" (ej. $150 → usar 20%).
               En las de productos que no llevan lote ni caducidad (dulces, perfumería...) pon "Maneja caducidad: No".
             </p>
             <div class="panel" style="padding: 0; overflow: hidden">
               <table class="tabla categorias">
-                <thead><tr><th>Nombre</th><th class="ajustado">Margen</th><th class="centro ajustado">Maneja caducidad</th><th class="derecha ajustado">Productos</th><th class="ajustado"></th></tr></thead>
+                <thead><tr><th>Nombre</th><th class="ajustado">Margen</th><th class="ajustado">Si el costo pasa de… <span class="ayuda">(opcional)</span></th><th class="centro ajustado">Maneja caducidad</th><th class="derecha ajustado">Productos</th><th class="ajustado"></th></tr></thead>
                 <tbody>
                   <template x-for="c in categorias" :key="c.id">
                     <tr>
                       <td><input x-model="edicionCategorias[c.id].nombre" :aria-label="`Nombre de ${c.nombre}`"></td>
                       <td><div class="campo-porcentaje"><input type="number" min="0" step="0.5" x-model="edicionCategorias[c.id].margen" placeholder="—"></div></td>
+                      <td><div class="margen-costo-alto">
+                        <div class="campo-dinero"><input type="number" min="0" step="1" x-model="edicionCategorias[c.id].limite" placeholder="—" :aria-label="`Costo límite de ${c.nombre}`"></div>
+                        <span class="suave">usar</span>
+                        <div class="campo-porcentaje"><input type="number" min="0" step="0.5" x-model="edicionCategorias[c.id].margen_arriba" placeholder="—" :aria-label="`Margen de costo alto de ${c.nombre}`"></div>
+                      </div></td>
                       <td class="centro">
                         <div class="interruptor">
                           <button type="button" :class="{ activo: edicionCategorias[c.id].controla_lote }" @click="edicionCategorias[c.id].controla_lote = true">Sí</button>

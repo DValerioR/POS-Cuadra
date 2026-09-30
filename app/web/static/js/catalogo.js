@@ -257,9 +257,10 @@ function pantallaCatalogo() {
       this.editor = null;
     },
 
+    // Margen de la categoría para el costo del editor (puede depender del costo).
     get margenCategoria() {
       const c = this.categorias.find((x) => x.id === this.editor.categoria_id);
-      return c && c.margen_porcentaje !== null ? Number(c.margen_porcentaje) : null;
+      return margenPara(c, this.editor.costo === "" ? null : Number(this.editor.costo));
     },
     precioCon(base) {
       const e = this.editor;
@@ -360,22 +361,30 @@ function pantallaCatalogo() {
       this.edicionCategorias = Object.fromEntries(this.categorias.map((c) => [c.id, {
         nombre: c.nombre,
         margen: c.margen_porcentaje === null ? "" : String(Number(c.margen_porcentaje)),
+        limite: c.limite_costo === null ? "" : String(Number(c.limite_costo)),
+        margen_arriba: c.margen_arriba_limite === null ? "" : String(Number(c.margen_arriba_limite)),
         controla_lote: c.controla_lote,
       }]));
     },
     cambioCategoria(c) {
       const e = this.edicionCategorias[c.id];
       if (!e) return false;
-      const margen = c.margen_porcentaje === null ? "" : String(Number(c.margen_porcentaje));
-      return e.nombre.trim() !== c.nombre || e.margen !== margen || e.controla_lote !== c.controla_lote;
+      const texto = (v) => (v === null ? "" : String(Number(v)));
+      return e.nombre.trim() !== c.nombre || e.margen !== texto(c.margen_porcentaje) || e.controla_lote !== c.controla_lote ||
+        e.limite !== texto(c.limite_costo) || e.margen_arriba !== texto(c.margen_arriba_limite);
     },
     async guardarCategoria(c) {
       const e = this.edicionCategorias[c.id];
       if (!e.nombre.trim()) return (this.error = "La categoría necesita un nombre.");
+      if ((e.limite === "") !== (e.margen_arriba === "")) {
+        return (this.error = "Para el margen de costo alto pon las dos cosas: desde qué costo y qué margen, o deja las dos vacías.");
+      }
       try {
         await API.put(`/categorias/${c.id}`, {
           nombre: e.nombre.trim(),
           margen_porcentaje: e.margen === "" ? null : String(e.margen),
+          limite_costo: e.limite === "" ? null : String(e.limite),
+          margen_arriba_limite: e.margen_arriba === "" ? null : String(e.margen_arriba),
           controla_lote: e.controla_lote,
         });
         this.avisar(`Listo: se guardó la categoría ${e.nombre.trim()}.`);

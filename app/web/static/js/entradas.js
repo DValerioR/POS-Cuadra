@@ -224,8 +224,10 @@ function pantallaEntradas() {
     sugerido(r) {
       const p = r.producto;
       const costo = this.costoPieza(r);
-      if (!p || p.margen === null || costo === null) return null;
-      return precioConImpuestos(costo * (1 + Number(p.margen) / 100), p.iva_porcentaje, p.ieps_porcentaje, this.paso,
+      const margen = p ? margenPara({ margen_porcentaje: p.margen, limite_costo: p.limite_costo,
+                                      margen_arriba_limite: p.margen_arriba_limite }, costo) : null;
+      if (margen === null || costo === null) return null;
+      return precioConImpuestos(costo * (1 + margen / 100), p.iva_porcentaje, p.ieps_porcentaje, this.paso,
         p.precio_maximo_publico ? Number(p.precio_maximo_publico) : null);
     },
     ivaDistinto(r) {

@@ -643,6 +643,9 @@ details.desglose table { margin-top: 8px; }
 @media (max-width: 560px) { .margen-y-precio { grid-template-columns: 1fr; } }
 .nueva-categoria { padding: 12px 14px; border-top: 1px solid var(--linea); }
 .categorias a { color: var(--primario); font-weight: 700; }
+.margen-costo-alto { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.margen-costo-alto .campo-dinero { width: 110px; }
+.margen-costo-alto .campo-dinero input { font-size: 16px; font-weight: 400; padding-left: 26px; }
 
 .interruptor { display: inline-flex; border: 1.5px solid var(--borde); border-radius: var(--radio-chico); overflow: hidden; }
 .interruptor button { border: 0; border-radius: 0; padding: 8px 14px; background: #fff; color: var(--texto-suave); }

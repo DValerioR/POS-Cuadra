@@ -100,9 +100,10 @@ def precio_sugerido(db: Session, producto: Producto, costo_pieza: Decimal | None
     if costo_pieza is None or producto.categoria_id is None:
         return None
     categoria = db.get(Categoria, producto.categoria_id)
-    if categoria is None or categoria.margen_porcentaje is None:
+    margen = categoria.margen_para(costo_pieza) if categoria is not None else None
+    if margen is None:
         return None
-    base = Decimal(costo_pieza) * (1 + categoria.margen_porcentaje / 100)
+    base = Decimal(costo_pieza) * (1 + margen / 100)
     con_impuestos = (
         base * (1 + Decimal(producto.ieps_porcentaje) / 100) * (1 + Decimal(producto.iva_porcentaje) / 100)
     ).quantize(CENTAVO, ROUND_HALF_UP)

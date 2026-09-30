@@ -68,6 +68,18 @@ function redondearPrecio(precio, paso, maximo) {
   return Math.round(arriba * 100) / 100;
 }
 
+// Margen que toca con ese costo: el normal, o el de "costo alto" si la
+// categoría lo tiene y el costo pasa del límite (ej. Otros: 50% / 20% > $150).
+// `c` trae margen_porcentaje, limite_costo y margen_arriba_limite.
+function margenPara(c, costo) {
+  if (!c || c.margen_porcentaje === null || c.margen_porcentaje === undefined) return null;
+  if (c.limite_costo !== null && c.limite_costo !== undefined && c.margen_arriba_limite !== null &&
+      c.margen_arriba_limite !== undefined && Number(costo) > Number(c.limite_costo)) {
+    return Number(c.margen_arriba_limite);
+  }
+  return Number(c.margen_porcentaje);
+}
+
 // Precio con impuestos: IEPS sobre la base e IVA sobre base + IEPS.
 function precioConImpuestos(base, ivaPct, iepsPct, paso, maximo) {
   const bruto = Math.round(base * (1 + Number(iepsPct) / 100) * (1 + Number(ivaPct) / 100) * 100) / 100;

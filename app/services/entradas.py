@@ -141,11 +141,12 @@ def reconocer(
 
 def datos_producto(db: Session, producto: Producto) -> dict:
     """Lo que la revisión necesita para mostrar costo, precio y sugerido."""
-    margen = None
+    margen = limite_costo = margen_arriba_limite = None
     controla = True
     if producto.categoria_id is not None:
         categoria = db.get(Categoria, producto.categoria_id)
         margen = categoria.margen_porcentaje
+        limite_costo, margen_arriba_limite = categoria.limite_costo, categoria.margen_arriba_limite
         controla = categoria.controla_lote
     controla = controla and not producto.no_caduca
     return {
@@ -153,7 +154,8 @@ def datos_producto(db: Session, producto: Producto) -> dict:
         "costo": producto.costo, "precio_venta": producto.precio_venta,
         "precio_maximo_publico": producto.precio_maximo_publico,
         "iva_porcentaje": producto.iva_porcentaje, "ieps_porcentaje": producto.ieps_porcentaje,
-        "margen": margen, "controla_lote": controla, "factor_conversion": producto.factor_conversion,
+        "margen": margen, "limite_costo": limite_costo, "margen_arriba_limite": margen_arriba_limite,
+        "controla_lote": controla, "factor_conversion": producto.factor_conversion,
     }
 
 

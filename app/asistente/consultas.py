@@ -180,7 +180,7 @@ def buscar_productos(db: Session, negocio_id: int, texto: str, limite: int | Non
             "costo_sin_impuestos": _dinero(p.costo) if p.costo is not None else "sin costo",
             "iva": f"{p.iva_porcentaje.normalize():f}%", "ieps": f"{p.ieps_porcentaje.normalize():f}%",
             "categoria": c.nombre if c else None,
-            "margen_de_la_categoria": f"{c.margen_porcentaje.normalize():f}%" if c and c.margen_porcentaje is not None else None,
+            "margen_de_la_categoria": c.texto_margen() if c and c.margen_porcentaje is not None else None,
             "existencia": _cantidad(inventario.existencia_total(db, p.id)),
             "por_revisar": p.motivo_revision if p.requiere_revision else None,
         })
@@ -214,7 +214,7 @@ def por_caducar(db: Session, negocio_id: int, meses: int = 6) -> dict:
 def estado_del_catalogo(db: Session, negocio_id: int) -> dict:
     base = select(func.count()).select_from(Producto).where(Producto.negocio_id == negocio_id, Producto.activo.is_(True))
     categorias = db.execute(
-        select(Categoria.nombre, Categoria.margen_porcentaje, func.count(Producto.id))
+        select(Categoria, func.count(Producto.id))
         .outerjoin(Producto, Producto.categoria_id == Categoria.id)
         .where(Categoria.negocio_id == negocio_id).group_by(Categoria.id).order_by(Categoria.nombre)
     ).all()
@@ -225,8 +225,7 @@ def estado_del_catalogo(db: Session, negocio_id: int) -> dict:
         "sin_categoria": db.scalar(base.where(Producto.categoria_id.is_(None))),
         "marcados_para_revisar": db.scalar(base.where(Producto.requiere_revision.is_(True))),
         "con_iva": db.scalar(base.where(Producto.iva_porcentaje > 0)),
-        "categorias": [{"nombre": n, "margen": f"{m.normalize():f}%" if m is not None else "sin margen", "productos": c}
-                       for n, m, c in categorias],
+        "categorias": [{"nombre": cat.nombre, "margen": cat.texto_margen(), "productos": c} for cat, c in categorias],
     }
 
 

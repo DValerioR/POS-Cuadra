@@ -10,7 +10,8 @@ pañales ni leches), similares y genéricos 50%, leches 5%, pañales 15%,
 ortopedia 15%, botanas y dulces 15%, y 20% para sueros orales y bebidas,
 material de curación, naturistas y suplementos, bisutería/juguetes/regalos,
 higiene femenina e incontinencia, limpieza del hogar, equipo médico y
-dermocosméticos.
+dermocosméticos. "Otros" (lo que no entra en ninguna regla): 50% si el costo
+es de hasta $150 y 20% si pasa de $150.
 
 Reglas, en orden (la primera que aplica gana):
 1. Pañales: "PAÑAL" en el nombre (los de adulto tipo Tena van en incontinencia).
@@ -25,7 +26,7 @@ Reglas, en orden (la primera que aplica gana):
    crema "con árnica" siga en perfumería).
 8. Patente: forma farmacéutica en el nombre (TABS, CAPS, JARABE, GOTAS...).
 9. Perfumería: palabras como SH, JABON, DES, CRA, PASTA, MAQ en el nombre.
-Lo demás queda sin asignar para decidirlo en Productos y precios. Solo se
+10. Otros: todo lo demás. Solo se
 tocan productos sin categoría o en una categoría "Depto N"; los que ya están
 en una de estas categorías no se mueven. Siempre deja un reporte en Excel en datos/.
 """
@@ -62,7 +63,10 @@ CATEGORIAS = {  # nombre -> margen
     "Limpieza del hogar": Decimal(20),
     "Equipo médico": Decimal(20),
     "Dermocosméticos": Decimal(20),
+    "Otros": Decimal(50),
 }
+# Margen por rango de costo: {categoría: (costo límite, margen si lo pasa)}.
+MARGEN_COSTO_ALTO = {"Otros": (Decimal(150), Decimal(20))}
 DEPTOS_PERFUMERIA = {2, 5, 6, 9, 12, 16}
 DEPTOS_MEDICAMENTO = {1}
 
@@ -172,7 +176,7 @@ def clasificar(nombre: str, laboratorio: str | None, depto: int | None) -> Clasi
         return Clasificacion("Patente", "forma de medicamento en el nombre (revisar)")
     if RE_PERFUMERIA.search(texto):
         return Clasificacion("Perfumería", "palabra de perfumería en el nombre")
-    return Clasificacion(None, f"Depto {depto}" if depto is not None else "sin departamento")
+    return Clasificacion("Otros", f"ninguna regla (Depto {depto})" if depto is not None else "ninguna regla (sin departamento)")
 
 
 def main() -> None:
@@ -187,7 +191,9 @@ def main() -> None:
         destino = set(CATEGORIAS)
         for nombre, margen in CATEGORIAS.items():
             if nombre not in categorias:
-                categorias[nombre] = Categoria(negocio_id=args.negocio, nombre=nombre, margen_porcentaje=margen)
+                limite, margen_alto = MARGEN_COSTO_ALTO.get(nombre, (None, None))
+                categorias[nombre] = Categoria(negocio_id=args.negocio, nombre=nombre, margen_porcentaje=margen,
+                                               limite_costo=limite, margen_arriba_limite=margen_alto)
                 db.add(categorias[nombre])
         db.flush()
         ids_destino = {categorias[n].id for n in destino}

@@ -39,7 +39,7 @@ from app.scripts.clasificar_categorias import clasificar
     ("CAFE VERDE CAPS C/60 SUPLEM/ALIMENTICIO", None, 15, "Naturistas y suplementos"),
     ("TOBRAMICINA SOL OFT 15ML", None, 7, "Patente"),
     ("QUITAESMALTE JALOMA 60ML", None, 3, "Perfumería"),
-    ("PILA RAYOVAC AA X 6", None, None, None),
+    ("PILA RAYOVAC AA X 6", None, None, "Otros"),
     ("OXOLVAN SOL 120ML (AMBROXOL)", None, 3, "Patente"),
     ("TOPIFORT CREMA 0.05% 30G", None, None, "Patente"),
     ("DIOCAPS CAPSC/30 (C)", None, None, "Patente"),
