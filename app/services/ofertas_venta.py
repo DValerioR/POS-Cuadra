@@ -249,8 +249,15 @@ def calcular(db: Session, negocio_id: int, renglones: list[tuple[Producto, Decim
 
 def del_producto(db: Session, negocio_id: int, producto_id: int) -> dict | None:
     """La oferta de hoy de un producto, para mostrarla al consultar precio."""
+    return de_productos(db, negocio_id, [producto_id]).get(producto_id)
+
+
+def de_productos(db: Session, negocio_id: int, producto_ids: list[int]) -> dict[int, dict]:
+    """La oferta de hoy de cada producto que tenga una (para la lista del buscador)."""
+    resultado: dict[int, dict] = {}
     for o in activas(db, negocio_id):
-        if producto_id in (o.producto_id, o.paquete_con_id):
-            return {"texto": texto(o, producto_id), "precio": o.precio if o.tipo != "paquete" else None,
-                    "paquete_precio": o.precio if o.tipo == "paquete" else None, "fin": o.fin}
-    return None
+        for pid in (o.producto_id, o.paquete_con_id):
+            if pid in producto_ids and pid not in resultado:
+                resultado[pid] = {"texto": texto(o, pid), "precio": o.precio if o.tipo != "paquete" else None,
+                                  "paquete_precio": o.precio if o.tipo == "paquete" else None, "fin": o.fin}
+    return resultado

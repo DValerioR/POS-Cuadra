@@ -185,7 +185,10 @@ function pantallaVenta() {
         const numero = ++this._consulta;
         try {
           const lista = await API.get(`/productos?solo_activos=true&limite=30&q=${encodeURIComponent(texto)}`);
+          // La oferta de hoy de cada uno, para verla en la lista antes de agregarlo.
+          const ofertas = lista.length ? await API.get(`/ofertas/de-productos?ids=${lista.map((p) => p.id).join(",")}`) : {};
           if (numero !== this._consulta) return; // ignorar respuestas viejas
+          lista.forEach((p) => { p.oferta = ofertas[p.id] || null; });
           this.resultados = lista;
           this.elegido = 0;
         } catch (e) {

@@ -138,6 +138,18 @@ def test_paquete_no_se_rompe_al_devolver(como_admin, caja, prods):
     assert d.json()["total"] == "270.00"
 
 
+def test_ofertas_para_el_buscador(como_admin, como_mostrador, prods):
+    panal, toallitas, jarabe = prods["panal"], prods["toallitas"], prods["jarabe"]
+    assert nueva(como_admin, jarabe, "precio_especial", 60).status_code == 201
+    assert nueva(como_admin, panal, "paquete", 270, paquete_con_id=toallitas.id).status_code == 201
+    r1 = como_mostrador.get(f"/ofertas/de-productos?ids={jarabe.id},{toallitas.id},{prods['antibiotico'].id}")
+    assert r1.status_code == 200
+    datos = r1.json()
+    assert set(datos) == {str(jarabe.id), str(toallitas.id)}  # sin oferta no viene
+    assert datos[str(jarabe.id)]["precio"] == "60.00"
+    assert datos[str(toallitas.id)] == {**datos[str(toallitas.id)], "texto": "Paquete con PAÑALES", "precio": None}
+
+
 def test_quitar_y_vencida(como_admin, caja, prods, db):
     jarabe = prods["jarabe"]
     o = nueva(como_admin, jarabe, "precio_especial", 60).json()

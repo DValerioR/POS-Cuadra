@@ -79,6 +79,14 @@ def del_producto(producto_id: int, usuario: Usuario = Depends(usuario_actual), d
     return _exacto(ofertas_venta.del_producto(db, usuario.negocio_id, producto_id))
 
 
+@router.get("/de-productos")
+def de_productos(ids: str = "", usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Las ofertas de hoy de varios productos (ids separados por coma), para
+    marcarlas en la lista del buscador. Solo vienen los que tienen oferta."""
+    producto_ids = [int(x) for x in ids.split(",") if x.strip().isdigit()][:100]
+    return _exacto({str(k): v for k, v in ofertas_venta.de_productos(db, usuario.negocio_id, producto_ids).items()})
+
+
 @router.post("", status_code=201)
 def crear(datos: OfertaIn, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
     try:

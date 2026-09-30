@@ -335,9 +335,13 @@
               <div class="suave" style="font-size: 14px">
                 <span x-text="p.clave || 'sin clave'"></span>
                 <template x-if="p.requiere_receta"><span class="etiqueta">Receta</span></template>
+                <template x-if="p.oferta"><span class="etiqueta verde" x-text="p.oferta.texto"></span></template>
               </div>
             </div>
-            <div class="precio" x-show="p.precio_venta !== null" x-text="dinero(p.precio_venta)"></div>
+            <div class="precio" x-show="p.precio_venta !== null">
+              <span class="suave tachado" style="font-size: 14px; margin-right: 6px" x-show="p.oferta && p.oferta.precio" x-text="dinero(p.precio_venta)"></span>
+              <span x-text="dinero(p.oferta && p.oferta.precio ? p.oferta.precio : p.precio_venta)"></span>
+            </div>
             <div class="sin-precio" x-show="p.precio_venta === null">Sin precio</div>
           </div>
         </template>
