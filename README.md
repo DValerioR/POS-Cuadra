@@ -232,6 +232,13 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - `GET /reportes/faltantes/excel?proveedor_id=` — lo mismo en Excel.
 - `GET /productos/{id}/proveedores` — proveedores que lo han surtido con su
   último costo por pieza (también en el editor del catálogo).
+- `GET /reportes/ofertas/candidatos` — productos que conviene poner en oferta
+  (caducan en 6 meses, sin ventas, de más, buen margen con poca venta), con
+  su precio mínimo de oferta. Sin IA. Solo admin.
+- `POST /reportes/ofertas` — el asistente propone ofertas para los 60 más
+  urgentes y el código las revisa (nunca debajo del costo si caduca, ni de
+  costo + 10% lo demás). Solo recomienda. `POST /reportes/ofertas/excel` con
+  `{"ofertas": [...]}` las baja en Excel junto con todos los candidatos.
 
 ### Asistente de IA: chat para administradores
 
@@ -353,6 +360,9 @@ funcione sin internet.
 - `/faltantes` — faltantes por proveedor (admin y bodega; Inventario →
   Faltantes por proveedor): se elige el proveedor; lo que otro proveedor dio
   más barato en su última compra sale en amarillo; Excel e imprimir.
+- `/ofertas` — ofertas sugeridas por el asistente (solo admin; Inicio →
+  Reportes): cuántos candidatos hay de cada tipo, botón para pedir las
+  ofertas y lista con precio normal, oferta, ganancia y motivo; Excel.
 - `/notificaciones` — centro de notificaciones (solo admin): devoluciones por
   autorizar (autorizar o rechazar con motivo) y ventas sin existencia
   registrada (contar lo que hay en anaquel), con lo resuelto hoy. Una

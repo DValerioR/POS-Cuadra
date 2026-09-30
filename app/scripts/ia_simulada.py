@@ -1,6 +1,6 @@
 """IA simulada para el servidor de demostración (`--ia-simulada`): permite ver
 el chat del asistente, probar sus consultas y las sugerencias de pedido del
-reporte de faltantes sin clave ni costo.
+reporte de faltantes y las ofertas sugeridas sin clave ni costo.
 
 No es inteligente: elige una consulta por palabras clave de la pregunta y
 responde listando lo que regresó. Nunca se usa fuera del demo.
@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from app.asistente import chat
 from app.asistente.consultas import hoy
-from app.services import configuracion_ia, sugerencias_pedido
+from app.services import configuracion_ia, ofertas, sugerencias_pedido
 
 
 class _Bloque:
@@ -88,8 +88,27 @@ def _sugerencias(cliente, texto):
     return json.dumps({"sugerencias": sugerencias})
 
 
+def _ofertas(cliente, texto):
+    """Lo que caduca: 25% de descuento (el código lo sube al mínimo si hace
+    falta); lo que sobra sin receta: 3x2; lo demás: 10% de descuento."""
+    propuestas = []
+    for linea in texto.splitlines()[2:]:
+        c = [x.strip() for x in linea.split("|")]
+        pid, receta, precio, razones = int(c[0]), c[3], float(c[6]), c[12]
+        if "Caduca" in razones:
+            tipo, nuevo, motivo = "descuento", precio * 0.75, "Caduca pronto (simulado)"
+        elif "Sobreinventario" in razones and receta == "no":
+            tipo, nuevo, motivo = "3x2", 0, "Hay de más (simulado)"
+        else:
+            tipo, nuevo, motivo = "descuento", precio * 0.9, "Se mueve poco (simulado)"
+        propuestas.append({"producto_id": pid, "tipo": tipo, "precio_oferta": round(nuevo, 2), "paquete_con_id": 0,
+                           "motivo": motivo})
+    return json.dumps({"ofertas": propuestas})
+
+
 def activar() -> None:
     chat._llamar = _llamar
     sugerencias_pedido._llamar = _sugerencias
+    ofertas._llamar = _ofertas
     configuracion_ia.cliente = lambda: object()
     configuracion_ia.estado = lambda: {"configurada": True, "termina_en": "DEMO", "modelo": "IA simulada"}

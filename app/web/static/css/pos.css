@@ -826,6 +826,29 @@ button.solo-icono:hover { color: var(--peligro); background: var(--peligro-suave
 .sugerencias-ia input { margin-top: 4px; }
 .sugerencias-ia.apagada { cursor: default; opacity: 0.7; }
 
+/* --- Ofertas sugeridas --------------------------------------------------- */
+.ofertas { max-width: 980px; margin: 0 auto; }
+.ofertas-cifras { grid-template-columns: repeat(4, 1fr); margin-bottom: 12px; }
+.ofertas-cifras .valor { font-size: 26px; }
+.ofertas .mensaje { margin: 12px 0 0; }
+.botones-ofertas { display: flex; flex-wrap: wrap; gap: 10px; }
+.botones-ofertas .grande { width: auto; flex: 0 1 auto; }
+.botones-ofertas button { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.botones-ofertas .primario { flex: 1 1 320px; }
+.lista-ofertas { display: flex; flex-direction: column; gap: 10px; }
+.oferta { display: flex; gap: 16px; align-items: flex-start; border: 1px solid var(--linea); border-radius: var(--radio-chico); padding: 14px 16px; }
+.oferta-producto { flex: 1 1 auto; min-width: 0; }
+.oferta-producto strong { display: block; font-size: 17px; margin-bottom: 6px; }
+.oferta-motivo { margin: 8px 0 0; }
+.oferta-precio { flex: 0 0 260px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.oferta-precio strong { font-size: 18px; color: var(--primario-oscuro); }
+.tachado { text-decoration: line-through; }
+@media (max-width: 760px) {
+  .ofertas-cifras { grid-template-columns: 1fr 1fr; }
+  .oferta { flex-direction: column; }
+  .oferta-precio { flex-basis: auto; align-items: flex-start; text-align: left; }
+}
+
 /* --- Centro de notificaciones ------------------------------------------ */
 
 .notificaciones { max-width: 860px; margin: 0 auto; }

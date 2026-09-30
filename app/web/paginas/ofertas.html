@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ofertas sugeridas · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Ofertas sugeridas (solo admin): el sistema muestra cuántos productos
+    // conviene poner en oferta (caducan pronto, sin ventas, de más, o con buen
+    // margen y poca venta) y el asistente propone la oferta de los más
+    // urgentes. Solo recomienda: ningún precio cambia; se baja en Excel.
+    const RAZONES = {
+      caduca: "Caduca pronto",
+      sin_movimiento: "Sin ventas",
+      sobreinventario: "De más",
+      poca_venta: "Buen margen, poca venta",
+    };
+    function pantallaOfertas() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        datos: null,
+        iaLista: false,
+        pidiendo: false,
+        resultado: null,
+        descargando: false,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.puedeUsar) {
+              const [datos, ia] = await Promise.all([API.get("/reportes/ofertas/candidatos"), API.get("/ia/estado")]);
+              this.datos = datos;
+              this.iaLista = ia.configurada;
+            }
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get puedeUsar() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        get total() {
+          return this.datos ? this.datos.candidatos.length : 0;
+        },
+        get aRevisar() {
+          return Math.min(this.total, this.datos ? this.datos.maximo_a_la_ia : 0);
+        },
+        async pedir() {
+          if (this.pidiendo || !this.total) return;
+          this.pidiendo = true;
+          this.error = "";
+          this.resultado = null;
+          try {
+            this.resultado = await API.post("/reportes/ofertas");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.pidiendo = false;
+          }
+        },
+        async descargar() {
+          if (this.descargando) return;
+          this.descargando = true;
+          this.error = "";
+          try {
+            const respuesta = await fetch("/reportes/ofertas/excel", {
+              method: "POST",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ofertas: this.resultado ? this.resultado.ofertas : [] }),
+            });
+            if (!respuesta.ok) {
+              let datos = null;
+              try { datos = await respuesta.json(); } catch { /* sin detalle */ }
+              throw new Error(mensajeDeError(datos, respuesta.status));
+            }
+            const nombre = decodeURIComponent((respuesta.headers.get("Content-Disposition") || "").split("''")[1] || "ofertas.xlsx");
+            const enlace = document.createElement("a");
+            enlace.href = URL.createObjectURL(await respuesta.blob());
+            enlace.download = nombre;
+            enlace.click();
+            setTimeout(() => URL.revokeObjectURL(enlace.href), 10000);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.descargando = false;
+          }
+        },
+        textoOferta(o) {
+          if (o.tipo === "2x1" || o.tipo === "3x2") return `${o.tipo}: lleva ${o.piezas} y paga ${dinero(o.precio_oferta)}`;
+          if (o.tipo === "paquete") return `Paquete con ${o.paquete_con.nombre}: ${dinero(o.precio_oferta)}`;
+          return `${o.tipo === "descuento" ? "Descuento" : "Precio especial"}: ${dinero(o.precio_oferta)}`;
+        },
+        caducidad(o) {
+          if (!o.caducidad) return "";
+          const [a, m] = o.caducidad.split("-");
+          const meses = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+          return `Caducan ${Number(o.piezas_por_caducar)} en ${meses[Number(m) - 1]} ${a}`;
+        },
+        razon(r) {
+          return RAZONES[r] || r;
+        },
+        plural(n, uno, varios) {
+          return `${n} ${n === 1 ? uno : varios}`;
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaOfertas()">
+
+  <header class="barra" data-pagina="ofertas"></header>
+
+  <main class="contenido ofertas" x-cloak x-show="!cargando">
+    <template x-if="usuario && !puedeUsar">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Las ofertas las revisan los administradores.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="puedeUsar && datos">
+      <div class="panel">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#chispa"/></svg></span>
+          <div><h1>Ofertas sugeridas</h1>
+            <p class="suave">El asistente propone ofertas para lo que caduca pronto, no se vende o sobra. Solo son sugerencias: ningún precio cambia.</p></div>
+        </div>
+
+        <div class="paso">1. Productos que conviene poner en oferta</div>
+        <div class="cifras ofertas-cifras">
+          <div class="cifra"><div class="rotulo">Caducan en 6 meses</div><div class="valor" x-text="datos.por_razon.caduca"></div></div>
+          <div class="cifra"><div class="rotulo">Sin ventas en 12 semanas</div><div class="valor" x-text="datos.con_historial ? datos.por_razon.sin_movimiento : '—'"></div></div>
+          <div class="cifra"><div class="rotulo">Hay de más</div><div class="valor" x-text="datos.por_razon.sobreinventario"></div></div>
+          <div class="cifra"><div class="rotulo">Buen margen, poca venta</div><div class="valor" x-text="datos.con_historial ? datos.por_razon.poca_venta : '—'"></div></div>
+        </div>
+        <div class="mensaje info" x-show="!datos.con_historial">
+          <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+          <span>Todavía no hay 12 semanas de ventas en el sistema<span x-show="datos.historial_desde" x-text="` (empiezan el ${new Date(datos.historial_desde + 'T12:00').toLocaleDateString('es-MX')})`"></span>,
+            así que por ahora solo se revisa lo que caduca pronto y lo que pasa de su máximo.</span>
+        </div>
+        <p class="ayuda" x-show="datos.sin_costo" x-text="`${plural(datos.sin_costo, 'producto con existencia no tiene', 'productos con existencia no tienen')} costo y no se revisan (no se puede saber cuánto bajar sin perder).`"></p>
+
+        <div class="paso separado">2. Pide las ofertas al asistente</div>
+        <p class="ayuda" x-show="total > aRevisar" x-text="`Se revisan los ${aRevisar} más urgentes de ${total} (primero los que caducan antes). Todos van en la segunda hoja del Excel.`"></p>
+        <p class="ayuda" x-show="!iaLista">Para usarlo, pon la clave en Configuración → Asistente de IA. Mientras, puedes bajar la lista de candidatos en Excel.</p>
+        <div class="botones-ofertas">
+          <button type="button" class="primario grande" :disabled="!iaLista || !total || pidiendo" @click="pedir()">
+            <svg class="ico"><use href="/static/iconos.svg#chispa"/></svg>
+            <span x-text="pidiendo ? `El asistente está revisando ${aRevisar} productos…` : (total ? 'Pedir ofertas al asistente' : 'No hay productos para oferta')"></span>
+          </button>
+          <button type="button" class="grande" :disabled="descargando || (!total && !resultado)" @click="descargar()">
+            <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>
+            <span x-text="descargando ? 'Generando…' : (resultado ? 'Bajar en Excel' : 'Bajar candidatos en Excel')"></span>
+          </button>
+        </div>
+
+        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+        <template x-if="resultado && !resultado.ofertas.length">
+          <div class="mensaje info"><svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+            <span>El asistente no encontró ofertas que convengan por ahora.</span></div>
+        </template>
+
+        <template x-if="resultado && resultado.ofertas.length">
+          <div>
+            <div class="paso separado" x-text="`3. ${plural(resultado.ofertas.length, 'oferta sugerida', 'ofertas sugeridas')}`"></div>
+            <div class="lista-ofertas">
+              <template x-for="o in resultado.ofertas" :key="o.producto_id">
+                <div class="oferta">
+                  <div class="oferta-producto">
+                    <strong x-text="o.nombre"></strong>
+                    <div class="etiquetas-renglon">
+                      <template x-for="r in o.razones" :key="r">
+                        <span class="etiqueta" :class="r === 'caduca' ? 'peligro' : 'gris'" x-text="razon(r)"></span>
+                      </template>
+                      <span class="etiqueta peligro" x-show="o.requiere_receta">Con receta</span>
+                      <span class="suave" x-text="caducidad(o)"></span>
+                      <span class="suave" x-text="`Hay ${Number(o.existencia)} · vendió ${o.vendidas_12_semanas} en 12 semanas`"></span>
+                    </div>
+                    <p class="oferta-motivo" x-text="o.motivo"></p>
+                  </div>
+                  <div class="oferta-precio">
+                    <span class="suave tachado" x-text="dinero(o.precio_normal)"></span>
+                    <strong x-text="textoOferta(o)"></strong>
+                    <span class="suave" x-text="`−${o.descuento_porcentaje}% · te deja ${dinero(o.ganancia)} sin impuestos`"></span>
+                    <span class="etiqueta" x-show="o.ajustada" title="El asistente propuso menos; se subió al precio mínimo">Subida al mínimo</span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <p class="ayuda" style="margin-top: 16px">
+          Una oferta nunca baja del costo en lo que caduca pronto, ni de costo + 10% en lo demás (con impuestos), ni pasa del
+          precio máximo al público. A los productos con receta solo se les sugiere descuento, nunca 2x1 ni paquetes.
+        </p>
+      </div>
+    </template>
+  </main>
+</body>
+</html>

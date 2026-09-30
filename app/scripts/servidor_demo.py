@@ -86,9 +86,12 @@ with SessionLocal() as db:
         Caja(negocio_id=negocio.id, nombre="Mostrador 2"),
     ])
     for i, (clave, nombre, iva) in enumerate(nombres):
+        precio = D(random.randint(25, 450))
         producto = Producto(
             negocio_id=negocio.id, clave=clave, nombre=nombre, iva_porcentaje=iva,
-            precio_venta=D(random.randint(25, 450)), requiere_receta=(i % 7 == 0),
+            precio_venta=precio, requiere_receta=(i % 7 == 0),
+            # Costo y máximo inventados, para ver márgenes y ofertas sugeridas.
+            costo=(precio / D("1.45") / (1 + D(iva) / 100)).quantize(D("0.01")), maximo=D(random.randint(5, 12)),
         )
         db.add(producto)
         db.flush()

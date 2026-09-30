@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 WEB = Path(__file__).resolve().parent.parent / "web"
-PAGINAS = {"login", "inicio", "venta", "turno", "devoluciones", "notificaciones", "inventario", "catalogo", "mercancia", "faltantes", "pedidos", "tableta", "usuarios", "cajas-impresoras", "reporte-ventas", "negocio-datos", "facturas", "factura-imprimir"}
+PAGINAS = {"login", "inicio", "venta", "turno", "devoluciones", "notificaciones", "inventario", "catalogo", "mercancia", "faltantes", "pedidos", "tableta", "usuarios", "cajas-impresoras", "reporte-ventas", "negocio-datos", "facturas", "factura-imprimir", "ofertas"}
 
 router = APIRouter(include_in_schema=False)
 mimetypes.add_type("application/manifest+json", ".webmanifest")  # Windows no lo conoce
