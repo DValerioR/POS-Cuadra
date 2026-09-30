@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Respaldos · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Respaldos de la base de datos (solo administradores): el último, hacer
+    // uno ahora y descargar cualquiera. Ver services/respaldos.py.
+    function pantallaRespaldos() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        r: null, // estado de /respaldos
+        respaldando: false,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) this.r = await API.get("/respaldos/estado");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        async respaldarAhora() {
+          this.error = "";
+          this.respaldando = true;
+          try {
+            const hecho = await API.post("/respaldos", {});
+            this.r = await API.get("/respaldos/estado");
+            this.avisar(hecho.copia_error ? `Respaldo hecho, pero ${hecho.copia_error}` : `Listo: respaldo hecho (${this.tamano(hecho.tamano)}).`);
+          } catch (e) {
+            this.error = e.message;
+            this.r = await API.get("/respaldos/estado");
+          } finally {
+            this.respaldando = false;
+          }
+        },
+        fecha(f) {
+          return f ? new Date(f).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" }) : "—";
+        },
+        haceCuanto(f) {
+          const horas = (Date.now() - new Date(f).getTime()) / 3600000;
+          if (horas < 1) return "hace menos de una hora";
+          if (horas < 48) return `hace ${Math.round(horas)} ${Math.round(horas) === 1 ? "hora" : "horas"}`;
+          return `hace ${Math.round(horas / 24)} días`;
+        },
+        tamano(bytes) {
+          return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 5000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaRespaldos()">
+
+  <header class="barra" data-pagina="respaldos"></header>
+
+  <main class="contenido cajas-pantalla" x-cloak x-show="!cargando">
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Los respaldos los revisa un administrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin && r">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#subir"/></svg></span>
+          <div><h1>Respaldos</h1>
+            <p class="suave">Una copia de toda la información (productos, ventas, usuarios...) para recuperarla si se descompone la computadora.</p></div>
+        </div>
+
+        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+        <div class="panel">
+          <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 12px; align-items: center">
+            <div>
+              <template x-if="r.ultimo_ok">
+                <div>
+                  <strong :class="{ 'texto-peligro': r.atrasado }" x-text="`Último respaldo: ${fecha(r.ultimo_ok)}`"></strong>
+                  <div class="suave" x-text="haceCuanto(r.ultimo_ok)"></div>
+                </div>
+              </template>
+              <template x-if="!r.ultimo_ok"><strong class="texto-peligro">Todavía no hay ningún respaldo.</strong></template>
+            </div>
+            <button type="button" class="primario" style="flex: 0 0 auto" :disabled="respaldando" @click="respaldarAhora()"
+                    x-text="respaldando ? 'Respaldando… (puede tardar un minuto)' : 'Respaldar ahora'"></button>
+          </div>
+          <div class="mensaje error" x-show="r.error" style="margin: 12px 0 0">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="`El último intento falló: ${r.error}`"></span></div>
+          <div class="mensaje aviso" x-show="r.copia_error" style="margin: 12px 0 0">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="r.copia_error"></span></div>
+          <p class="suave" style="margin: 12px 0 0" x-show="r.automaticos"
+             x-text="`Se hace uno solo cada día mientras el servidor está prendido. Se guardan los últimos ${r.conservar} automáticos; los que haces con el botón no se borran.`"></p>
+          <p class="suave" style="margin: 12px 0 0" x-show="!r.automaticos">Los respaldos automáticos están apagados en esta computadora.</p>
+          <p class="suave" style="margin: 4px 0 0"><span x-text="`Carpeta: ${r.carpeta}`"></span>
+            <span x-show="r.copia" x-text="` · copia extra en: ${r.copia}`"></span></p>
+          <p class="ayuda" style="margin: 4px 0 0" x-show="!r.copia">Conviene guardar también una copia fuera de esta computadora:
+            descarga un respaldo de vez en cuando a una USB, o pide que se configure una carpeta de copia (CARPETA_RESPALDOS_COPIA).</p>
+        </div>
+
+        <div class="panel" style="padding: 0; overflow: hidden">
+          <table class="tabla">
+            <thead><tr><th>Respaldo</th><th>Tipo</th><th class="derecha">Tamaño</th><th></th></tr></thead>
+            <tbody>
+              <template x-for="a in r.archivos" :key="a.nombre">
+                <tr>
+                  <td x-text="fecha(a.fecha)"></td>
+                  <td x-text="a.automatico ? 'Automático' : 'Hecho a mano'"></td>
+                  <td class="derecha" x-text="tamano(a.tamano)"></td>
+                  <td class="derecha"><a class="boton" :href="`/respaldos/archivo/${a.nombre}`" download>Descargar</a></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+          <p class="suave" style="padding: 12px 18px; margin: 0" x-show="!r.archivos.length">No hay respaldos en la carpeta.</p>
+        </div>
+        <p class="ayuda" style="margin: 0">Para recuperar la información de un respaldo se necesita ayuda técnica (ver docs/RESPALDOS.md).</p>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

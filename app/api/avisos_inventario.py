@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import usuario_actual
 from app.core.database import get_db
-from app.models import AvisoInventario, EstadoAviso, Usuario
-from app.services import avisos_inventario, inventario, solicitudes
+from app.models import AvisoInventario, EstadoAviso, RolUsuario, Usuario
+from app.services import avisos_inventario, inventario, respaldos, solicitudes
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
 router = APIRouter(tags=["avisos de inventario"])
@@ -101,4 +101,6 @@ def pendientes(usuario: Usuario = Depends(usuario_actual), db: Session = Depends
         a = avisos_inventario.contar_pendientes(db, usuario)
     except ERRORES_NEGOCIO as e:
         raise a_http(e)
-    return {"solicitudes": s, "inventario": a, "total": s + a}
+    # El respaldo falló o hace más de un día que no hay: también espera al administrador.
+    r = 1 if usuario.rol == RolUsuario.ADMIN and respaldos.automaticos_activos() and respaldos.estado()["necesita_atencion"] else 0
+    return {"solicitudes": s, "inventario": a, "respaldo": r, "total": s + a + r}

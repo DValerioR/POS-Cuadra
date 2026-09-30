@@ -15,6 +15,7 @@ function pantallaNotificaciones() {
     respondidas: [],
     avisos: [], // ventas sin existencia pendientes
     avisosRevisados: [],
+    respaldo: null, // estado de /respaldos; se avisa si falló o está atrasado
     conteos: {}, // producto_id -> lo que se escribió en "¿Cuántas hay?"
     rechazando: null, // id de la solicitud a la que se le escribe el motivo del rechazo
     respuesta: "",
@@ -33,11 +34,22 @@ function pantallaNotificaciones() {
       }
       setInterval(() => this.esAdmin && !this.ocupado && this.cargar(), 15000);
       document.addEventListener("solicitudes-pendientes", (ev) => {
-        if (ev.detail !== this.pendientes.length + this.avisos.length && !this.ocupado) this.cargar();
+        if (ev.detail !== this.pendientes.length + this.avisos.length + (this.alertaRespaldo ? 1 : 0) && !this.ocupado) this.cargar();
       });
       window.addEventListener("keydown", (ev) => {
         if (ev.key === "Escape" && this.rechazando) this.rechazando = null;
       });
+    },
+
+    get alertaRespaldo() {
+      return Boolean(this.respaldo && this.respaldo.automaticos && this.respaldo.necesita_atencion);
+    },
+    textoRespaldo() {
+      const r = this.respaldo;
+      if (!r) return "";
+      if (r.error) return `El último respaldo falló: ${r.error}`;
+      if (!r.ultimo_ok) return "Todavía no se ha hecho ningún respaldo de la base de datos.";
+      return `El último respaldo es del ${new Date(r.ultimo_ok).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" })}: hace más de un día.`;
     },
 
     get esAdmin() {
@@ -49,12 +61,14 @@ function pantallaNotificaciones() {
         const hoy = new Date();
         hoy.setHours(0, 0, 0, 0);
         const desde = encodeURIComponent(hoy.toISOString());
-        const [pendientes, hechas, avisos, avisosHoy] = await Promise.all([
+        const [pendientes, hechas, avisos, avisosHoy, respaldo] = await Promise.all([
           API.get("/solicitudes?estado=pendiente&limite=100"),
           API.get(`/solicitudes?desde=${desde}&limite=50`),
           API.get("/avisos-inventario?estado=pendiente&limite=200"),
           API.get(`/avisos-inventario?desde=${desde}&limite=100`),
+          API.get("/respaldos/estado"),
         ]);
+        this.respaldo = respaldo;
         this.pendientes = pendientes;
         this.respondidas = hechas.filter((s) => s.estado !== "pendiente");
         this.avisos = avisos;

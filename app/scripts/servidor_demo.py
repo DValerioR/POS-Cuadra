@@ -30,6 +30,9 @@ from app.core.config import settings
 config.ENV_PATH = Path(tempfile.gettempdir()) / "pos_demo.env"
 settings.anthropic_api_key = None
 settings.mercadopago_token = None
+# Los respaldos del demo (de la base de pruebas) van aparte, nunca junto a los reales.
+settings.carpeta_respaldos = str(Path(tempfile.gettempdir()) / "pos_demo_respaldos")
+settings.carpeta_respaldos_copia = None
 
 real = make_url(settings.database_url)
 prueba = real.set(database=real.database + "_test")

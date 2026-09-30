@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.api.auth import router as auth_router
@@ -22,9 +24,20 @@ from app.api.facturas import router as facturas_router
 from app.api.ofertas import router as ofertas_router
 from app.api.ofertas_venta import router as ofertas_venta_router
 from app.api.terminal import router as terminal_router
+from app.api.respaldos import router as respaldos_router
 from app.api.web import estaticos, router as web_router
+from app.services import respaldos
 
-app = FastAPI(title="POS Farmacia")
+@asynccontextmanager
+async def ciclo_de_vida(app: FastAPI):
+    # Respaldos automáticos mientras el servidor está prendido (nunca sobre la base de pruebas).
+    parar = respaldos.iniciar_automaticos()
+    yield
+    if parar is not None:
+        parar.set()
+
+
+app = FastAPI(title="POS Farmacia", lifespan=ciclo_de_vida)
 
 app.include_router(health_router)
 app.include_router(auth_router)
@@ -48,6 +61,7 @@ app.include_router(facturas_router)
 app.include_router(ofertas_router)
 app.include_router(ofertas_venta_router)
 app.include_router(terminal_router)
+app.include_router(respaldos_router)
 
 # Pantallas: al final, para que las rutas del API tengan prioridad.
 app.mount("/static", estaticos, name="static")

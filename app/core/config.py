@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     # Token de acceso de Mercado Pago (terminal Point para cobrar con
     # tarjeta). Se captura desde Configuración → Terminal Mercado Pago.
     mercadopago_token: str | None = None
+    # Respaldos de la base (ver services/respaldos.py): carpeta, cuántos
+    # automáticos se guardan, copia extra opcional (USB, carpeta de Drive...)
+    # y dónde está pg_dump si no se encuentra solo.
+    respaldos_automaticos: bool = True
+    carpeta_respaldos: str = "datos/respaldos"
+    respaldos_a_conservar: int = 30
+    carpeta_respaldos_copia: str | None = None
+    pg_bin: str | None = None
 
 
 settings = Settings()

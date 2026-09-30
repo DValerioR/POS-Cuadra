@@ -255,6 +255,7 @@ const SECCIONES = [
   { id: "mi-password", texto: "Cambiar mi contraseña", icono: "candado", grupo: "Configuración", accion: "miPassword", existe: true, roles: TODOS },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas-impresoras", existe: true, roles: ["admin"] },
   { id: "terminal", texto: "Terminal Mercado Pago", icono: "tarjeta", grupo: "Configuración", ruta: "/terminal-mp", existe: true, roles: ["admin"] },
+  { id: "respaldos", texto: "Respaldos", icono: "subir", grupo: "Configuración", ruta: "/respaldos", existe: true, roles: ["admin"] },
   { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: true, roles: ["admin"] },
   { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
   { id: "ia", texto: "Asistente de IA (clave de Claude)", icono: "chispa", grupo: "Configuración", accion: "ia", existe: true, roles: ["admin"] },
