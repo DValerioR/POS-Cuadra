@@ -5,7 +5,7 @@ import pytest
 from tests.conftest import PASSWORD
 
 
-@pytest.mark.parametrize("pagina", ["login", "inicio", "venta", "turno", "devoluciones", "notificaciones", "inventario", "catalogo", "mercancia", "faltantes", "pedidos", "tableta"])
+@pytest.mark.parametrize("pagina", ["login", "inicio", "venta", "turno", "devoluciones", "notificaciones", "inventario", "catalogo", "mercancia", "faltantes", "pedidos", "tableta", "usuarios"])
 def test_paginas(cliente, pagina):
     r = cliente.get(f"/{pagina}")
     assert r.status_code == 200

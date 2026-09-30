@@ -188,6 +188,27 @@
     </div>
   </div>
 
+  <!-- Cambiar mi contraseña -->
+  <div class="velo" x-show="ventana === 'miPassword'" x-cloak @click.self="cerrarVentana()">
+    <form class="panel ventana-texto" @submit.prevent="cambiarMiPassword()">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Cambiar mi contraseña</h2><p class="suave" x-text="usuario ? (usuario.nombre_completo || usuario.nombre_usuario) : ''"></p></div>
+      </div>
+      <label style="margin-top: 0">Contraseña actual</label>
+      <input type="password" x-model="miPassword.actual" autocomplete="current-password" id="mi-password-actual">
+      <div class="rejilla-2">
+        <div><label>Contraseña nueva <span class="ayuda">(mínimo 6)</span></label><input type="password" x-model="miPassword.nueva" autocomplete="new-password"></div>
+        <div><label>Repítela</label><input type="password" x-model="miPassword.nueva2" autocomplete="new-password"></div>
+      </div>
+      <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+      <div class="fila separado">
+        <button type="button" style="flex: 0 0 auto" @click="cerrarVentana()">Cancelar <kbd>Esc</kbd></button>
+        <button class="primario grande">Cambiar contraseña</button>
+      </div>
+    </form>
+  </div>
+
   <!-- Acerca del sistema -->
   <div class="velo" x-show="ventana === 'acerca'" x-cloak @click.self="cerrarVentana()">
     <div class="panel ventana-texto">

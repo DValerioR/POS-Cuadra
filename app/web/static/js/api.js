@@ -241,7 +241,8 @@ const SECCIONES = [
   { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/inventario?vista=por-caducar", existe: true, roles: ["admin", "bodega"] },
   { id: "faltantes", texto: "Faltantes por proveedor (Excel)", icono: "camion", grupo: "Reportes", ruta: "/faltantes", existe: true, roles: ["admin", "bodega"] },
 
-  { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: false, roles: ["admin"] },
+  { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: true, roles: ["admin"] },
+  { id: "mi-password", texto: "Cambiar mi contraseña", icono: "candado", grupo: "Configuración", accion: "miPassword", existe: true, roles: TODOS },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas", existe: false, roles: ["admin"] },
   { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: false, roles: ["admin"] },
   { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },

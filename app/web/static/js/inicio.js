@@ -26,7 +26,8 @@ function pantallaInicio() {
     opcionElegida: 0,
     altSolo: false,
 
-    ventana: null, // "imagen" | "teclas" | "acerca" | "ia"
+    ventana: null, // "imagen" | "teclas" | "acerca" | "ia" | "miPassword"
+    miPassword: { actual: "", nueva: "", nueva2: "" },
 
     // Asistente de IA: la clave nunca se muestra completa.
     ia: null, // {configurada, termina_en, modelo}
@@ -112,6 +113,11 @@ function pantallaInicio() {
             ? "Listo: al iniciar sesión en esta computadora se entrará directo a Vender."
             : "Listo: al iniciar sesión en esta computadora se entrará a esta pantalla de inicio."
         );
+      } else if (s.accion === "miPassword") {
+        this.miPassword = { actual: "", nueva: "", nueva2: "" };
+        this.error = "";
+        this.ventana = "miPassword";
+        this.$nextTick(() => document.getElementById("mi-password-actual").focus());
       } else if (s.accion === "consultarPrecio") {
         abrirConsultaPrecio();
       } else if (s.accion === "ia") {
@@ -127,6 +133,18 @@ function pantallaInicio() {
         this.ventana = "imagen";
       } else {
         this.ventana = s.accion; // "teclas" | "acerca"
+      }
+    },
+
+    async cambiarMiPassword() {
+      const p = this.miPassword;
+      if (p.nueva !== p.nueva2) return (this.error = "Las contraseñas nuevas no coinciden.");
+      try {
+        await API.put("/cuentas/yo/password", { actual: p.actual, nueva: p.nueva });
+        this.cerrarVentana();
+        this.avisar("Listo: la próxima vez entra con tu contraseña nueva.");
+      } catch (e) {
+        this.error = e.message;
       }
     },
 

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usuarios · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Usuarios (solo administradores): alta, nombre, rol, activar/desactivar
+    // y restablecer contraseña. Las reglas (siempre un admin activo, nadie se
+    // desactiva a sí mismo...) las revisa el servidor.
+    const ROLES_DESCRIPCION = {
+      mostrador: "Vende, cobra y hace su corte. No cambia precios; las devoluciones las pide.",
+      bodega: "Entradas de mercancía, inventario, caducidades y pedidos. No cobra ni ve dinero.",
+      admin: "Todo: precios, reportes, devoluciones, usuarios y configuración.",
+    };
+
+    function pantallaUsuarios() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        lista: [],
+        ventana: null, // nuevo | editar
+        f: null, // formulario
+        guardando: false,
+        errorVentana: "",
+        roles: ROLES_DESCRIPCION,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.usuario.rol === "admin") this.lista = await API.get("/cuentas");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+          window.addEventListener("keydown", (ev) => {
+            if (ev.key === "Escape" && this.ventana) this.cerrar();
+          });
+        },
+        get activos() {
+          return this.lista.filter((u) => u.activo);
+        },
+        get inactivos() {
+          return this.lista.filter((u) => !u.activo);
+        },
+        nombreRol(r) {
+          return ROLES[r] || r;
+        },
+        acceso(f) {
+          if (!f) return "Nunca ha entrado";
+          return "Último acceso: " + new Date(f).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+        },
+        nuevo() {
+          this.f = { nombre_completo: "", nombre_usuario: "", rol: "mostrador", password: "", password2: "" };
+          this.abrir("nuevo");
+        },
+        editar(u) {
+          this.f = { ...u, password: "", password2: "" };
+          this.abrir("editar");
+        },
+        abrir(tipo) {
+          this.errorVentana = "";
+          this.ventana = tipo;
+          this.$nextTick(() => { const i = document.querySelector(`[data-ventana="${tipo}"] input`); if (i) i.focus(); });
+        },
+        cerrar() {
+          this.ventana = null;
+        },
+        async guardar(accion, texto) {
+          this.guardando = true;
+          this.errorVentana = "";
+          try {
+            this.lista = await accion();
+            this.ventana = null;
+            this.avisar(texto);
+          } catch (e) {
+            this.errorVentana = e.message;
+          } finally {
+            this.guardando = false;
+          }
+        },
+        crear() {
+          const f = this.f;
+          if (f.password !== f.password2) return (this.errorVentana = "Las contraseñas no coinciden.");
+          return this.guardar(() => API.post("/cuentas", {
+            nombre_usuario: f.nombre_usuario.trim(), nombre_completo: f.nombre_completo, rol: f.rol, password: f.password,
+          }), `Listo: ${f.nombre_completo.trim()} ya puede entrar como «${f.nombre_usuario.trim()}».`);
+        },
+        guardarCambios() {
+          const f = this.f;
+          return this.guardar(() => API.put(`/cuentas/${f.id}`, { nombre_completo: f.nombre_completo, rol: f.rol }),
+            `Listo: se guardaron los cambios de ${f.nombre_completo.trim()}.`);
+        },
+        cambiarActivo(activo) {
+          const f = this.f;
+          return this.guardar(() => API.put(`/cuentas/${f.id}`, { activo }),
+            activo ? `${f.nombre_completo} puede volver a entrar.` : `${f.nombre_completo} ya no puede entrar.`);
+        },
+        restablecer() {
+          const f = this.f;
+          if (!f.password) return (this.errorVentana = "Escribe la contraseña nueva.");
+          if (f.password !== f.password2) return (this.errorVentana = "Las contraseñas no coinciden.");
+          return this.guardar(() => API.put(`/cuentas/${f.id}/password`, { password: f.password }),
+            `Listo: ${f.nombre_completo} ya entra con la contraseña nueva.`);
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 4000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaUsuarios()">
+
+  <header class="barra" data-pagina="usuarios"></header>
+
+  <main class="contenido usuarios" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <template x-if="usuario && usuario.rol !== 'admin'">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Los usuarios los manejan los administradores. Tu contraseña la cambias en Inicio → Configuración.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="usuario && usuario.rol === 'admin'">
+      <div class="pila" style="gap: 16px">
+        <div class="fila" style="justify-content: space-between; flex-wrap: wrap">
+          <div class="encabezado" style="margin: 0">
+            <span class="circulo"><svg><use href="/static/iconos.svg#usuarios"/></svg></span>
+            <div><h1>Usuarios</h1><p class="suave">Quién puede entrar al sistema y qué puede hacer.</p></div>
+          </div>
+          <button type="button" class="primario" style="flex: 0 0 auto" @click="nuevo()">+ Nuevo usuario</button>
+        </div>
+
+        <div class="panel" style="padding: 0; overflow: hidden">
+          <template x-for="u in activos" :key="u.id">
+            <button type="button" class="fila-usuario" @click="editar(u)">
+              <span class="avatar" x-text="u.nombre_completo.trim().charAt(0).toUpperCase()"></span>
+              <span class="datos">
+                <strong x-text="u.nombre_completo + (u.soy_yo ? ' (tú)' : '')"></strong>
+                <span class="suave" x-text="`${u.nombre_usuario} · ${acceso(u.ultimo_acceso)}`"></span>
+              </span>
+              <span class="etiqueta" :class="{ verde: u.rol === 'admin', gris: u.rol === 'bodega' }" x-text="nombreRol(u.rol)"></span>
+            </button>
+          </template>
+        </div>
+
+        <template x-if="inactivos.length">
+          <div>
+            <div class="paso">Desactivados (no pueden entrar)</div>
+            <div class="panel" style="padding: 0; overflow: hidden">
+              <template x-for="u in inactivos" :key="u.id">
+                <button type="button" class="fila-usuario inactivo" @click="editar(u)">
+                  <span class="avatar" x-text="u.nombre_completo.trim().charAt(0).toUpperCase()"></span>
+                  <span class="datos"><strong x-text="u.nombre_completo"></strong><span class="suave" x-text="u.nombre_usuario"></span></span>
+                  <span class="etiqueta gris">Desactivado</span>
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+
+  <div class="velo arriba" x-show="ventana" x-cloak @click.self="cerrar()">
+    <!-- Nuevo -->
+    <form class="panel ventana-usuario" data-ventana="nuevo" x-show="ventana === 'nuevo'" @submit.prevent="crear()">
+      <template x-if="f && ventana === 'nuevo'">
+        <div>
+          <h2 style="margin-top: 0">Nuevo usuario</h2>
+          <label>Nombre completo</label>
+          <input x-model="f.nombre_completo" placeholder="Ej. Ana López" maxlength="80">
+          <label>Usuario <span class="ayuda">(con el que entra; sin espacios)</span></label>
+          <input x-model="f.nombre_usuario" placeholder="Ej. ana" autocomplete="off" autocapitalize="none" maxlength="40">
+          <label>¿Qué va a hacer?</label>
+          <div class="roles-usuario">
+            <template x-for="r in ['mostrador', 'bodega', 'admin']" :key="r">
+              <button type="button" class="opcion" :class="{ activa: f.rol === r }" @click="f.rol = r">
+                <strong x-text="nombreRol(r)"></strong><span x-text="roles[r]"></span></button>
+            </template>
+          </div>
+          <div class="rejilla-2">
+            <div><label>Contraseña <span class="ayuda">(mínimo 6)</span></label><input type="password" x-model="f.password" autocomplete="new-password"></div>
+            <div><label>Repítela</label><input type="password" x-model="f.password2" autocomplete="new-password"></div>
+          </div>
+          <div class="mensaje error" x-show="errorVentana"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorVentana"></span></div>
+          <div class="fila separado">
+            <button type="button" style="flex: 0 0 auto" @click="cerrar()">Cancelar <kbd>Esc</kbd></button>
+            <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Crear usuario'"></button>
+          </div>
+        </div>
+      </template>
+    </form>
+
+    <!-- Editar -->
+    <div class="panel ventana-usuario" data-ventana="editar" x-show="ventana === 'editar'">
+      <template x-if="f && ventana === 'editar'">
+        <div>
+          <h2 style="margin-top: 0" x-text="f.nombre_completo"></h2>
+          <p class="suave" style="margin-top: 0" x-text="`Usuario: ${f.nombre_usuario} · ${acceso(f.ultimo_acceso)}`"></p>
+          <form @submit.prevent="guardarCambios()">
+            <label>Nombre completo</label>
+            <input x-model="f.nombre_completo" maxlength="80">
+            <label>¿Qué hace?</label>
+            <div class="roles-usuario">
+              <template x-for="r in ['mostrador', 'bodega', 'admin']" :key="r">
+                <button type="button" class="opcion" :class="{ activa: f.rol === r }" @click="f.rol = r">
+                  <strong x-text="nombreRol(r)"></strong><span x-text="roles[r]"></span></button>
+              </template>
+            </div>
+            <div class="fila separado">
+              <button type="button" style="flex: 0 0 auto" @click="cerrar()">Cerrar <kbd>Esc</kbd></button>
+              <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar cambios'"></button>
+            </div>
+          </form>
+
+          <form class="seccion-usuario" @submit.prevent="restablecer()">
+            <div class="paso">Contraseña nueva <span class="ayuda" x-show="!f.soy_yo">(si la olvidó; se le cierra la sesión)</span></div>
+            <div class="rejilla-2">
+              <div><input type="password" x-model="f.password" placeholder="Contraseña nueva" autocomplete="new-password"></div>
+              <div><input type="password" x-model="f.password2" placeholder="Repítela" autocomplete="new-password"></div>
+            </div>
+            <button type="submit" style="margin-top: 10px" :disabled="guardando">Cambiar contraseña</button>
+          </form>
+
+          <div class="seccion-usuario" x-show="!f.soy_yo">
+            <template x-if="f.activo">
+              <div class="fila" style="justify-content: space-between; flex-wrap: wrap">
+                <span class="suave">Si ya no trabaja aquí, desactívalo: no podrá entrar, pero sus ventas y cortes se conservan.</span>
+                <button type="button" class="texto-peligro" style="flex: 0 0 auto" :disabled="guardando" @click="cambiarActivo(false)">Desactivar</button>
+              </div>
+            </template>
+            <template x-if="!f.activo">
+              <div class="fila" style="justify-content: space-between; flex-wrap: wrap">
+                <span class="suave">Está desactivado: no puede entrar.</span>
+                <button type="button" class="primario" style="flex: 0 0 auto" :disabled="guardando" @click="cambiarActivo(true)">Volver a activar</button>
+              </div>
+            </template>
+          </div>
+
+          <div class="mensaje error" x-show="errorVentana" style="margin-top: 12px"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorVentana"></span></div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>
