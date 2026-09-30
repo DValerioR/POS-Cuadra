@@ -19,13 +19,13 @@ class ResultadoImpresion:
 
 
 def logo_ticket(db: Session, negocio_id: int, columnas: int) -> tuple[int, int, bytes] | None:
-    """El logo en puntos para la esquina superior derecha, si el negocio
-    tiene logo y eligió ponerlo en el ticket."""
-    negocio = db.get(Negocio, negocio_id, options=[undefer(Negocio.logo_imagen)])
-    if not negocio.ticket_logo or not negocio.logo_imagen:
+    """El logo de la farmacia en puntos, centrado arriba del ticket, si el
+    negocio tiene logo y eligió ponerlo en el ticket."""
+    negocio = db.get(Negocio, negocio_id, options=[undefer(Negocio.marca_imagen)])
+    if not negocio.ticket_logo or not negocio.marca_imagen:
         return None
     try:
-        return raster_para_ticket(negocio.logo_imagen, columnas)
+        return raster_para_ticket(negocio.marca_imagen, columnas, alineacion="centro")
     except Exception:
         return None  # una imagen dañada no debe impedir imprimir el ticket
 

@@ -70,7 +70,7 @@ class Ticket:
         self._bytes += ESC + b"a\x00" + GS + b"v0\x00" + bytes([
             bytes_renglon % 256, bytes_renglon // 256, alto % 256, alto // 256,
         ]) + bits + b"\n"
-        self._texto.append("[logo]".rjust(self.columnas))
+        self._texto.append("[logo]".center(self.columnas).rstrip())
         return self
 
     def separador(self, caracter: str = "-") -> "Ticket":

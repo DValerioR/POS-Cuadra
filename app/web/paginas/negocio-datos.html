@@ -33,6 +33,7 @@
         error: "",
         aviso: "",
         guardando: false,
+        subiendo: false,
         original: null,
         f: null,
         regimenes: REGIMENES,
@@ -54,7 +55,7 @@
           this.original = n;
           this.f = {
             nombre: n.nombre, razon_social: n.razon_social || "", rfc: n.rfc || "", regimen_fiscal: n.regimen_fiscal || "",
-            codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "", ticket_logo: n.ticket_logo, logo_url: n.logo_url,
+            codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "", ticket_logo: n.ticket_logo, marca_url: n.marca_url,
             redondeo: n.redondeo_precio_venta === null ? "" : String(Number(n.redondeo_precio_venta)),
           };
         },
@@ -111,6 +112,34 @@
           for (const l of this.f.ticket_pie.split("\n")) if (l.trim()) lineas.push(this.centrar(l.trim()));
           return lineas.join("\n");
         },
+        // El logo se guarda al elegirlo (no espera al botón Guardar).
+        async subirLogo(ev) {
+          const archivo = ev.target.files[0];
+          ev.target.value = "";
+          if (!archivo) return;
+          this.subiendo = true;
+          this.error = "";
+          try {
+            const n = await API.put("/negocio/marca", archivo);
+            this.original.marca_url = n.marca_url;
+            this.f.marca_url = n.marca_url;
+            ponerLogo(document.querySelector(".barra .marca .logo"), n.marca_url);
+            this.avisar("Listo: se cambió el logo de la farmacia.");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.subiendo = false;
+          }
+        },
+        async quitarLogo() {
+          try {
+            await API.pedir("DELETE", "/negocio/marca");
+            this.original.marca_url = this.f.marca_url = null;
+            this.avisar("Se quitó el logo; vuelve a mostrarse la cruz.");
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
         avisar(texto) {
           this.aviso = texto;
           clearTimeout(this._aviso);
@@ -148,6 +177,25 @@
           <input x-model="f.nombre" maxlength="80">
         </div>
 
+        <div class="panel logo-farmacia">
+          <div class="vista-logo">
+            <img x-show="f.marca_url" :src="f.marca_url" alt="Logo de la farmacia">
+            <span class="suave" x-show="!f.marca_url">Sin logo</span>
+          </div>
+          <div>
+            <div class="paso" style="margin-top: 0">Logo de la farmacia</div>
+            <p class="suave" style="margin-top: 0">Sale arriba a la izquierda en todas las pantallas, al iniciar sesión, en la tableta y, si quieres, en el ticket. La imagen del centro de Inicio es aparte (Configuración → Imagen de inicio).</p>
+            <div class="fila" style="gap: 8px; flex-wrap: wrap">
+              <label class="boton" style="flex: 0 0 auto; margin: 0" :class="{ apagado: subiendo }">
+                <input type="file" accept="image/png,image/jpeg,image/gif,image/webp" hidden @change="subirLogo($event)">
+                <span x-text="subiendo ? 'Subiendo…' : (f.marca_url ? 'Cambiar logo' : 'Subir logo')"></span>
+              </label>
+              <button type="button" class="texto-peligro" style="flex: 0 0 auto" x-show="f.marca_url" @click="quitarLogo()">Quitar</button>
+            </div>
+            <p class="ayuda" style="margin-bottom: 0">PNG o JPG. Si tiene fondo blanco alrededor, se quita solo.</p>
+          </div>
+        </div>
+
         <div class="panel">
           <div class="paso" style="margin-top: 0">Datos fiscales <span class="ayuda">(los de sus facturas; se usarán al facturar desde el sistema)</span></div>
           <label style="margin-top: 0">Razón social</label>
@@ -172,15 +220,15 @@
             <textarea rows="4" x-model="f.ticket_encabezado" maxlength="500"></textarea>
             <label>Abajo <span class="ayuda">(agradecimiento, horario, redes…)</span></label>
             <textarea rows="3" x-model="f.ticket_pie" maxlength="300"></textarea>
-            <label class="casilla" :class="{ apagada: !f.logo_url }" style="margin-top: 14px">
-              <input type="checkbox" x-model="f.ticket_logo" :disabled="!f.logo_url">
-              <span>Poner el logo arriba a la derecha <span class="ayuda" x-text="f.logo_url ? '(en blanco y negro)' : '(primero sube el logo en Configuración → Logo e imagen de inicio)'"></span></span>
+            <label class="casilla" :class="{ apagada: !f.marca_url }" style="margin-top: 14px">
+              <input type="checkbox" x-model="f.ticket_logo" :disabled="!f.marca_url">
+              <span>Poner el logo arriba del ticket <span class="ayuda" x-text="f.marca_url ? '(en blanco y negro)' : '(primero sube el logo de la farmacia, arriba)'"></span></span>
             </label>
           </div>
           <div>
             <div class="paso" style="margin-top: 0">Así se verá <span class="ayuda">(aproximado)</span></div>
             <div class="vista-ticket-papel">
-              <img class="vista-ticket-logo" x-show="f.ticket_logo && f.logo_url" :src="f.logo_url && `/negocio/logo-ticket?${f.logo_url.split('?')[1] || ''}`" alt="">
+              <img class="vista-ticket-logo" x-show="f.ticket_logo && f.marca_url" :src="f.marca_url && `/negocio/marca-ticket?${f.marca_url.split('?')[1] || ''}`" alt="">
               <pre class="vista-ticket" x-text="ticket"></pre>
             </div>
           </div>

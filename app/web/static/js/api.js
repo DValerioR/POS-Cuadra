@@ -252,7 +252,7 @@ const SECCIONES = [
   { id: "mi-password", texto: "Cambiar mi contraseña", icono: "candado", grupo: "Configuración", accion: "miPassword", existe: true, roles: TODOS },
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas-impresoras", existe: true, roles: ["admin"] },
   { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: true, roles: ["admin"] },
-  { id: "imagen", texto: "Logo e imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
+  { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
   { id: "ia", texto: "Asistente de IA (clave de Claude)", icono: "chispa", grupo: "Configuración", accion: "ia", existe: true, roles: ["admin"] },
   { id: "entrada-directa", texto: "Entrar directo a Vender en esta computadora", icono: "rayo", grupo: "Configuración", accion: "entradaDirecta", existe: true, roles: ["admin", "mostrador"] },
 
@@ -317,7 +317,7 @@ async function pintarBarra() {
   try {
     const [usuario, negocio] = await Promise.all([API.get("/auth/yo"), API.get("/negocio")]);
     barra.querySelector("[data-negocio]").textContent = negocio.nombre;
-    ponerLogo(barra.querySelector(".marca .logo"), negocio.logo_url);
+    ponerLogo(barra.querySelector(".marca .logo"), negocio.marca_url);
     if (usuario.rol === "admin") {
       vigilarSolicitudes(barra.querySelector(".campana"));
       montarAsistente();

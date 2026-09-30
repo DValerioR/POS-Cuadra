@@ -21,6 +21,11 @@ class Negocio(Base):
     logo_url: Mapped[str | None] = mapped_column(default=None)
     logo_imagen: Mapped[bytes | None] = mapped_column(LargeBinary, default=None, deferred=True)
     logo_tipo: Mapped[str | None] = mapped_column(default=None)
+    # Logo de la farmacia (aparte de la imagen de inicio): va en la barra de
+    # todas las pantallas, en el inicio de sesión, en la tableta y en el ticket.
+    marca_url: Mapped[str | None] = mapped_column(default=None)
+    marca_imagen: Mapped[bytes | None] = mapped_column(LargeBinary, default=None, deferred=True)
+    marca_tipo: Mapped[str | None] = mapped_column(default=None)
     # Paso al que se redondean los precios de venta (1.00 = pesos enteros,
     # 0.50 = medios pesos). None = no redondear. Ver services/precios.py.
     redondeo_precio_venta: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
@@ -32,6 +37,6 @@ class Negocio(Base):
     # Líneas del ticket arriba (dirección, teléfono, RFC) y abajo (agradecimiento).
     ticket_encabezado: Mapped[str | None] = mapped_column(default=None)
     ticket_pie: Mapped[str | None] = mapped_column(default=None)
-    # Imprimir el logo (la imagen de inicio) arriba a la derecha del ticket.
+    # Imprimir el logo de la farmacia centrado arriba del ticket.
     ticket_logo: Mapped[bool] = mapped_column(default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

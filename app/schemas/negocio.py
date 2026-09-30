@@ -69,6 +69,7 @@ class NegocioOut(BaseModel):
     id: int
     nombre: str
     logo_url: str | None
+    marca_url: str | None = None
     redondeo_precio_venta: Decimal | None
     ticket_encabezado: str | None
     ticket_pie: str | None

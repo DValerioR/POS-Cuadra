@@ -1362,7 +1362,11 @@ code.comando { display: block; margin-top: 6px; font-size: 13px; word-break: bre
 .negocio-datos { max-width: 980px; margin: 0 auto; }
 .ticket-negocio { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: start; }
 .vista-ticket-papel { position: relative; background: #fff; border: 1px dashed var(--borde); border-radius: 6px; box-shadow: var(--sombra); padding-top: 4px; }
-.vista-ticket-logo { display: block; width: 42%; margin: 10px 14px 0 auto; image-rendering: pixelated; }
+.vista-ticket-logo { display: block; width: 42%; margin: 10px auto 0; image-rendering: pixelated; }
+.logo-farmacia { display: grid; grid-template-columns: 200px 1fr; gap: 20px; align-items: center; }
+.vista-logo { display: grid; place-items: center; height: 140px; border-radius: var(--radio); background: var(--fondo); }
+.vista-logo img { max-width: 180px; max-height: 120px; }
+@media (max-width: 600px) { .logo-farmacia { grid-template-columns: 1fr; } }
 .vista-ticket {
   margin: 0; padding: 12px 14px 16px; background: transparent; border: 0;
   font-family: "Consolas", "Courier New", monospace; font-size: 11px; line-height: 1.45; color: #222;

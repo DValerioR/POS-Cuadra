@@ -78,7 +78,7 @@ def _raster(huella: str, datos: bytes, ancho_papel: int, ancho_logo: int, alinea
     return bytes_renglon, alto, bytes(bits)
 
 
-def raster_para_ticket(datos: bytes, columnas: int, alineacion: str = "derecha") -> tuple[int, int, bytes]:
+def raster_para_ticket(datos: bytes, columnas: int, alineacion: str = "centro") -> tuple[int, int, bytes]:
     """(bytes por renglón, alto en puntos, bits) del logo para ESC/POS.
     48 columnas = papel de 80 mm (576 puntos); 32 = 58 mm (384 puntos)."""
     ancho_papel = 576 if columnas >= 42 else 384
