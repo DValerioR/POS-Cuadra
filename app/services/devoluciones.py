@@ -141,7 +141,29 @@ def _piezas_solicitadas(venta: Venta, solicitadas: list[PiezaDevuelta]) -> Pieza
                 piezas.append((asignacion, tomar, ventas.importe_de_piezas(renglon, tomar)))
                 ya_pedido[asignacion.id] += tomar
                 pendiente -= tomar
+    _paquetes_completos(venta, ya_pedido)
     return piezas
+
+
+def _paquetes_completos(venta: Venta, ya_pedido: dict[int, Decimal]) -> None:
+    """Lo vendido en paquete solo se regresa completo: si se devuelve algo de
+    un paquete, deben venir todas las piezas pendientes de sus productos
+    (así nadie se queda con un producto a precio de paquete)."""
+    paquetes: dict[int, list[VentaRenglon]] = defaultdict(list)
+    for r in venta.renglones:
+        if r.oferta is not None and r.oferta.tipo == "paquete" and r.descuento > 0:
+            paquetes[r.oferta_id].append(r)
+    for renglones in paquetes.values():
+        pedido = {r.id: sum((ya_pedido[a.id] for a in r.lotes), Decimal(0)) for r in renglones}
+        if not any(pedido.values()):
+            continue
+        pendientes = {r.id: sum((a.cantidad - a.cantidad_devuelta for a in r.lotes), Decimal(0)) for r in renglones}
+        if any(pedido[r.id] < pendientes[r.id] for r in renglones):
+            lista = " y ".join(f"{pendientes[r.id].normalize():f} {r.nombre}" for r in renglones)
+            raise OperacionInvalida(
+                f"Se vendió en paquete: para devolverlo hay que regresar el paquete completo ({lista})"
+            )
+
 
 
 def calcular_reembolso(

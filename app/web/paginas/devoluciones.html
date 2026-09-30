@@ -114,6 +114,7 @@
                     <td>
                       <div class="nombre" x-text="r.nombre"></div>
                       <div x-show="Number(r.descuento) > 0"><span class="etiqueta verde" x-text="r.oferta_texto || 'Oferta'"></span></div>
+                      <div class="suave" style="font-size: 14px" x-show="r.paquete_id && eligePiezas">Va en paquete: se regresa completo</div>
                       <div class="suave" style="font-size: 14px" x-show="Number(r.cantidad_devuelta) > 0"
                            x-text="`Ya regresó ${cantidad(r.cantidad_devuelta)}`"></div>
                       <template x-if="eligePiezas && cuantas(r) > 0 && lotesPendientes(r).length > 1">
@@ -137,7 +138,7 @@
                         <div class="fila piezas" style="justify-content: center; gap: 8px">
                           <div class="contador" style="flex: 0 0 auto">
                             <button type="button" @click="cambiar(r, -1)" title="Una menos">−</button>
-                            <input type="number" min="0" :max="disponible(r)" step="1" x-model.number="piezas[r.id]" placeholder="0" aria-label="Piezas que regresa">
+                            <input type="number" min="0" :max="disponible(r)" step="1" x-model.number="piezas[r.id]" @change="completarPaquete(r)" placeholder="0" aria-label="Piezas que regresa">
                             <button type="button" @click="cambiar(r, 1)" title="Una más">+</button>
                           </div>
                           <button type="button" style="flex: 0 0 auto; padding: 8px 10px" @click="todas(r)" x-show="disponible(r) > 1">Todas</button>

@@ -93,6 +93,31 @@ def test_paquete(como_admin, caja, prods):
     assert como_admin.post("/ventas/cotizar", json={"renglones": [r(panal, 1)]}).json()["descuento"] == "0"
 
 
+def test_paquete_solo_se_devuelve_completo(como_admin, caja, prods):
+    from tests.test_devoluciones import cambiar
+    panal, toallitas, jarabe = prods["panal"], prods["toallitas"], prods["jarabe"]
+    assert nueva(como_admin, panal, "paquete", 270, paquete_con_id=toallitas.id).status_code == 201
+    v = vender(como_admin, caja, [r(panal, 1), r(toallitas, 1), r(jarabe, 1)], efectivo="350").json()
+    ids = {x["nombre"]: x["id"] for x in v["renglones"]}
+
+    def devolver(*nombres):
+        return como_admin.post(f"/ventas/{v['id']}/devoluciones", json={
+            "caja_id": caja.id, "motivo": "no le quedó",
+            "piezas": [{"renglon_id": ids[n], "cantidad": "1"} for n in nombres]})
+
+    # Solo una parte del paquete: no se puede, ni como devolución ni como cambio.
+    d = devolver("TOALLITAS")
+    assert d.status_code == 409 and "paquete completo" in d.json()["detail"]
+    c = cambiar(como_admin, v, caja, [{"renglon_id": ids["PAÑALES"], "cantidad": "1"}], [r(jarabe, 1)])
+    assert c.status_code == 409
+    # Lo que no va en el paquete se devuelve normal.
+    assert devolver("JARABE").status_code == 201
+    # El paquete completo sí: regresa lo que se pagó por los dos.
+    d = devolver("PAÑALES", "TOALLITAS")
+    assert d.status_code == 201, d.text
+    assert d.json()["total"] == "270.00"
+
+
 def test_quitar_y_vencida(como_admin, caja, prods, db):
     jarabe = prods["jarabe"]
     o = nueva(como_admin, jarabe, "precio_especial", 60).json()

@@ -36,6 +36,7 @@ def _venta_out(venta: Venta, avisos: list[str] | None = None, impreso: Impresion
                 id=r.id, producto_id=r.producto_id, nombre=r.nombre, cantidad=r.cantidad,
                 precio_unitario=r.precio_unitario, importe=r.importe,
                 descuento=r.descuento, oferta_texto=r.oferta_texto,
+                paquete_id=r.oferta_id if r.oferta is not None and r.oferta.tipo == "paquete" and r.descuento > 0 else None,
                 subtotal=r.subtotal, ieps=r.ieps, iva=r.iva,
                 cantidad_devuelta=sum((l.cantidad_devuelta for l in r.lotes), Decimal(0)),
                 lotes=[

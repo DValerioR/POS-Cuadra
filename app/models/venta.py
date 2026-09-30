@@ -84,6 +84,7 @@ class VentaRenglon(Base):
 
     venta: Mapped[Venta] = relationship(back_populates="renglones")
     lotes: Mapped[list["VentaRenglonLote"]] = relationship(order_by="VentaRenglonLote.id")
+    oferta: Mapped["Oferta | None"] = relationship()
 
 
 class VentaRenglonLote(Base):

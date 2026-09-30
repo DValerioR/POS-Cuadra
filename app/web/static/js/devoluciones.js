@@ -212,9 +212,19 @@ function pantallaDevoluciones() {
     cambiar(renglon, paso) {
       const nueva = Math.min(this.disponible(renglon), Math.max(0, this.cuantas(renglon) + paso));
       this.piezas[renglon.id] = nueva;
+      this.completarPaquete(renglon);
     },
     todas(renglon) {
       this.piezas[renglon.id] = this.disponible(renglon);
+      this.completarPaquete(renglon);
+    },
+    // Lo vendido en paquete solo se regresa completo: marcar uno marca todo el paquete.
+    completarPaquete(renglon) {
+      if (!renglon.paquete_id) return;
+      const marcar = this.cuantas(renglon) > 0;
+      this.venta.renglones
+        .filter((r) => r.paquete_id === renglon.paquete_id)
+        .forEach((r) => { this.piezas[r.id] = marcar ? this.disponible(r) : 0; });
     },
 
     // Lo que se cobró por pieza: con oferta, su parte del descuento (igual que el servidor).

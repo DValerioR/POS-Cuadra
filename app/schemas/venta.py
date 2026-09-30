@@ -43,6 +43,7 @@ class RenglonOut(BaseModel):
     importe: Decimal
     descuento: Decimal = Decimal(0)
     oferta_texto: str | None = None
+    paquete_id: int | None = None  # oferta de paquete: sus renglones se devuelven juntos
     subtotal: Decimal
     ieps: Decimal
     iva: Decimal
