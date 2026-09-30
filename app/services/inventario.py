@@ -31,7 +31,10 @@ def obtener_producto(db: Session, negocio_id: int, producto_id: int) -> Producto
 
 
 def controla_lote(db: Session, producto: Producto) -> bool:
-    """Sin categoría se asume que sí controla lote (lo más seguro en farmacia)."""
+    """Sin categoría se asume que sí controla lote (lo más seguro en farmacia).
+    Un producto marcado "no caduca" nunca lo controla."""
+    if producto.no_caduca:
+        return False
     if producto.categoria_id is None:
         return True
     return db.get(Categoria, producto.categoria_id).controla_lote
@@ -53,8 +56,8 @@ def lotes_fefo(db: Session, producto_id: int, bloquear: bool = False) -> list[Lo
 
 def avance_caducidades(db: Session, negocio_id: int, limite: int, desplazamiento: int) -> dict:
     """Cuántas piezas siguen sin caducidad (inventario heredado de PVWin), solo
-    de productos cuya categoría controla lote."""
-    controla = (Producto.categoria_id.is_(None)) | (Categoria.controla_lote.is_(True))
+    de productos cuya categoría controla lote y que no están marcados "no caduca"."""
+    controla = ((Producto.categoria_id.is_(None)) | (Categoria.controla_lote.is_(True))) & Producto.no_caduca.is_(False)
     base = (
         select(Lote)
         .join(Producto, Producto.id == Lote.producto_id)
@@ -98,6 +101,15 @@ def avance_caducidades(db: Session, negocio_id: int, limite: int, desplazamiento
 
 
 # --- Operaciones ----------------------------------------------------------
+
+def marcar_no_caduca(db: Session, negocio_id: int, usuario_id: int, producto_id: int, no_caduca: bool) -> Producto:
+    """Marca (o desmarca) que el producto no caduca. Sus piezas se quedan en el
+    lote sin caducidad; solo deja de pedirse la caducidad. No hace commit."""
+    _validar_usuario(db, negocio_id, usuario_id, ROLES_AJUSTE)
+    producto = obtener_producto(db, negocio_id, producto_id)
+    producto.no_caduca = no_caduca
+    return producto
+
 
 def _validar_usuario(db: Session, negocio_id: int, usuario_id: int, roles: set[RolUsuario]) -> Usuario:
     usuario = db.get(Usuario, usuario_id)

@@ -77,6 +77,12 @@
                 <span>Se vendieron más piezas de las que el sistema tenía registradas. Cuenta las que hay en anaquel con <strong>Contar</strong> para corregirlo.</span>
               </div>
 
+              <div class="mensaje info" x-show="producto.no_caduca">
+                <svg class="ico"><use href="/static/iconos.svg#info"/></svg>
+                <span>Marcado como <strong>no caduca</strong>: no se le pide caducidad y no cuenta en el avance.</span>
+                <button type="button" style="margin-left: auto" :disabled="guardando" @click="marcarNoCaduca(false)">Sí caduca</button>
+              </div>
+
               <div class="acciones-inventario">
                 <button type="button" class="opcion-grande" x-show="puedeCapturar" @click="abrirVentana('capturar')">
                   <svg><use href="/static/iconos.svg#reloj"/></svg>
@@ -272,6 +278,10 @@
       <div class="fila separado">
         <button type="button" style="flex: 0 0 auto" @click="cerrarVentana()">Cancelar <kbd>Esc</kbd></button>
         <button class="primario grande" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar caducidad'"></button>
+      </div>
+      <div class="no-caduca">
+        <span class="suave">¿Este producto no trae caducidad?</span>
+        <button type="button" :disabled="guardando" @click="marcarNoCaduca(true)">No caduca</button>
       </div>
     </form>
 

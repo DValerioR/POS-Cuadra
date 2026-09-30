@@ -19,6 +19,7 @@ from app.schemas.inventario import (
     ExistenciaOut,
     LoteOut,
     MovimientoOut,
+    NoCaducaIn,
     PorCaducarOut,
 )
 from app.services import inventario
@@ -44,11 +45,27 @@ def _existencia(db: Session, producto) -> ExistenciaOut:
         clave=producto.clave,
         nombre=producto.nombre,
         controla_lote=inventario.controla_lote(db, producto),
+        no_caduca=producto.no_caduca,
         existencia=sum((l.cantidad for l in lotes), 0),
         existencia_registrada=inventario.existencia_total(db, producto.id),
         sin_caducidad=sum((l.cantidad for l in lotes if l.caducidad is None), 0),
         lotes=[LoteOut.model_validate(l) for l in lotes],
     )
+
+
+@router.put("/productos/{producto_id}/no-caduca", response_model=ExistenciaOut)
+def marcar_no_caduca(
+    producto_id: int, datos: NoCaducaIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)
+):
+    """Marca que el producto no caduca (admin y bodega): ya no se le pide
+    caducidad y sale del avance de caducidades. Se puede desmarcar."""
+    try:
+        producto = inventario.marcar_no_caduca(db, usuario.negocio_id, usuario.id, producto_id, datos.no_caduca)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return _existencia(db, producto)
 
 
 @router.post("/captura-caducidad", response_model=LoteOut, status_code=201)

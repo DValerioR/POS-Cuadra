@@ -201,11 +201,14 @@
                   <div class="calculado"><label>Entran</label><strong x-text="`${cantidad(piezas(r))} pzas`"></strong></div>
                   <div><label>Costo por unidad <span class="ayuda">(sin IVA)</span></label><div class="campo-dinero"><input type="number" min="0" step="0.01" x-model="r.costo_unitario"></div></div>
                   <div><label>Lote</label><input x-model="r.numero_lote" placeholder="Opcional"></div>
-                  <div><label>Caducidad</label><input type="month" x-model="r.caducidad_mes"></div>
+                  <div><label>Caducidad</label>
+                    <input type="month" x-model="r.caducidad_mes" x-show="!r.producto || r.producto.controla_lote">
+                    <div class="calculado" x-show="r.producto && !r.producto.controla_lote"><strong>No caduca</strong></div></div>
                 </div>
 
                 <div class="notas-renglon">
-                  <div class="nota aviso" x-show="sinCaducidad(r)"><svg class="ico"><use href="/static/iconos.svg#reloj"/></svg>Sin caducidad: entrará como "sin caducidad registrada".</div>
+                  <div class="nota aviso" x-show="sinCaducidad(r)"><svg class="ico"><use href="/static/iconos.svg#reloj"/></svg>Sin caducidad: entrará como "sin caducidad registrada".
+                    <button type="button" class="chico" @click="marcarNoCaduca(r)" title="El producto no trae caducidad: ya no se le pedirá">No caduca</button></div>
                   <div class="nota aviso" x-show="ivaDistinto(r)"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
                     <span x-text="`La factura trae IVA ${r.iva_factura}% y el producto tiene ${r.producto && Number(r.producto.iva_porcentaje)}%. Revísalo en Productos y precios.`"></span></div>
                   <template x-if="cambioCosto(r)">

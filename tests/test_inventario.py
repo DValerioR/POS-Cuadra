@@ -238,3 +238,27 @@ def test_por_caducar(como_admin, db, negocio, medicamento):
     lista = como_admin.get("/inventario/por-caducar", params={"meses": 6}).json()
     assert [(l["numero_lote"], l["dias"] < 0) for l in lista] == [("VENCIDO", True), ("PRONTO", False)]
     assert lista[1]["nombre"] == "AMOXICILINA 500MG"
+
+
+def test_producto_que_no_caduca(como_admin, como_mostrador, medicamento):
+    avance = como_admin.get("/inventario/avance-caducidades").json()
+    assert avance["productos_pendientes"] == 1
+    r = como_admin.put(f"/inventario/productos/{medicamento.id}/no-caduca", json={"no_caduca": True})
+    assert r.status_code == 200, r.text
+    assert (r.json()["no_caduca"], r.json()["controla_lote"]) == (True, False)
+    # Sale del avance y ya no se le puede capturar caducidad; sus piezas no cambian.
+    avance = como_admin.get("/inventario/avance-caducidades").json()
+    assert (avance["productos_pendientes"], avance["piezas_total"]) == (0, "0")
+    assert capturar(como_admin, medicamento, "2027-01-31", 1).status_code in (400, 409, 422)
+    assert existencia(como_admin, medicamento)["existencia"] == "10.00"
+    # Mostrador no lo marca; se puede desmarcar.
+    assert como_mostrador.put(f"/inventario/productos/{medicamento.id}/no-caduca", json={"no_caduca": False}).status_code == 403
+    r = como_admin.put(f"/inventario/productos/{medicamento.id}/no-caduca", json={"no_caduca": False})
+    assert r.json()["controla_lote"] is True
+    assert como_admin.get("/inventario/avance-caducidades").json()["productos_pendientes"] == 1
+
+
+def test_no_caduca_desde_el_catalogo(como_admin, medicamento):
+    r = como_admin.put(f"/productos/{medicamento.id}", json={"no_caduca": True})
+    assert r.status_code == 200 and r.json()["no_caduca"] is True
+    assert existencia(como_admin, medicamento)["controla_lote"] is False

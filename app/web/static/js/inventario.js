@@ -249,7 +249,7 @@ function pantallaInventario() {
       return this.producto && this.producto.controla_lote && Number(this.producto.sin_caducidad) > 0;
     },
     textoLote(l) {
-      if (!l.caducidad && !l.numero_lote) return "Sin caducidad registrada";
+      if (!l.caducidad && !l.numero_lote) return this.producto && this.producto.no_caduca ? "No caduca" : "Sin caducidad registrada";
       return l.numero_lote ? `Lote ${l.numero_lote}` : "Sin número de lote";
     },
     textoTipo(tipo) {
@@ -319,6 +319,14 @@ function pantallaInventario() {
           numero_lote: c.lote.trim() || null,
         });
         return `Listo: ${cantidad(c.cantidad)} piezas con caducidad ${mesAnio(this.ultimoDiaDelMes(c.mes))}.`;
+      });
+    },
+
+    // "No caduca": ya no se le pide caducidad y sale del avance.
+    async marcarNoCaduca(valor) {
+      await this.guardar(async () => {
+        await API.put(`/inventario/productos/${this.producto.producto_id}/no-caduca`, { no_caduca: valor });
+        return valor ? "Listo: quedó como no caduca y ya no cuenta en el avance." : "Listo: se le vuelve a pedir caducidad.";
       });
     },
 

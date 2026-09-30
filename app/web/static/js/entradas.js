@@ -212,6 +212,20 @@ function pantallaEntradas() {
     sinCaducidad(r) {
       return r.producto && r.producto.controla_lote && !r.caducidad_mes;
     },
+    // Marca el producto como "no caduca" (para este y los demás renglones del mismo producto).
+    async marcarNoCaduca(r) {
+      try {
+        await API.put(`/inventario/productos/${r.producto.id}/no-caduca`, { no_caduca: true });
+        for (const x of this.e.renglones) {
+          if (x.producto && x.producto.id === r.producto.id) {
+            x.producto.controla_lote = false;
+            x.caducidad_mes = "";
+          }
+        }
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
     quitar(i) {
       this.e.renglones.splice(i, 1);
     },

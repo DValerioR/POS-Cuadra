@@ -224,7 +224,7 @@ function pantallaCatalogo() {
       this.proveedoresDelProducto = [];
       this.margenEscrito = null;
       const vacio = {
-        id: null, nombre: "", clave: "", categoria_id: null, laboratorio: "", requiere_receta: false,
+        id: null, nombre: "", clave: "", categoria_id: null, laboratorio: "", requiere_receta: false, no_caduca: false,
         costo: "", precio_venta: "", precio_maximo_publico: "", iva_porcentaje: 0, ieps_porcentaje: 0,
         minimo: "", maximo: "", requiere_revision: false, motivo_revision: null, activo: true,
       };
@@ -310,6 +310,7 @@ function pantallaCatalogo() {
         categoria_id: e.categoria_id,
         laboratorio: e.laboratorio.trim() || null,
         requiere_receta: e.requiere_receta,
+        no_caduca: e.no_caduca,
         costo: num(e.costo),
         precio_venta: num(e.precio_venta),
         precio_maximo_publico: num(e.precio_maximo_publico),

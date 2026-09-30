@@ -22,12 +22,17 @@ class ExistenciaOut(BaseModel):
     clave: str | None
     nombre: str
     controla_lote: bool
+    no_caduca: bool  # marcado a mano; controla_lote ya lo toma en cuenta
     existencia: Decimal  # piezas en lotes con existencia
     # Lo que dice el sistema contando el lote sin caducidad aunque esté en
     # negativo (se vendieron piezas que no estaban registradas).
     existencia_registrada: Decimal
     sin_caducidad: Decimal
     lotes: list[LoteOut]  # en orden FEFO
+
+
+class NoCaducaIn(BaseModel):
+    no_caduca: bool
 
 
 class CapturaCaducidadIn(BaseModel):

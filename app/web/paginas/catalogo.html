@@ -249,6 +249,12 @@
               <button type="button" :class="{ activo: !editor.requiere_receta }" @click="editor.requiere_receta = false">No</button>
             </div>
           </div>
+          <div><label>¿Caduca?</label>
+            <div class="interruptor">
+              <button type="button" :class="{ activo: !editor.no_caduca }" @click="editor.no_caduca = false">Sí</button>
+              <button type="button" :class="{ activo: editor.no_caduca }" @click="editor.no_caduca = true">No caduca</button>
+            </div>
+          </div>
         </div>
 
         <div class="paso separado">Precio e impuestos</div>

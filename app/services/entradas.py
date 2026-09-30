@@ -147,6 +147,7 @@ def datos_producto(db: Session, producto: Producto) -> dict:
         categoria = db.get(Categoria, producto.categoria_id)
         margen = categoria.margen_porcentaje
         controla = categoria.controla_lote
+    controla = controla and not producto.no_caduca
     return {
         "id": producto.id, "nombre": producto.nombre, "clave": producto.clave,
         "costo": producto.costo, "precio_venta": producto.precio_venta,

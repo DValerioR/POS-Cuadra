@@ -42,6 +42,9 @@ class Producto(Base):
     # (sin grupo, costo en cero, clave repetida, ...). El motivo dice qué revisar.
     requiere_revision: Mapped[bool] = mapped_column(default=False, server_default=false())
     motivo_revision: Mapped[str | None] = mapped_column(default=None)
+    # El producto no caduca (por su tipo o porque no trae fecha): no se le
+    # pide caducidad y no cuenta en el avance de caducidades.
+    no_caduca: Mapped[bool] = mapped_column(default=False, server_default=false())
     activo: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

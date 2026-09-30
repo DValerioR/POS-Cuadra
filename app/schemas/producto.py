@@ -11,6 +11,7 @@ class ProductoBase(BaseModel):
     clave_sat: str | None = None
     laboratorio: str | None = None
     requiere_receta: bool = False
+    no_caduca: bool = False
     precio_venta: Decimal | None = None
     costo: Decimal | None = None
     precio_maximo_publico: Decimal | None = None
@@ -34,6 +35,7 @@ class ProductoUpdate(BaseModel):
     clave_sat: str | None = None
     laboratorio: str | None = None
     requiere_receta: bool | None = None
+    no_caduca: bool | None = None
     precio_venta: Decimal | None = None
     costo: Decimal | None = None
     precio_maximo_publico: Decimal | None = None
