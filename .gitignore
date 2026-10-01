@@ -17,3 +17,7 @@ backups/
 
 # Certificado HTTPS de la red local (llaves privadas). Nunca a GitHub.
 certificados/
+
+# Los genera el instalador en cada servidor (con la ruta del perfil de quien instala).
+iniciar_servidor.cmd
+iniciar_servidor_https.cmd

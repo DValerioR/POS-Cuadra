@@ -27,7 +27,14 @@ app/
 alembic/      migraciones de base de datos
 ```
 
-## Cómo correrlo
+## Instalar en la farmacia
+
+Ver `instalador/LEEME.md`: una línea en PowerShell instala el servidor (Python,
+PostgreSQL, base, servidor como tarea de Windows, firewall, acceso directo) y otra
+prepara cada caja (acceso directo y agente de impresión). `instalador/actualizar.cmd`
+actualiza desde GitHub.
+
+## Cómo correrlo (desarrollo)
 
 1. Crear entorno virtual e instalar dependencias:
    ```
