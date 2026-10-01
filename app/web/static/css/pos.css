@@ -1616,3 +1616,13 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 .lista-cambios li { margin: 2px 0; }
 .fila-historial { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--borde); }
 .fila-historial:last-child { border-bottom: 0; }
+
+/* Barra con menús en pantallas medianas (~1200 px): en un renglón, más
+   compacta en lugar de partirse en dos. */
+.barra nav.menus { flex-wrap: nowrap; }
+.barra.minima .menu-titulo { padding: 0 8px; }
+.barra.minima .menu-titulo .flecha { display: none; }
+@media (max-width: 1300px) and (min-width: 761px) {
+  .barra-menus { gap: 0 12px; }
+  .barra-menus .menu-titulo { padding: 0 11px; font-size: 17px; }
+}
