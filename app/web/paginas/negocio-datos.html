@@ -11,6 +11,7 @@
   <meta name="theme-color" content="#0a4d40">
   <link rel="stylesheet" href="/static/css/pos.css">
   <script src="/static/js/api.js"></script>
+  <script src="/static/js/horario-negocio.js"></script>
   <script>
     // Datos del negocio (solo administradores): nombre, datos fiscales (para
     // facturar más adelante), textos del ticket con vista previa y redondeo.
@@ -25,16 +26,10 @@
       "626": "Régimen Simplificado de Confianza",
     };
     const ANCHO_TICKET = 48;
-    const DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
-    // Horario que se propone la primera vez (luego se ajusta).
-    const HORARIO_INICIAL = () => ({
-      semana: Object.fromEntries(DIAS.map((d) => [d, d === "domingo" ? [] : [{ abre: "09:00", cierra: "21:00" }]])),
-      especiales: [],
-    });
-    const copia = (x) => JSON.parse(JSON.stringify(x));
 
     function pantallaNegocio() {
       return {
+        ...horarioNegocio(),
         usuario: null,
         cargando: true,
         error: "",
@@ -44,7 +39,6 @@
         original: null,
         f: null,
         regimenes: REGIMENES,
-        dias: DIAS,
 
         async init() {
           try {
@@ -65,7 +59,7 @@
             nombre: n.nombre, razon_social: n.razon_social || "", rfc: n.rfc || "", regimen_fiscal: n.regimen_fiscal || "",
             codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "", ticket_logo: n.ticket_logo, marca_url: n.marca_url,
             redondeo: n.redondeo_precio_venta === null ? "" : String(Number(n.redondeo_precio_venta)),
-            horario: n.horario ? copia(n.horario) : null,
+            horario: horarioAEditar(n.horario),
           };
         },
         get cambios() {
@@ -75,12 +69,14 @@
           return this.f.nombre !== o.nombre || this.f.razon_social !== (o.razon_social || "") || this.f.rfc !== (o.rfc || "") ||
             this.f.regimen_fiscal !== (o.regimen_fiscal || "") || this.f.codigo_postal !== (o.codigo_postal || "") ||
             this.f.ticket_encabezado !== (o.ticket_encabezado || "") || this.f.ticket_pie !== (o.ticket_pie || "") || this.f.redondeo !== r || this.f.ticket_logo !== o.ticket_logo ||
-            JSON.stringify(this.f.horario) !== JSON.stringify(o.horario || null);
+            JSON.stringify(horarioAGuardar(this.f.horario)) !== JSON.stringify(horarioAGuardar(horarioAEditar(o.horario)));
         },
         async guardar() {
           const f = this.f;
           if (!f.nombre.trim()) return (this.error = "El negocio necesita un nombre.");
           if (f.horario && f.horario.especiales.some((e) => !e.fecha)) return (this.error = "A un día especial le falta la fecha.");
+          if (f.horario && f.horario.especiales.some((e) => !e.cerrado && !e.tarde && !e.temprano))
+            return (this.error = "En cada día especial marca si entran más tarde, salen más temprano o no se abre.");
           this.guardando = true;
           this.error = "";
           try {
@@ -94,7 +90,7 @@
               ticket_pie: f.ticket_pie.trim() || null,
               ticket_logo: f.ticket_logo,
               redondeo_precio_venta: f.redondeo || null,
-              ...(f.horario ? { horario: f.horario } : {}),
+              ...(f.horario ? { horario: horarioAGuardar(f.horario) } : {}),
             });
             this.cargar(n);
             document.querySelectorAll("[data-negocio]").forEach((e) => (e.textContent = n.nombre));
@@ -105,43 +101,6 @@
           } finally {
             this.guardando = false;
           }
-        },
-        // --- Horario ---
-        capturarHorario() {
-          this.f.horario = HORARIO_INICIAL();
-        },
-        alternarDia(turnos) {
-          if (turnos.length) turnos.splice(0);
-          else turnos.push({ abre: "09:00", cierra: "21:00" });
-        },
-        // Segundo horario del día (por si cierran a comer): parte el día en dos.
-        partirDia(turnos) {
-          const cierra = turnos[0].cierra;
-          turnos[0].cierra = "14:00";
-          turnos.push({ abre: "16:00", cierra: cierra > "16:00" ? cierra : "21:00" });
-        },
-        copiarLunes() {
-          const lunes = this.f.horario.semana.lunes;
-          for (const d of ["martes", "miércoles", "jueves", "viernes"]) this.f.horario.semana[d] = copia(lunes);
-          this.avisar("Se copió el horario del lunes de martes a viernes.");
-        },
-        agregarEspecial() {
-          this.f.horario.especiales.push({ fecha: "", turnos: [], nota: "" });
-        },
-        // El horario en palabras, como lo dirá el bot (igual que services/horario.py).
-        get horarioTexto() {
-          const h = this.f && this.f.horario;
-          if (!h) return "";
-          const t = (turnos) => turnos.length ? turnos.map((x) => `de ${x.abre} a ${x.cierra}`).join(" y ") : "cerrado";
-          const grupos = [];
-          DIAS.forEach((d, i) => {
-            const texto = t(h.semana[d] || []);
-            const ultimo = grupos[grupos.length - 1];
-            if (ultimo && ultimo.texto === texto) ultimo.fin = i;
-            else grupos.push({ ini: i, fin: i, texto });
-          });
-          const frase = grupos.map((g) => (g.ini === g.fin ? DIAS[g.ini] : g.fin === g.ini + 1 ? `${DIAS[g.ini]} y ${DIAS[g.fin]}` : `${DIAS[g.ini]} a ${DIAS[g.fin]}`) + " " + g.texto).join("; ");
-          return frase.charAt(0).toUpperCase() + frase.slice(1) + ".";
         },
         // Vista previa aproximada del ticket (texto centrado a 48 columnas).
         centrar(texto) {
@@ -228,7 +187,7 @@
 
         <div class="panel horario-negocio">
           <div class="paso" style="margin-top: 0">Horario de atención</div>
-          <p class="suave" style="margin-top: 0">El bot de WhatsApp lo usa para contestar a qué hora abren y para no confirmar encargos fuera de horario.</p>
+          <p class="suave" style="margin-top: 0">Horario corrido o por turnos (a qué hora se abre cada uno). El bot de WhatsApp lo usa para contestar a qué hora abren y para no confirmar encargos fuera de horario.</p>
 
           <template x-if="!f.horario">
             <div class="fila" style="gap: 12px; flex-wrap: wrap">
@@ -239,49 +198,82 @@
 
           <template x-if="f.horario">
             <div>
+              <div class="interruptor" style="margin-bottom: 14px">
+                <button type="button" :class="{ activo: f.horario.modo === 'corrido' }" @click="cambiarModo('corrido')">Horario corrido</button>
+                <button type="button" :class="{ activo: f.horario.modo === 'turnos' }" @click="cambiarModo('turnos')">Por turnos</button>
+              </div>
+
+              <template x-if="f.horario.modo === 'turnos'">
+                <div class="turnos-nombres">
+                  <span class="suave">Turnos:</span>
+                  <template x-for="(nombre, i) in f.horario.turnos" :key="i">
+                    <span class="turno-nombre">
+                      <input x-model="f.horario.turnos[i]" maxlength="30" aria-label="Nombre del turno">
+                      <button type="button" class="texto-peligro" x-show="f.horario.turnos.length > 1" title="Quitar este turno" @click="quitarTurno(i)">✕</button>
+                    </span>
+                  </template>
+                  <button type="button" class="enlace" x-show="f.horario.turnos.length < 4" @click="agregarTurno()">+ Agregar turno</button>
+                </div>
+              </template>
+
               <div class="horario-semana">
                 <template x-for="d in dias" :key="d">
-                  <div class="horario-dia" :class="{ cerrado: !f.horario.semana[d].length }">
-                    <strong class="nombre-dia" x-text="d.charAt(0).toUpperCase() + d.slice(1)"></strong>
-                    <label class="casilla">
-                      <input type="checkbox" :checked="f.horario.semana[d].length > 0" @change="alternarDia(f.horario.semana[d])">
-                      <span x-text="f.horario.semana[d].length ? 'Abierto' : 'Cerrado'"></span>
-                    </label>
+                  <div class="horario-dia" :class="{ cerrado: !f.horario.dias[d].some((c) => c.activo) }">
+                    <strong class="nombre-dia" x-text="nombreDia(d)"></strong>
                     <div class="turnos">
-                      <template x-for="(t, i) in f.horario.semana[d]" :key="i">
-                        <span class="turno">
-                          <input type="time" x-model="t.abre" aria-label="Abre"><span>a</span><input type="time" x-model="t.cierra" aria-label="Cierra">
-                          <button type="button" class="texto-peligro" x-show="i === 1" title="Quitar el segundo horario" @click="f.horario.semana[d].splice(1, 1)">Quitar</button>
+                      <template x-for="(c, i) in f.horario.dias[d]" :key="i">
+                        <span class="turno" :class="{ apagado: !c.activo }">
+                          <label class="casilla">
+                            <input type="checkbox" x-model="c.activo">
+                            <span x-text="f.horario.modo === 'turnos' ? (f.horario.turnos[i] || 'Turno') : (c.activo ? 'Abierto' : 'Cerrado')"></span>
+                          </label>
+                          <template x-if="c.activo">
+                            <span class="horas"><input type="time" x-model="c.abre" aria-label="Abre"><span>a</span><input type="time" x-model="c.cierra" aria-label="Cierra"></span>
+                          </template>
                         </span>
                       </template>
-                      <button type="button" class="enlace" x-show="f.horario.semana[d].length === 1" @click="partirDia(f.horario.semana[d])">+ Cierra a comer</button>
                     </div>
                   </div>
                 </template>
               </div>
               <button type="button" style="margin-top: 10px" @click="copiarLunes()">Copiar el lunes de martes a viernes</button>
 
-              <div class="paso">Días especiales <span class="ayuda">(festivos, inventario… cambian el horario solo esa fecha)</span></div>
-              <p class="suave" style="margin-top: 0" x-show="!f.horario.especiales.length">No hay días especiales.</p>
+              <div class="paso">Días especiales <span class="ayuda">(festivos, inventario… cambian la entrada o la salida solo esa fecha)</span></div>
+              <p class="suave" style="margin-top: 0">Marca un día de esta semana:</p>
+              <div class="semana-actual">
+                <template x-for="dia in semanaActual()" :key="dia.fecha">
+                  <button type="button" :disabled="dia.pasado" :class="{ hoy: dia.hoy, marcado: dia.especial }"
+                          :title="dia.especial ? 'Ya es día especial' : 'Marcar como día especial'" @click="agregarEspecial(dia.fecha)">
+                    <span x-text="dia.corto"></span><strong x-text="dia.numero"></strong>
+                  </button>
+                </template>
+                <button type="button" class="otra-fecha" @click="agregarEspecial()">Otra fecha…</button>
+              </div>
+
               <template x-for="(e, i) in f.horario.especiales" :key="i">
-                <div class="horario-dia especial" :class="{ cerrado: !e.turnos.length }">
-                  <input type="date" x-model="e.fecha" aria-label="Fecha">
-                  <label class="casilla">
-                    <input type="checkbox" :checked="e.turnos.length > 0" @change="alternarDia(e.turnos)">
-                    <span x-text="e.turnos.length ? 'Abierto' : 'Cerrado'"></span>
-                  </label>
-                  <div class="turnos">
-                    <template x-for="(t, j) in e.turnos" :key="j">
-                      <span class="turno"><input type="time" x-model="t.abre" aria-label="Abre"><span>a</span><input type="time" x-model="t.cierra" aria-label="Cierra"></span>
-                    </template>
+                <div class="dia-especial" :class="{ cerrado: e.cerrado }">
+                  <div class="cabeza">
+                    <input type="date" x-model="e.fecha" @change="proponerHoras(e)" aria-label="Fecha">
+                    <strong x-text="fechaLarga(e.fecha)"></strong>
                     <input x-model="e.nota" maxlength="80" placeholder="Motivo (opcional)">
+                    <button type="button" class="texto-peligro" @click="f.horario.especiales.splice(i, 1)">Quitar</button>
                   </div>
-                  <button type="button" class="texto-peligro" @click="f.horario.especiales.splice(i, 1)">Quitar</button>
+                  <div class="reglas">
+                    <label class="casilla" :class="{ apagada: e.cerrado }">
+                      <input type="checkbox" x-model="e.tarde" :disabled="e.cerrado"><span>Entramos más tarde, a las</span>
+                    </label>
+                    <input type="time" x-model="e.abre" :disabled="e.cerrado || !e.tarde" aria-label="Hora de entrada">
+                    <label class="casilla" :class="{ apagada: e.cerrado }">
+                      <input type="checkbox" x-model="e.temprano" :disabled="e.cerrado"><span>Salimos más temprano, a las</span>
+                    </label>
+                    <input type="time" x-model="e.cierra" :disabled="e.cerrado || !e.temprano" aria-label="Hora de salida">
+                    <label class="casilla"><input type="checkbox" x-model="e.cerrado"><span>No se abre ese día</span></label>
+                  </div>
+                  <p class="resultado" x-text="resultadoEspecial(e)"></p>
                 </div>
               </template>
-              <button type="button" style="margin-top: 10px" @click="agregarEspecial()">+ Agregar día especial</button>
 
-              <div class="mensaje info" style="margin-top: 14px"><span><strong>Así lo dirá el bot:</strong> <span x-text="horarioTexto"></span></span></div>
+              <div class="mensaje info" style="margin-top: 14px"><span><strong>Así lo dirá el bot:</strong> <span x-text="horarioTexto()"></span></span></div>
             </div>
           </template>
         </div>

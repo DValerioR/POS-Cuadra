@@ -1,8 +1,9 @@
 import re
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.services.horario import DIAS
 
@@ -19,60 +20,107 @@ REGIMENES = {
 }
 
 
+HORA = r"([01]\d|2[0-3]):[0-5]\d|24:00"
+
+
+def _hora(v: str | None, opcional: bool = False) -> str | None:
+    if v is None or (opcional and not v.strip()):
+        if opcional:
+            return None
+        raise ValueError("Falta una hora")
+    v = v.strip()
+    if not re.fullmatch(HORA, v):
+        raise ValueError("La hora va como 09:00 (24 horas)")
+    return v
+
+
 class Turno(BaseModel):
+    nombre: str = Field(default="", max_length=30)
     abre: str
     cierra: str
 
     @field_validator("abre", "cierra")
     @classmethod
-    def _hora(cls, v):
-        v = v.strip()
-        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d|24:00", v):
-            raise ValueError("La hora va como 09:00 (24 horas)")
-        return v
+    def _horas(cls, v):
+        return _hora(v)
 
-
-def _revisar_turnos(turnos: list[Turno], cuando: str) -> list[Turno]:
-    if len(turnos) > 2:
-        raise ValueError(f"{cuando}: máximo dos horarios por día")
-    for t in turnos:
-        if t.abre >= t.cierra:
-            raise ValueError(f"{cuando}: la hora de cerrar ({t.cierra}) debe ser después de la de abrir ({t.abre})")
-    if len(turnos) == 2:
-        primero, segundo = sorted(turnos, key=lambda t: t.abre)
-        if segundo.abre < primero.cierra:
-            raise ValueError(f"{cuando}: los dos horarios se enciman")
-        turnos = [primero, segundo]
-    return turnos
+    @field_validator("nombre")
+    @classmethod
+    def _nombre(cls, v):
+        return " ".join(v.split())
 
 
 class DiaEspecial(BaseModel):
+    """Reglas de un día especial: entrar más tarde, salir más temprano o cerrar."""
     fecha: date
-    turnos: list[Turno] = []  # [] = cerrado ese día
+    abre: str | None = None  # entramos más tarde: a esta hora
+    cierra: str | None = None  # salimos más temprano: a esta hora
+    cerrado: bool = False
     nota: str | None = Field(default=None, max_length=80)
+
+    @field_validator("abre", "cierra")
+    @classmethod
+    def _horas(cls, v):
+        return _hora(v, opcional=True)
 
 
 class Horario(BaseModel):
+    modo: Literal["corrido", "turnos"] = "corrido"
+    turnos: list[str] = []
     semana: dict[str, list[Turno]]
     especiales: list[DiaEspecial] = []
 
-    @field_validator("semana")
-    @classmethod
-    def _semana(cls, v):
-        extras = set(v) - set(DIAS)
+    @model_validator(mode="after")
+    def _revisar(self):
+        extras = set(self.semana) - set(DIAS)
         if extras:
             raise ValueError(f"Día no reconocido: {', '.join(sorted(extras))}")
-        return {d: _revisar_turnos(v.get(d, []), d.capitalize()) for d in DIAS}
+        if self.modo == "turnos":
+            self.turnos = [" ".join(n.split()) for n in self.turnos]
+            if not self.turnos or any(not n for n in self.turnos):
+                raise ValueError("Cada turno necesita un nombre")
+            if len(self.turnos) > 4:
+                raise ValueError("Máximo cuatro turnos")
+            if len({n.lower() for n in self.turnos}) != len(self.turnos):
+                raise ValueError("Hay dos turnos con el mismo nombre")
+        else:
+            self.turnos = []
+        semana = {}
+        for dia in DIAS:
+            lista = self.semana.get(dia, [])
+            nombre_dia = dia.capitalize()
+            if self.modo == "corrido":
+                if len(lista) > 1:
+                    raise ValueError(f"{nombre_dia}: en horario corrido va un solo horario")
+                for t in lista:
+                    t.nombre = ""
+            else:
+                for t in lista:
+                    if t.nombre not in self.turnos:
+                        raise ValueError(f"{nombre_dia}: el turno «{t.nombre}» no existe")
+                if len({t.nombre for t in lista}) != len(lista):
+                    raise ValueError(f"{nombre_dia}: un turno está repetido")
+                lista = sorted(lista, key=lambda t: self.turnos.index(t.nombre))
+            for t in lista:
+                if t.abre >= t.cierra:
+                    que = f"el turno {t.nombre}" if t.nombre else "el horario"
+                    raise ValueError(f"{nombre_dia}, {que}: la hora de cerrar ({t.cierra}) debe ser después de la de abrir ({t.abre})")
+            semana[dia] = lista
+        self.semana = semana
 
-    @field_validator("especiales")
-    @classmethod
-    def _especiales(cls, v):
-        fechas = [e.fecha for e in v]
+        fechas = [e.fecha for e in self.especiales]
         if len(fechas) != len(set(fechas)):
             raise ValueError("Hay un día especial repetido")
-        for e in v:
-            e.turnos = _revisar_turnos(e.turnos, e.fecha.strftime("%d/%m/%Y"))
-        return sorted(v, key=lambda e: e.fecha)
+        for e in self.especiales:
+            cuando = e.fecha.strftime("%d/%m/%Y")
+            if e.cerrado:
+                e.abre = e.cierra = None
+            elif not e.abre and not e.cierra:
+                raise ValueError(f"Día especial {cuando}: indica a qué hora entran o salen, o márcalo cerrado")
+            elif e.abre and e.cierra and e.abre >= e.cierra:
+                raise ValueError(f"Día especial {cuando}: la salida debe ser después de la entrada")
+        self.especiales = sorted(self.especiales, key=lambda e: e.fecha)
+        return self
 
 
 class NegocioUpdate(BaseModel):

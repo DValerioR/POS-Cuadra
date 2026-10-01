@@ -1511,23 +1511,45 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 }
 .barra.compacta .menu-titulo { padding: 0 10px; font-size: 16px; }
 
+
 /* Datos del negocio: horario de atención */
+.horario-negocio button.enlace { background: none; border: 0; padding: 4px 0; color: var(--primario); font-weight: 600; min-height: 0; flex: 0 0 auto; }
+.turnos-nombres { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.turno-nombre { display: inline-flex; align-items: center; gap: 2px; }
+.turno-nombre input { width: 140px; font-weight: 600; }
+.turno-nombre .texto-peligro { padding: 6px 8px; min-height: 0; }
 .horario-semana { display: flex; flex-direction: column; gap: 6px; }
 .horario-dia {
-  display: grid; grid-template-columns: 110px 120px 1fr; align-items: center; gap: 12px;
+  display: grid; grid-template-columns: 100px 1fr; align-items: center; gap: 12px;
   padding: 8px 12px; border: 1px solid var(--borde); border-radius: var(--radio-chico);
 }
-.horario-dia.especial { grid-template-columns: 160px 120px 1fr auto; margin-bottom: 6px; }
 .horario-dia.cerrado { background: var(--fondo); }
 .horario-dia.cerrado .nombre-dia { color: var(--texto-suave); }
-.horario-dia .casilla { margin: 0; }
-.horario-dia .turnos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.horario-dia .turno { display: inline-flex; align-items: center; gap: 6px; }
-.horario-dia input[type="time"] { width: auto; }
-.horario-dia .turnos > input { flex: 1 1 160px; }
-.horario-dia button.enlace, .horario-dia button.texto-peligro { flex: 0 0 auto; }
+.horario-dia .turnos { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; }
+.horario-dia .turno { display: inline-flex; align-items: center; gap: 8px; }
+.horario-dia .turno .casilla { margin: 0; flex: 0 0 110px; width: 110px; }
+.horario-dia .turno.apagado .casilla { color: var(--texto-suave); }
+.horario-dia .horas { display: inline-flex; align-items: center; gap: 6px; }
+.horario-negocio input[type="time"] { width: auto; }
+.semana-actual { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.semana-actual button { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 58px; padding: 6px 8px; line-height: 1.2; }
+.semana-actual button span { font-size: 13px; color: var(--texto-suave); }
+.semana-actual button strong { font-size: 18px; }
+.semana-actual button.hoy { border-color: var(--primario); }
+.semana-actual button.marcado { background: var(--primario-suave); border-color: var(--primario); }
+.semana-actual button:disabled { opacity: 0.4; }
+.semana-actual .otra-fecha { justify-content: center; }
+.dia-especial { border: 1px solid var(--borde); border-radius: var(--radio-chico); padding: 10px 12px; margin-bottom: 8px; }
+.dia-especial.cerrado { background: var(--fondo); }
+.dia-especial .cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.dia-especial .cabeza input[type="date"] { width: auto; }
+.dia-especial .cabeza strong { min-width: 170px; }
+.dia-especial .cabeza input:not([type]) { flex: 1 1 160px; }
+.dia-especial .cabeza .texto-peligro { flex: 0 0 auto; }
+.dia-especial .reglas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-top: 10px; }
+.dia-especial .reglas .casilla { margin: 0; }
+.dia-especial .reglas input[type="time"] { margin-right: 14px; }
+.dia-especial .resultado { margin: 8px 0 0; font-weight: 600; color: var(--primario); }
 @media (max-width: 760px) {
-  .horario-dia, .horario-dia.especial { grid-template-columns: 1fr auto; }
-  .horario-dia .turnos { grid-column: 1 / -1; }
+  .horario-dia { grid-template-columns: 1fr; gap: 6px; }
 }
-.horario-dia button.enlace { background: none; border: 0; padding: 4px 0; color: var(--primario); font-weight: 600; min-height: 0; }
