@@ -186,6 +186,33 @@ De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la co
 
 De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja (un solo turno abierto por caja; ya existen "Mostrador 1" y "Mostrador 2" en la base real); ventas con cobro en efectivo, tarjeta y mixto, descuento de lotes por FEFO o por el lote que indica el vendedor, captura de caducidad al vender, desglose de IVA e IEPS y folios consecutivos; cancelaciones, devoluciones y cambios de producto (los hace el admin; el cajero pide devoluciones y cancelaciones y un admin las autoriza desde el centro de notificaciones); ventas en espera (hasta 5 por caja); tickets en ESC/POS con impresión por red o por agente USB y apertura del cajón solo con efectivo (encabezado y pie de Farmacia La Fe ya configurados); y las pantallas en HTML + Alpine.js: inicio de sesión, venta en mostrador (con escaneo, búsqueda por nombre con F2 y modo cobro con Esc), turno y corte, devoluciones, cancelaciones y cambios de producto, y el centro de notificaciones (solo admin). Hay casi 250 pruebas automáticas (`pytest`) que corren contra una base aparte.
 
+## Pendientes al 30/09/2026 (resumen para retomar)
+
+**Siguiente sesión (decidido por el dueño): hacer funcionar las facturas** de verdad. Hoy la facturación de un ticket ya existe (`/facturas`, `app/facturacion/`, PAC intercambiable en `app/facturacion/pac.py`), pero con PAC=simulado, que genera facturas "PRUEBA · SIN VALIDEZ FISCAL". Falta:
+- Elegir el PAC real (API sencilla tipo Facturapi o Facturama, o el mismo que usa PVWin, RFC LSO1306189R5), crear la cuenta y conectar su API.
+- Dar de alta el CSD del negocio (.cer, .key y su contraseña; los pega/sube el dueño, nunca se escriben a mano en el código).
+- Probar en el ambiente de pruebas del PAC y luego timbrar una factura real.
+- Después: cancelación ante el SAT, factura global de público en general y autofacturación web.
+
+**Esperan algo del dueño:**
+- Terminal Mercado Pago Point Smart 2: cuando llegue, darla de alta, pegar el Access Token y hacer un cobro real pequeño.
+- Bot de WhatsApp: número y cuenta de Meta Business verificada, las 4 plantillas aprobadas en Meta y el túnel (Cloudflare Tunnel) para el webhook (`docs/WHATSAPP.md`).
+- Capturar en el servidor real el horario de atención y la información para clientes (Datos del negocio).
+- Elegir el destino de la copia de respaldos en la computadora de la farmacia (USB, Drive u OneDrive) y probar una restauración en una base aparte.
+- Catálogo completo de PVWin de la A a la Z (con %IVA) y el historial de compras, para reimportar.
+
+**Instalación en la farmacia:**
+- Correr el instalador (`instalador/LEEME.md`) en la computadora servidor y en cada caja; fijar las IP en el módem.
+- Probar ahí la actualización automática completa (en desarrollo solo se probó el regreso automático, en una copia aparte).
+- Probar impresoras (Bixolon SRP-330II y Epson TM-T20II), cajón y agente de impresión.
+- Probar la tableta con cámara (HTTPS, puerto 8443).
+- Limpiar los datos de prueba antes de arrancar y hacer la prueba piloto con una caja, con PVWin todavía instalado.
+- Quitar en la computadora de desarrollo la tarea vieja "Cuadra - respaldo diario" (ya no hace falta).
+
+**Revisar con datos reales:** lectura de facturas de proveedor en PDF/foto, chat del asistente, sugerencias de pedido y de ofertas, el bot con la clave real de Claude; revisar el catálogo con el reporte de revisión (productos marcados, categorías "Depto N", claves SAT sugeridas).
+
+**Ideas ofrecidas, sin pedir aún:** avisar en Turno y corte cuando un turno ya debería estar abierto (con los turnos del horario); rama `produccion` para que no todo lo que se sube a master llegue a la farmacia; reembolsos a tarjeta desde la terminal.
+
 Para retomar, lo pendiente es:
 - Ya está la pantalla de inicio o "núcleo" con pantallas responsivas (ver arriba). La migración de la imagen de inicio (`b7e4a1c9d2f3`) ya se corrió en la base real (29/09/2026); falta subir la imagen de Farmacia La Fe desde el núcleo.
 - Incidente del 29/09/2026: un script de desarrollo borró la base real (el demo corrió su borrado sobre `pos`; ya tiene candado). Se reconstruyó el mismo día desde `datos/` con los mismos importadores (resultado idéntico: 10,398 productos, 10,385 con precio, mismas existencias), el negocio (redondeo a pesos, ticket), las cajas Mostrador 1 y 2 y el usuario administrador `Diego` (lo creó el dueño). Se perdieron los cambios hechos a mano después de la importación (la categoría "Patente" con 20%, ediciones de productos) y los datos de prueba. Desde entonces hay respaldo automático diario (22:00) en `backups/FarmaciaLaFe` (ver README.md, "Respaldos"); se probó restaurarlo en una base aparte.
