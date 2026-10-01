@@ -1553,3 +1553,52 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 @media (max-width: 760px) {
   .horario-dia { grid-template-columns: 1fr; gap: 6px; }
 }
+
+/* Conversaciones de WhatsApp */
+.chat-whatsapp { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 14px; height: calc(100vh - 230px); min-height: 420px; }
+.chat-whatsapp .panel { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+.lista-chats { overflow-y: auto !important; }
+.fila-chat {
+  display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 12px 14px; text-align: left;
+  border: 0; border-bottom: 1px solid var(--borde); border-radius: 0; background: transparent; min-height: 0;
+}
+.fila-chat:hover { background: var(--fondo); }
+.fila-chat.elegida { background: var(--primario-suave); }
+.fila-chat.espera { box-shadow: inset 4px 0 0 var(--peligro); }
+.fila-chat .avatar {
+  flex: 0 0 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--primario); color: #fff; font-weight: 700;
+}
+.fila-chat .datos { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.fila-chat .arriba, .fila-chat .abajo { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; }
+.fila-chat .arriba small { color: var(--texto-suave); flex: 0 0 auto; }
+.fila-chat .ultimo { color: var(--texto-suave); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-weight: 400; }
+.chat-abierto .vacio-chat { margin: auto; text-align: center; }
+.chat-abierto .vacio-chat svg { width: 48px; height: 48px; opacity: 0.4; }
+.chat-contenido { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.chat-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--borde); flex-wrap: wrap; }
+.chat-cabeza small { margin-left: 8px; }
+.chat-cabeza .volver-lista { display: none; flex: 0 0 auto; }
+.chat-mensajes { flex: 1 1 auto; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #efeae2; }
+.burbuja { max-width: 75%; padding: 8px 12px; border-radius: 12px; background: #fff; align-self: flex-start; box-shadow: 0 1px 1px rgba(0,0,0,0.08); overflow-wrap: anywhere; }
+.burbuja.bot, .burbuja.personal { align-self: flex-end; background: #d9fdd3; }
+.burbuja.personal { background: #cfe9ff; }
+.burbuja.sistema { align-self: center; background: #fff5c4; font-size: 13px; max-width: 90%; text-align: center; }
+.burbuja .quien { display: block; font-weight: 700; color: var(--primario-oscuro); font-size: 12px; }
+.burbuja .hora { display: block; text-align: right; color: var(--texto-suave); font-size: 11px; margin-top: 2px; }
+.burbuja .error-envio { display: block; color: var(--peligro); font-weight: 600; }
+.burbuja img { max-width: 220px; max-height: 220px; border-radius: 8px; display: block; margin: 4px 0; }
+.chat-escribir { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--borde); align-items: flex-end; }
+.chat-escribir textarea { flex: 1 1 auto; resize: none; }
+.chat-escribir button { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .chat-whatsapp { grid-template-columns: 1fr; height: auto; }
+  .chat-whatsapp .chat-abierto { display: none; height: calc(100vh - 160px); }
+  .chat-whatsapp.con-abierta .lista-chats { display: none; }
+  .chat-whatsapp.con-abierta .chat-abierto { display: flex; }
+  .chat-cabeza .volver-lista { display: inline-flex; }
+  .burbuja { max-width: 90%; }
+}
+.plantilla-meta { border: 1px solid var(--borde); border-radius: var(--radio-chico); padding: 10px 12px; margin-bottom: 8px; }
+.plantilla-meta p { margin: 6px 0 0; }
+.chat-cabeza button { white-space: nowrap; }

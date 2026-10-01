@@ -7,6 +7,7 @@ responde listando lo que regresó. Nunca se usa fuera del demo.
 """
 
 import json
+import re
 from datetime import timedelta
 
 from app.asistente import chat
@@ -125,7 +126,112 @@ def _foto(datos, tipo):
                                          "presentacion": None, "laboratorio": None}]})
 
 
+# --- Bot de WhatsApp simulado ---------------------------------------------------
+# Elige la herramienta por palabras clave y arma la respuesta con lo que
+# regresó (datos reales del demo). Sirve para ver el flujo, no la redacción.
+
+_PERSONA = ("persona", "humano", "alguien", "encargad", "queja", "factura", "asesor")
+_INFO = ("horario", "abren", "cierran", "abierto", "a qué hora", "a que hora", "dónde", "donde", "ubicaci",
+         "direcci", "pago", "tarjeta", "teléfono", "telefono")
+_RELLENO = (r"\b(hola|buen(os|as)? (d[ií]as|tardes|noches)|tienen|tiene|hay|precio|de|del|el|la|los|las|"
+            r"cu[aá]nto|cuesta|me|da|quiero|busco|un|una|por favor|favor)\b")
+_DISPONIBLE = {"hay": "sí tenemos", "pocas": "nos quedan pocas piezas", "no_hay": "por el momento no tenemos",
+               "por_encargo": "es por encargo"}
+
+
+def _bot_texto(mensajes) -> str:
+    texto = next(b["text"] for b in mensajes[-1]["content"] if b.get("type") == "text")
+    return texto.split("]\n", 1)[-1] if texto.startswith("[Hoy es") else texto
+
+
+def _bot_elegir(mensajes):
+    texto = _bot_texto(mensajes)
+    t = texto.lower()
+    if any(p in t for p in _PERSONA):
+        return "pasar_a_persona", {"motivo": f"El cliente pidió: {texto[:120]}"}
+    foto = re.search(r"Se leyó: ([^.;]+)", texto)
+    if foto:
+        return "buscar_producto", {"texto": foto.group(1)}
+    if "envió una foto" in t:
+        return None
+    if any(p in t for p in _INFO):
+        return "informacion_farmacia", {}
+    if re.match(r"^\s*(s[ií]\b|claro|enc[aá]rg)", t):
+        anteriores = [m for m in mensajes[:-1] if m["role"] == "assistant"]
+        previo = next((b["text"] for b in anteriores[-1]["content"] if b.get("type") == "text"), "") if anteriores else ""
+        nombre = re.search(r"\*([^*]+)\*", previo)
+        cliente = re.search(r"Cliente: ([^\]]+)\]", mensajes[-1]["content"][0]["text"])
+        if nombre and "encargu" in previo:
+            return "registrar_encargo", {"descripcion": nombre.group(1), "cantidad": 1,
+                                         "nombre_cliente": cliente.group(1) if cliente else "Cliente"}
+    buscado = re.sub(_RELLENO, " ", t, flags=re.I)
+    buscado = " ".join(re.sub(r"[¿?¡!.,]", " ", buscado).split())
+    if len(buscado) < 3:
+        return None
+    return "buscar_producto", {"texto": buscado}
+
+
+def _bot_respuesta(nombre: str, r: dict) -> str:
+    if nombre == "buscar_producto":
+        lista = r.get("resultados") or []
+        if not lista:
+            return ("Una disculpa, no encontramos ese producto en nuestro catálogo. ¿Podría indicarnos el nombre "
+                    "exacto o enviarnos una foto de la caja o la receta?")
+        if lista[0]["coincidencia"] == "parecido":
+            opciones = "\n".join(f"• *{p['nombre']}*" for p in lista[:3])
+            return f"No encontramos ese nombre exacto. ¿Se refiere a alguno de estos?\n{opciones}"
+        lineas = []
+        for p in lista[:3]:
+            extra = (f" ({p['oferta']})" if p["oferta"] else "") + (" Requiere receta médica." if p["requiere_receta"] else "")
+            lineas.append(f"• *{p['nombre']}*: {p['precio']}, {_DISPONIBLE[p['disponibilidad']]}.{extra}")
+        texto = "Con gusto le informo:\n" + "\n".join(lineas)
+        if lista[0]["disponibilidad"] in ("no_hay", "por_encargo"):
+            texto += f"\n\n¿Desea que le encarguemos *{lista[0]['nombre']}*? Responda «sí, encárguelo»."
+        return texto
+    if nombre == "informacion_farmacia":
+        partes = [f"Nuestro horario es: {r['horario_semana']}."]
+        if r["abierta_ahora"] is not None:
+            partes.append("En este momento estamos abiertos." if r["abierta_ahora"] else "En este momento estamos cerrados.")
+        if r["direccion"]:
+            partes.append(f"Nos encontramos en {r['direccion']}." + (f" Ubicación: {r['ubicacion']}" if r["ubicacion"] else ""))
+        if r["formas_de_pago"]:
+            partes.append("Aceptamos: " + ", ".join(r["formas_de_pago"]).lower() + ".")
+        if r["telefono"]:
+            partes.append(f"Teléfono: {r['telefono']}.")
+        return "\n".join(partes)
+    if nombre == "registrar_encargo":
+        if r.get("registrado"):
+            return (f"Su encargo de *{r['encargo']}* quedó registrado. Nuestro personal lo solicitará al proveedor "
+                    "y le avisaremos por este medio.")
+        if r.get("motivo") == "fuera_de_horario":
+            return ("Le informamos que la confirmación del pedido no puede ser procesada fuera del horario laboral. "
+                    f"Nuestro horario es: {r['horario_semana']}. Con gusto le atendemos en ese horario.")
+        return "Una disculpa, no fue posible registrar su encargo. Una persona de nuestro equipo le atenderá."
+    if nombre == "pasar_a_persona":
+        if r.get("farmacia_abierta_ahora") is False:
+            return "Con gusto. En este momento estamos fuera de horario; una persona de nuestro equipo le atenderá en cuanto abramos."
+        return "Con gusto. En breve le atenderá una persona de nuestro equipo."
+    return "Gracias por escribirnos."
+
+
+def _llamar_bot(cliente, sistema, mensajes):
+    ultimo = mensajes[-1]["content"]
+    if ultimo and ultimo[0].get("type") == "tool_result":
+        uso = next(b for b in mensajes[-2]["content"] if b.get("type") == "tool_use")
+        return _Respuesta([_Bloque(type="text", text=_bot_respuesta(uso["name"], json.loads(ultimo[0]["content"])))], "end_turn")
+    eleccion = _bot_elegir(mensajes)
+    if eleccion is None:
+        return _Respuesta([_Bloque(type="text", text=(
+            "¡Buen día! Gracias por escribir a la farmacia (bot simulado del demo). ¿En qué podemos ayudarle? "
+            "Puede preguntar por un producto, nuestro horario o ubicación."))], "end_turn")
+    nombre, entrada = eleccion
+    return _Respuesta([_Bloque(type="tool_use", id="demo-bot", name=nombre, input=entrada)], "tool_use")
+
+
 def activar() -> None:
+    from app.whatsapp import bot
+
+    bot._llamar = _llamar_bot
     chat._llamar = _llamar
     buscador._llamar_foto = _foto
     sugerencias_pedido._llamar = _sugerencias

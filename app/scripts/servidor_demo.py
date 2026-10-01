@@ -80,6 +80,19 @@ with SessionLocal() as db:
         redondeo_precio_venta=D(1),
         ticket_encabezado="Iturbide Norte #2\nMagdalena, Jalisco, México\nTel. 386 744 0175",
         ticket_pie="Gracias por su compra, tenga buen día!",
+        # Para el bot de WhatsApp: horario por turnos e información para clientes.
+        horario={
+            "modo": "turnos", "turnos": ["Matutino", "Vespertino"],
+            "semana": {d: ([{"nombre": "Matutino", "abre": "09:00", "cierra": "14:00"}] if d == "domingo" else
+                           [{"nombre": "Matutino", "abre": "08:00", "cierra": "15:00"},
+                            {"nombre": "Vespertino", "abre": "15:00", "cierra": "22:00"}])
+                       for d in ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]},
+            "especiales": [],
+        },
+        direccion="Iturbide Norte #2, Magdalena, Jalisco",
+        ubicacion_url="https://maps.google.com/?q=Magdalena+Jalisco",
+        telefono="386 744 0175",
+        formas_pago=["Efectivo", "Tarjeta de débito", "Tarjeta de crédito"],
     )
     db.add(negocio)
     db.flush()
@@ -126,6 +139,8 @@ print("Terminal Mercado Pago: simulada (Mostrador 2 la tiene; no cobra nada).")
 from app.whatsapp import cliente as whatsapp  # noqa: E402
 
 whatsapp.activar_simulado()
-print("WhatsApp: simulado (no envía mensajes).")
+settings.whatsapp_avisos_a = "523860000000"  # el "WhatsApp de la tableta" del demo (simulado)
+settings.whatsapp_bot_activo = True
+print("WhatsApp: simulado (no envía mensajes). El bot se prueba en Conversaciones de WhatsApp.")
 
 uvicorn.run("app.main:app", host="127.0.0.1", port=8001)

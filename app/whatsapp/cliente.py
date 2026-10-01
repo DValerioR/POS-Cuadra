@@ -45,6 +45,13 @@ PLANTILLAS = {
         "Estimado(a) {{1}}, lamentamos informarle que no fue posible encargar {{2}}, {{3}}. "
         "Si lo desea, con gusto le sugerimos una alternativa. Atentamente, {{4}}.",
     ),
+    # Al WhatsApp del personal (la tableta) cuando un cliente necesita a una
+    # persona: {{1}} cliente, {{2}} su número, {{3}} motivo.
+    "atencion_cliente": Plantilla(
+        "atencion_cliente",
+        "Un cliente necesita atención en WhatsApp: {{1}} ({{2}}). Motivo: {{3}}. "
+        "Contéstele desde el sistema, en Ventas → Conversaciones de WhatsApp.",
+    ),
 }
 
 
@@ -84,17 +91,43 @@ class ClienteReal:
                 {"type": "body", "parameters": [{"type": "text", "text": p} for p in parametros]},
             ]},
         }
+        return self._enviar(cuerpo)
+
+    def enviar_texto(self, telefono: str, texto: str) -> str:
+        """Texto libre: solo se puede dentro de las 24 h desde que el cliente escribió."""
+        cuerpo = {"messaging_product": "whatsapp", "to": telefono, "type": "text",
+                  "text": {"body": texto, "preview_url": True}}
+        return self._enviar(cuerpo)
+
+    def _enviar(self, cuerpo: dict) -> str:
         try:
             r = self._http.post(f"/{self._numero_id}/messages", json=cuerpo)
         except httpx.HTTPError:
             raise ErrorWhatsApp("No hay conexión con WhatsApp. ¿Hay internet?")
         if r.status_code >= 400:
-            try:
-                detalle = r.json().get("error", {}).get("message")
-            except ValueError:
-                detalle = None
-            raise ErrorWhatsApp(f"WhatsApp no aceptó el mensaje ({r.status_code})" + (f": {detalle}" if detalle else ""))
+            raise ErrorWhatsApp(_error(r))
         return r.json()["messages"][0]["id"]
+
+    def descargar_media(self, media_id: str) -> tuple[bytes, str]:
+        """La foto (u otro archivo) que mandó el cliente: (bytes, tipo)."""
+        try:
+            info = self._http.get(f"/{media_id}")
+            if info.status_code >= 400:
+                raise ErrorWhatsApp(_error(info))
+            datos = self._http.get(info.json()["url"])
+        except httpx.HTTPError:
+            raise ErrorWhatsApp("No hay conexión con WhatsApp. ¿Hay internet?")
+        if datos.status_code >= 400:
+            raise ErrorWhatsApp(_error(datos))
+        return datos.content, info.json().get("mime_type", "")
+
+
+def _error(r: httpx.Response) -> str:
+    try:
+        detalle = r.json().get("error", {}).get("message")
+    except ValueError:
+        detalle = None
+    return f"WhatsApp no aceptó el mensaje ({r.status_code})" + (f": {detalle}" if detalle else "")
 
 
 @dataclass
@@ -110,6 +143,16 @@ class ClienteSimulado:
             raise ErrorWhatsApp(mensaje)
         self.enviados.append({"telefono": telefono, "plantilla": plantilla.nombre, "parametros": parametros})
         return f"wamid.SIMULADO{len(self.enviados)}"
+
+    def enviar_texto(self, telefono: str, texto: str) -> str:
+        if self.falla:
+            mensaje, self.falla = self.falla, None
+            raise ErrorWhatsApp(mensaje)
+        self.enviados.append({"telefono": telefono, "texto": texto})
+        return f"wamid.SIMULADO{len(self.enviados)}"
+
+    def descargar_media(self, media_id: str) -> tuple[bytes, str]:
+        raise ErrorWhatsApp("El WhatsApp simulado no descarga fotos")
 
 
 _simulado: ClienteSimulado | None = None

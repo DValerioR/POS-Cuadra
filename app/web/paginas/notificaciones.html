@@ -56,7 +56,13 @@
           <a class="boton" href="/encargos">Ver encargos</a>
         </div>
 
-        <div class="panel vacio-solicitudes" x-show="!pendientes.length && !avisos.length && !alertaRespaldo && !encargosPorPedir">
+        <div class="mensaje aviso" x-show="whatsappPendientes" style="margin: 0">
+          <svg class="ico"><use href="/static/iconos.svg#mensaje"/></svg>
+          <span x-text="whatsappPendientes === 1 ? 'Un cliente de WhatsApp espera a una persona.' : `${whatsappPendientes} clientes de WhatsApp esperan a una persona.`"></span>
+          <a class="boton" href="/conversaciones">Ver conversaciones</a>
+        </div>
+
+        <div class="panel vacio-solicitudes" x-show="!pendientes.length && !avisos.length && !alertaRespaldo && !encargosPorPedir && !whatsappPendientes">
           <svg><use href="/static/iconos.svg#palomita"/></svg>
           <strong>No hay nada pendiente</strong>
           <span class="suave">Cuando un cajero pida una devolución o venda algo que el sistema no tenía, aparecerá aquí y en la campana de arriba, en cualquier pantalla.</span>

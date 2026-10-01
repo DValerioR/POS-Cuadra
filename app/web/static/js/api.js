@@ -240,6 +240,7 @@ const SECCIONES = [
   { id: "turno", texto: "Turno y corte", icono: "caja", grupo: "Ventas", ruta: "/turno", existe: true, roles: ["admin", "mostrador"], tecla: "F2" },
   { id: "devoluciones", texto: "Devoluciones y cambios", icono: "regresar", grupo: "Ventas", ruta: "/devoluciones", existe: true, roles: ["admin", "mostrador"] },
   { id: "encargos", texto: "Encargos de clientes", icono: "portapapeles", grupo: "Ventas", ruta: "/encargos", existe: true, roles: ["admin", "mostrador", "bodega"] },
+  { id: "whatsapp", texto: "Conversaciones de WhatsApp", icono: "mensaje", grupo: "Ventas", ruta: "/conversaciones", existe: true, roles: ["admin", "mostrador", "bodega"] },
   { id: "notificaciones", texto: "Notificaciones", icono: "campana", grupo: "Ventas", ruta: "/notificaciones", existe: true, roles: ["admin"] },
 
   { id: "facturas", texto: "Facturar un ticket", icono: "ticket", grupo: "Ventas", ruta: "/facturas", existe: true, roles: ["admin", "mostrador"] },
@@ -259,6 +260,7 @@ const SECCIONES = [
   { id: "cajas", texto: "Cajas e impresoras", icono: "impresora", grupo: "Configuración", ruta: "/cajas-impresoras", existe: true, roles: ["admin"] },
   { id: "terminal", texto: "Terminal Mercado Pago", icono: "tarjeta", grupo: "Configuración", ruta: "/terminal-mp", existe: true, roles: ["admin"] },
   { id: "respaldos", texto: "Respaldos", icono: "subir", grupo: "Configuración", ruta: "/respaldos", existe: true, roles: ["admin"] },
+  { id: "whatsapp-config", texto: "WhatsApp y bot", icono: "mensaje", grupo: "Configuración", ruta: "/whatsapp", existe: true, roles: ["admin"] },
   { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: true, roles: ["admin"] },
   { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
   { id: "ia", texto: "Asistente de IA (clave de Claude)", icono: "chispa", grupo: "Configuración", accion: "ia", existe: true, roles: ["admin"] },

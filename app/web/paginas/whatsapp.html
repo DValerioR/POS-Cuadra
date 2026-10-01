@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WhatsApp y bot · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Configuración del WhatsApp de la farmacia (solo administradores): si el
+    // bot contesta, a qué número avisar cuando un cliente necesita a una
+    // persona (el WhatsApp de la tableta) y la conexión con Meta (claves que
+    // se guardan en el .env). Guía completa: docs/WHATSAPP.md.
+    function pantallaWhatsApp() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        estado: null,
+        avisosA: "",
+        claves: { token: "", numero_id: "", verify_token: "", app_secret: "" },
+        guardando: false,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) this.cargar(await API.get("/whatsapp/configuracion"));
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        cargar(e) {
+          this.estado = e;
+          this.avisosA = e.avisos_a ? e.avisos_a.replace(/^52/, "") : "";
+          this.claves = { token: "", numero_id: e.numero_id || "", verify_token: "", app_secret: "" };
+        },
+        async guardar(cambios, mensaje) {
+          this.guardando = true;
+          this.error = "";
+          try {
+            this.cargar(await API.put("/whatsapp/configuracion", cambios));
+            this.avisar(mensaje);
+          } catch (e) {
+            this.error = e.message;
+            window.scrollTo(0, 0);
+          } finally {
+            this.guardando = false;
+          }
+        },
+        guardarClaves() {
+          const cambios = {};
+          for (const [k, v] of Object.entries(this.claves)) if (v.trim() && (k !== "numero_id" || v.trim() !== this.estado.numero_id)) cambios[k] = v.trim();
+          if (!Object.keys(cambios).length) return (this.error = "No escribiste nada nuevo.");
+          this.guardar(cambios, "Listo: se guardó la conexión con Meta.");
+        },
+        // Una clave al azar para "Verificar token" (se pega igual en Meta).
+        generarClave() {
+          const bytes = crypto.getRandomValues(new Uint8Array(18));
+          this.claves.verify_token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+        },
+        async probarAviso() {
+          try {
+            await API.post("/whatsapp/configuracion/probar-aviso", {});
+            this.avisar("Se mandó el aviso de prueba; revisa el WhatsApp de la tableta.");
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        copiar(texto) {
+          navigator.clipboard.writeText(texto).then(() => this.avisar("Copiado."));
+        },
+        get urlWebhook() {
+          return "https://<dirección del túnel>/whatsapp/webhook";
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 4000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaWhatsApp()">
+
+  <header class="barra" data-pagina="whatsapp-config"></header>
+
+  <main class="contenido negocio-datos" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">El WhatsApp lo configura un administrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin && estado">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#mensaje"/></svg></span>
+          <div><h1>WhatsApp y bot</h1>
+            <p class="suave">El bot contesta a los clientes las 24 horas: precios, si hay, horario, ubicación, formas de pago y encargos.
+              Lo que contesta sale de Datos del negocio (horario e información para clientes) y del catálogo.</p></div>
+        </div>
+
+        <div class="mensaje" :class="estado.simulado ? 'info' : estado.configurado && estado.webhook_listo ? 'ok' : 'aviso'" style="margin: 0">
+          <svg class="ico"><use :href="`/static/iconos.svg#${estado.configurado ? 'palomita' : 'alerta'}`"/></svg>
+          <span x-show="estado.simulado">Demo: WhatsApp simulado. Prueba el bot en Ventas → Conversaciones de WhatsApp, con "Probar como cliente".</span>
+          <span x-show="!estado.simulado && estado.configurado && estado.webhook_listo">WhatsApp conectado.</span>
+          <span x-show="!estado.simulado && !(estado.configurado && estado.webhook_listo)">Falta conectar el número de WhatsApp de la farmacia (abajo, paso 3).</span>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">1. El bot</div>
+          <label class="casilla" style="margin: 0">
+            <input type="checkbox" :checked="estado.bot_activo" :disabled="guardando"
+                   @change="guardar({ bot_activo: $event.target.checked }, $event.target.checked ? 'El bot vuelve a contestar.' : 'El bot ya no contesta: los mensajes llegan a Conversaciones.')">
+            <span>El bot contesta a los clientes <span class="ayuda">(si lo apagas, cada mensaje llega a Conversaciones para que lo conteste una persona)</span></span>
+          </label>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">2. Avisos al personal</div>
+          <p class="suave" style="margin-top: 0">Cuando un cliente pide hablar con una persona (o el bot no sabe qué contestar), sale en la campana y se manda un WhatsApp a este número. Normalmente, el de la tableta.</p>
+          <div class="fila" style="gap: 8px; flex-wrap: wrap">
+            <input x-model="avisosA" inputmode="tel" maxlength="20" placeholder="10 dígitos" style="flex: 0 1 220px">
+            <button type="button" class="primario" style="flex: 0 0 auto" :disabled="guardando"
+                    @click="guardar({ avisos_a: avisosA }, avisosA.trim() ? 'Listo: se guardó el número para avisos.' : 'Se quitó el número para avisos.')">Guardar</button>
+            <button type="button" style="flex: 0 0 auto" x-show="estado.avisos_a" @click="probarAviso()">Mandar aviso de prueba</button>
+          </div>
+          <p class="ayuda">El aviso usa la plantilla "atencion_cliente" (paso 4); hasta que Meta la apruebe no llega.</p>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">3. Conexión con Meta <span class="ayuda">(una sola vez; ver la guía docs/WHATSAPP.md)</span></div>
+          <p class="suave" style="margin-top: 0">Se sacan de developers.facebook.com → tu app → WhatsApp. Las claves no se vuelven a mostrar: para cambiar una, escribe la nueva.</p>
+          <div class="rejilla-2">
+            <div>
+              <label style="margin-top: 0">Token de acceso <span class="ayuda" x-text="estado.token ? `(guardado, termina en …${estado.token})` : '(falta)'"></span></label>
+              <input type="password" x-model="claves.token" autocomplete="off" placeholder="EAA…">
+            </div>
+            <div>
+              <label style="margin-top: 0">Identificador del número <span class="ayuda">(Phone number ID)</span></label>
+              <input x-model="claves.numero_id" inputmode="numeric" maxlength="40">
+            </div>
+            <div>
+              <label>Secreto de la app <span class="ayuda" x-text="estado.app_secret ? '(guardado)' : '(falta)'"></span></label>
+              <input type="password" x-model="claves.app_secret" autocomplete="off" placeholder="Configuración de la app → Básica">
+            </div>
+            <div>
+              <label>Clave para verificar el webhook <span class="ayuda" x-text="estado.verify_token ? '(guardada)' : '(falta)'"></span></label>
+              <div class="fila" style="gap: 6px">
+                <input x-model="claves.verify_token" autocomplete="off" style="flex: 1 1 auto">
+                <button type="button" style="flex: 0 0 auto" @click="generarClave()">Generar</button>
+              </div>
+            </div>
+          </div>
+          <p class="ayuda">En Meta, en WhatsApp → Configuración → Webhook: URL de devolución <code x-text="urlWebhook"></code>, y la misma clave de verificación. Suscribe el campo "messages".</p>
+          <button type="button" class="primario" :disabled="guardando" @click="guardarClaves()">Guardar conexión</button>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">4. Plantillas para dar de alta en Meta</div>
+          <p class="suave" style="margin-top: 0">En el administrador de WhatsApp → Plantillas de mensajes, categoría "Utilidad", idioma "Español (MEX)", con el mismo nombre y texto. Sirven para escribirle a alguien que no ha escrito en las últimas 24 horas.</p>
+          <template x-for="p in estado.plantillas" :key="p.nombre">
+            <div class="plantilla-meta">
+              <div class="fila" style="justify-content: space-between; gap: 8px"><code x-text="p.nombre"></code>
+                <button type="button" class="texto-suave" style="flex: 0 0 auto" @click="copiar(p.texto)">Copiar texto</button></div>
+              <p x-text="p.texto"></p>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

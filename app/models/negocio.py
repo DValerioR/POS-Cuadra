@@ -45,4 +45,10 @@ class Negocio(Base):
     # Horario de atención por día de la semana y días especiales; ver
     # services/horario.py. None = aún no se captura.
     horario: Mapped[dict | None] = mapped_column(JSONB, default=None)
+    # Información para clientes (la da el bot de WhatsApp): dirección, liga
+    # de Google Maps, teléfono y formas de pago (lista de textos).
+    direccion: Mapped[str | None] = mapped_column(default=None)
+    ubicacion_url: Mapped[str | None] = mapped_column(default=None)
+    telefono: Mapped[str | None] = mapped_column(default=None)
+    formas_pago: Mapped[list | None] = mapped_column(JSONB, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

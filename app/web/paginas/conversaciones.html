@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversaciones de WhatsApp · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Conversaciones de WhatsApp: lo que el bot platica con los clientes.
+    // Cuando un cliente necesita a una persona, su conversación sale primero
+    // ("Espera a una persona"); alguien la toma, le contesta desde aquí (el
+    // bot ya no contesta) y al terminar la regresa al bot. Se actualiza sola.
+    // En el demo hay un simulador para escribir como si fuera un cliente.
+    const ESTADOS = { espera: "Espera a una persona", persona: "La atiende una persona", bot: "Contesta el bot" };
+
+    function pantallaConversaciones() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        lista: [],
+        abierta: null, // detalle de la conversación elegida
+        texto: "",
+        enviando: false,
+        simulado: false,
+        sim: { telefono: "5512345678", nombre: "Cliente de prueba", texto: "" },
+        simulando: false,
+        estados: ESTADOS,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (!this.puede) return;
+            await this.cargar();
+            if (this.esAdmin) this.simulado = (await API.get("/whatsapp/configuracion")).simulado;
+            const id = Number(new URLSearchParams(location.search).get("id"));
+            if (id) this.abrir(id);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+          setInterval(() => this.puede && !this.enviando && !this.simulando && this.refrescar(), 5000);
+        },
+        get puede() {
+          return this.usuario && ["admin", "mostrador", "bodega"].includes(this.usuario.rol);
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        async cargar() {
+          this.lista = await API.get("/whatsapp/conversaciones");
+        },
+        async refrescar() {
+          try {
+            await this.cargar();
+            if (this.abierta) {
+              const fila = this.lista.find((c) => c.id === this.abierta.id);
+              if (fila && (fila.ultimo_mensaje_at !== this.abierta.ultimo_mensaje_at || fila.estado !== this.abierta.estado)) await this.abrir(this.abierta.id);
+            }
+          } catch { /* sin conexión: se reintenta */ }
+        },
+        async abrir(id, bajar = true) {
+          try {
+            this.abierta = await API.get(`/whatsapp/conversaciones/${id}`);
+            const fila = this.lista.find((c) => c.id === id);
+            if (fila) fila.sin_leer = 0;
+            this.error = "";
+            if (bajar) this.$nextTick(() => this.alFinal());
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        alFinal() {
+          const caja = this.$refs.mensajes;
+          if (caja) caja.scrollTop = caja.scrollHeight;
+        },
+        async accion(ruta) {
+          try {
+            this.abierta = await API.post(`/whatsapp/conversaciones/${this.abierta.id}/${ruta}`, {});
+            await this.cargar();
+            this.$nextTick(() => this.alFinal());
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        async enviar() {
+          const texto = this.texto.trim();
+          if (!texto) return;
+          this.enviando = true;
+          try {
+            this.abierta = await API.post(`/whatsapp/conversaciones/${this.abierta.id}/responder`, { texto });
+            this.texto = "";
+            this.error = "";
+            await this.cargar();
+            this.$nextTick(() => this.alFinal());
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.enviando = false;
+          }
+        },
+        // --- Simulador del demo ---
+        async simular() {
+          const texto = this.sim.texto.trim();
+          if (!texto) return;
+          this.simulando = true;
+          try {
+            this.abierta = await API.post("/whatsapp/simular", { telefono: this.sim.telefono, nombre: this.sim.nombre, texto });
+            this.sim.texto = "";
+            this.error = "";
+            await this.cargar();
+            this.$nextTick(() => this.alFinal());
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.simulando = false;
+          }
+        },
+        async simularFoto(ev) {
+          const archivo = ev.target.files[0];
+          ev.target.value = "";
+          if (!archivo) return;
+          this.simulando = true;
+          try {
+            const q = `telefono=${encodeURIComponent(this.sim.telefono)}&nombre=${encodeURIComponent(this.sim.nombre)}`;
+            this.abierta = await API.post(`/whatsapp/simular-foto?${q}`, archivo);
+            await this.cargar();
+            this.$nextTick(() => this.alFinal());
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.simulando = false;
+          }
+        },
+        // --- Formato ---
+        nombre(c) {
+          return c.nombre || "+" + c.telefono;
+        },
+        hora(f) {
+          const d = new Date(f);
+          const hoy = new Date();
+          return d.toDateString() === hoy.toDateString()
+            ? d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+            : d.toLocaleDateString("es-MX", { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" });
+        },
+        quien(m) {
+          return { cliente: this.nombre(this.abierta), bot: "Bot", personal: m.quien || "Personal", sistema: "" }[m.de];
+        },
+        // *negritas* de WhatsApp y ligas, con el texto escapado.
+        formato(texto) {
+          return escapar(texto || "")
+            .replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>")
+            .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>')
+            .replace(/\n/g, "<br>");
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaConversaciones()">
+
+  <header class="barra" data-pagina="whatsapp"></header>
+
+  <main class="contenido conversaciones" x-cloak x-show="!cargando">
+    <template x-if="usuario && !puede">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Las conversaciones las atienden mostrador, bodega y administradores.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="puede">
+      <div class="pila" style="gap: 14px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#mensaje"/></svg></span>
+          <div><h1>Conversaciones de WhatsApp</h1>
+            <p class="suave">El bot contesta solo. Cuando un cliente necesita a una persona sale primero: tómala, contéstale aquí y al terminar regrésala al bot.</p></div>
+        </div>
+
+        <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+        <div class="chat-whatsapp" :class="{ 'con-abierta': abierta }">
+          <!-- Lista -->
+          <div class="panel lista-chats">
+            <p class="suave" style="padding: 14px; margin: 0" x-show="!lista.length">Todavía no hay conversaciones.</p>
+            <template x-for="c in lista" :key="c.id">
+              <button type="button" class="fila-chat" :class="{ elegida: abierta && abierta.id === c.id, espera: c.estado === 'espera' }" @click="abrir(c.id)">
+                <span class="avatar" x-text="nombre(c).charAt(0).toUpperCase()"></span>
+                <span class="datos">
+                  <span class="arriba"><strong x-text="nombre(c)"></strong><small x-text="hora(c.ultimo_mensaje_at)"></small></span>
+                  <span class="abajo">
+                    <span class="ultimo" x-text="c.ultimo ? (c.ultimo.de === 'cliente' ? '' : (c.ultimo.de === 'bot' ? 'Bot: ' : c.ultimo.de === 'personal' ? 'Tú: ' : '')) + c.ultimo.texto : ''"></span>
+                    <span class="numero-aviso" x-show="c.sin_leer" x-text="c.sin_leer"></span>
+                  </span>
+                  <span class="etiqueta peligro" x-show="c.estado === 'espera'">Espera a una persona</span>
+                  <span class="etiqueta gris" x-show="c.estado === 'persona'" x-text="c.atendida_por ? `La atiende ${c.atendida_por}` : 'La atiende una persona'"></span>
+                </span>
+              </button>
+            </template>
+          </div>
+
+          <!-- Conversación -->
+          <div class="panel chat-abierto">
+            <template x-if="!abierta">
+              <div class="vacio-chat suave">
+                <svg><use href="/static/iconos.svg#mensaje"/></svg>
+                <p>Elige una conversación.</p>
+              </div>
+            </template>
+            <template x-if="abierta">
+              <div class="chat-contenido">
+                <div class="chat-cabeza">
+                  <button type="button" class="texto-suave volver-lista" @click="abierta = null">← Conversaciones</button>
+                  <div>
+                    <strong x-text="nombre(abierta)"></strong>
+                    <small class="suave" x-text="'+' + abierta.telefono"></small>
+                    <div><span class="etiqueta" :class="{ peligro: abierta.estado === 'espera', gris: abierta.estado === 'persona', verde: abierta.estado === 'bot' }" x-text="estados[abierta.estado]"></span></div>
+                  </div>
+                  <div class="fila" style="gap: 8px; flex: 0 0 auto">
+                    <button type="button" class="primario" x-show="abierta.estado !== 'persona'" @click="accion('tomar')">Atenderla yo</button>
+                    <button type="button" x-show="abierta.estado !== 'bot'" @click="accion('regresar-al-bot')">Regresar al bot</button>
+                  </div>
+                </div>
+                <div class="mensaje aviso" style="margin: 8px 12px 0" x-show="abierta.estado !== 'bot' && abierta.motivo_persona">
+                  <span><strong>Motivo:</strong> <span x-text="abierta.motivo_persona"></span></span>
+                </div>
+                <div class="mensaje error" style="margin: 8px 12px 0" x-show="abierta.estado === 'espera' && abierta.aviso_error">
+                  <span>No se pudo avisar al WhatsApp del personal: <span x-text="abierta.aviso_error"></span></span>
+                </div>
+
+                <div class="chat-mensajes" x-ref="mensajes">
+                  <template x-for="m in abierta.mensajes" :key="m.id">
+                    <div class="burbuja" :class="m.de">
+                      <small class="quien" x-show="m.de !== 'sistema'" x-text="quien(m)"></small>
+                      <a x-show="m.foto" :href="`/whatsapp/mensajes/${m.id}/foto`" target="_blank"><img :src="m.foto ? `/whatsapp/mensajes/${m.id}/foto` : ''" alt="Foto del cliente"></a>
+                      <div x-show="m.texto" x-html="formato(m.texto)"></div>
+                      <small class="error-envio" x-show="m.error" x-text="`No se envió: ${m.error}`"></small>
+                      <small class="hora" x-text="hora(m.fecha)"></small>
+                    </div>
+                  </template>
+                </div>
+
+                <form class="chat-escribir" @submit.prevent="enviar()" x-show="abierta.puede_escribir">
+                  <textarea rows="2" x-model="texto" maxlength="2000" placeholder="Escribe la respuesta al cliente…"
+                            @keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); enviar(); }"></textarea>
+                  <button class="primario" :disabled="enviando || !texto.trim()" x-text="enviando ? 'Enviando…' : 'Enviar'"></button>
+                </form>
+                <p class="ayuda" style="margin: 8px 12px" x-show="abierta.estado === 'bot' && abierta.puede_escribir">Si escribes, la conversación pasa a ti y el bot deja de contestar.</p>
+                <div class="mensaje info" style="margin: 8px 12px" x-show="!abierta.puede_escribir">
+                  <span>Pasaron más de 24 horas desde que el cliente escribió: WhatsApp no deja contestarle hasta que vuelva a escribir. Si es urgente, llámele.</span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Simulador (solo en el demo) -->
+        <template x-if="simulado">
+          <form class="panel simulador-whatsapp" @submit.prevent="simular()">
+            <div class="paso" style="margin-top: 0">Probar como cliente <span class="ayuda">(solo en el demo: escribe como si fueras un cliente y contesta el bot)</span></div>
+            <div class="fila" style="gap: 8px; flex-wrap: wrap">
+              <input x-model="sim.nombre" maxlength="60" placeholder="Nombre" style="flex: 1 1 160px">
+              <input x-model="sim.telefono" maxlength="20" placeholder="Teléfono" inputmode="tel" style="flex: 1 1 140px">
+            </div>
+            <div class="fila" style="gap: 8px; margin-top: 8px">
+              <input x-model="sim.texto" maxlength="2000" placeholder="Ej. ¿Tienen paracetamol? ¿A qué hora cierran? Quiero hablar con alguien" style="flex: 1 1 auto">
+              <label class="boton" style="flex: 0 0 auto; margin: 0" :class="{ apagado: simulando }" title="Mandar una foto como cliente">
+                <input type="file" accept="image/*" hidden @change="simularFoto($event)">Foto
+              </label>
+              <button class="primario" style="flex: 0 0 auto" :disabled="simulando || !sim.texto.trim()" x-text="simulando ? 'Contestando…' : 'Mandar'"></button>
+            </div>
+          </form>
+        </template>
+      </div>
+    </template>
+  </main>
+</body>
+</html>

@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     # (ver app/whatsapp/cliente.py).
     whatsapp_token: str | None = None
     whatsapp_numero_id: str | None = None
+    # Bot de WhatsApp (ver app/whatsapp/bot.py y docs/WHATSAPP.md): la clave
+    # que se le da a Meta para confirmar el webhook, el "secreto de la app"
+    # para comprobar que cada mensaje viene de Meta, el número que recibe los
+    # avisos cuando un cliente necesita a una persona (el WhatsApp de la
+    # tableta) y si el bot contesta (apagado, los mensajes solo se guardan).
+    whatsapp_verify_token: str | None = None
+    whatsapp_app_secret: str | None = None
+    whatsapp_avisos_a: str | None = None
+    whatsapp_bot_activo: bool = True
 
 
 settings = Settings()

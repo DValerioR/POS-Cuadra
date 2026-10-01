@@ -9,6 +9,7 @@ from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.models import AvisoInventario, EstadoAviso, RolUsuario, Usuario
 from app.services import avisos_inventario, encargos, inventario, respaldos, solicitudes
+from app.whatsapp import bot as whatsapp_bot
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
 router = APIRouter(tags=["avisos de inventario"])
@@ -105,4 +106,6 @@ def pendientes(usuario: Usuario = Depends(usuario_actual), db: Session = Depends
     r = 1 if usuario.rol == RolUsuario.ADMIN and respaldos.automaticos_activos() and respaldos.estado()["necesita_atencion"] else 0
     # Encargos de clientes que falta pedir al proveedor.
     e = encargos.contar_por_pedir(db, usuario.negocio_id) if usuario.rol == RolUsuario.ADMIN else 0
-    return {"solicitudes": s, "inventario": a, "respaldo": r, "encargos": e, "total": s + a + r + e}
+    # Clientes de WhatsApp que esperan a una persona (o con mensajes sin leer).
+    w = whatsapp_bot.contar_pendientes(db, usuario.negocio_id) if usuario.rol == RolUsuario.ADMIN else 0
+    return {"solicitudes": s, "inventario": a, "respaldo": r, "encargos": e, "whatsapp": w, "total": s + a + r + e + w}

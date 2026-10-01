@@ -134,6 +134,33 @@ class NegocioUpdate(BaseModel):
     regimen_fiscal: str | None = None
     codigo_postal: str | None = None
     horario: Horario | None = None
+    direccion: str | None = Field(default=None, max_length=300)
+    ubicacion_url: str | None = Field(default=None, max_length=500)
+    telefono: str | None = Field(default=None, max_length=40)
+    formas_pago: list[str] | None = Field(default=None, max_length=10)
+
+    @field_validator("direccion", "telefono")
+    @classmethod
+    def _texto(cls, v):
+        return " ".join(v.split()) or None if v is not None else v
+
+    @field_validator("ubicacion_url")
+    @classmethod
+    def _url(cls, v):
+        v = (v or "").strip()
+        if not v:
+            return None
+        if not re.match(r"https?://\S+$", v):
+            raise ValueError("La liga de ubicación debe empezar con https:// (cópiala de Google Maps → Compartir)")
+        return v
+
+    @field_validator("formas_pago")
+    @classmethod
+    def _formas(cls, v):
+        if v is None:
+            return None
+        limpias = [" ".join(f.split())[:60] for f in v if f and f.strip()]
+        return limpias or None
 
     @field_validator("nombre", "razon_social")
     @classmethod
@@ -186,4 +213,8 @@ class NegocioOut(BaseModel):
     regimen_fiscal: str | None = None
     codigo_postal: str | None = None
     horario: dict | None = None
+    direccion: str | None = None
+    ubicacion_url: str | None = None
+    telefono: str | None = None
+    formas_pago: list[str] | None = None
     created_at: datetime

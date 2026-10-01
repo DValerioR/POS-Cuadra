@@ -26,6 +26,7 @@
       "626": "Régimen Simplificado de Confianza",
     };
     const ANCHO_TICKET = 48;
+    const FORMAS_PAGO = ["Efectivo", "Tarjeta de débito", "Tarjeta de crédito", "Transferencia"];
 
     function pantallaNegocio() {
       return {
@@ -39,6 +40,7 @@
         original: null,
         f: null,
         regimenes: REGIMENES,
+        formasPago: FORMAS_PAGO,
 
         async init() {
           try {
@@ -60,6 +62,9 @@
             codigo_postal: n.codigo_postal || "", ticket_encabezado: n.ticket_encabezado || "", ticket_pie: n.ticket_pie || "", ticket_logo: n.ticket_logo, marca_url: n.marca_url,
             redondeo: n.redondeo_precio_venta === null ? "" : String(Number(n.redondeo_precio_venta)),
             horario: horarioAEditar(n.horario),
+            direccion: n.direccion || "", ubicacion_url: n.ubicacion_url || "", telefono: n.telefono || "",
+            formas: (n.formas_pago || []).filter((x) => FORMAS_PAGO.includes(x)),
+            otras_formas: (n.formas_pago || []).filter((x) => !FORMAS_PAGO.includes(x)).join(", "),
           };
         },
         get cambios() {
@@ -69,7 +74,9 @@
           return this.f.nombre !== o.nombre || this.f.razon_social !== (o.razon_social || "") || this.f.rfc !== (o.rfc || "") ||
             this.f.regimen_fiscal !== (o.regimen_fiscal || "") || this.f.codigo_postal !== (o.codigo_postal || "") ||
             this.f.ticket_encabezado !== (o.ticket_encabezado || "") || this.f.ticket_pie !== (o.ticket_pie || "") || this.f.redondeo !== r || this.f.ticket_logo !== o.ticket_logo ||
-            JSON.stringify(horarioAGuardar(this.f.horario)) !== JSON.stringify(horarioAGuardar(horarioAEditar(o.horario)));
+            JSON.stringify(horarioAGuardar(this.f.horario)) !== JSON.stringify(horarioAGuardar(horarioAEditar(o.horario))) ||
+            this.f.direccion !== (o.direccion || "") || this.f.ubicacion_url !== (o.ubicacion_url || "") || this.f.telefono !== (o.telefono || "") ||
+            JSON.stringify(this.formasAGuardar()) !== JSON.stringify(o.formas_pago || null);
         },
         async guardar() {
           const f = this.f;
@@ -91,6 +98,10 @@
               ticket_logo: f.ticket_logo,
               redondeo_precio_venta: f.redondeo || null,
               ...(f.horario ? { horario: horarioAGuardar(f.horario) } : {}),
+              direccion: f.direccion.trim() || null,
+              ubicacion_url: f.ubicacion_url.trim() || null,
+              telefono: f.telefono.trim() || null,
+              formas_pago: this.formasAGuardar(),
             });
             this.cargar(n);
             document.querySelectorAll("[data-negocio]").forEach((e) => (e.textContent = n.nombre));
@@ -101,6 +112,12 @@
           } finally {
             this.guardando = false;
           }
+        },
+        // Formas de pago en el orden de la lista, más las que se escribieron aparte.
+        formasAGuardar() {
+          const lista = FORMAS_PAGO.filter((x) => this.f.formas.includes(x))
+            .concat(this.f.otras_formas.split(",").map((x) => x.trim()).filter(Boolean));
+          return lista.length ? lista : null;
         },
         // Vista previa aproximada del ticket (texto centrado a 48 columnas).
         centrar(texto) {
@@ -276,6 +293,24 @@
               <div class="mensaje info" style="margin-top: 14px"><span><strong>Así lo dirá el bot:</strong> <span x-text="horarioTexto()"></span></span></div>
             </div>
           </template>
+        </div>
+
+        <div class="panel">
+          <div class="paso" style="margin-top: 0">Información para clientes <span class="ayuda">(la da el bot de WhatsApp)</span></div>
+          <label style="margin-top: 0">Dirección</label>
+          <textarea rows="2" x-model="f.direccion" maxlength="300" placeholder="Calle, número, colonia, ciudad"></textarea>
+          <div class="rejilla-2">
+            <div><label>Liga de ubicación <span class="ayuda">(Google Maps → Compartir → Copiar vínculo)</span></label>
+              <input x-model="f.ubicacion_url" maxlength="500" placeholder="https://maps.app.goo.gl/…"></div>
+            <div><label>Teléfono</label><input x-model="f.telefono" maxlength="40" inputmode="tel"></div>
+          </div>
+          <label>Formas de pago</label>
+          <div class="fila" style="gap: 6px 18px; flex-wrap: wrap">
+            <template x-for="forma in formasPago" :key="forma">
+              <label class="casilla" style="margin: 0"><input type="checkbox" :value="forma" x-model="f.formas"><span x-text="forma"></span></label>
+            </template>
+          </div>
+          <input x-model="f.otras_formas" maxlength="200" placeholder="Otras, separadas por coma (ej. vales de despensa)" style="margin-top: 8px">
         </div>
 
         <div class="panel logo-farmacia">
