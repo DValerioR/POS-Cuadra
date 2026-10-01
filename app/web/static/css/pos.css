@@ -1602,3 +1602,17 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 .plantilla-meta { border: 1px solid var(--borde); border-radius: var(--radio-chico); padding: 10px 12px; margin-bottom: 8px; }
 .plantilla-meta p { margin: 6px 0 0; }
 .chat-cabeza button { white-space: nowrap; }
+
+/* Aviso de versión nueva del sistema */
+.aviso-version {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 90;
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px;
+  background: var(--primario-oscuro); color: #fff; border-radius: 999px; box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+  max-width: calc(100vw - 32px);
+}
+.aviso-version .ico { width: 20px; height: 20px; }
+.aviso-version button { flex: 0 0 auto; background: #fff; color: var(--primario-oscuro); border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; min-height: 0; }
+.lista-cambios { margin: 6px 0 0; padding-left: 20px; }
+.lista-cambios li { margin: 2px 0; }
+.fila-historial { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--borde); }
+.fila-historial:last-child { border-bottom: 0; }

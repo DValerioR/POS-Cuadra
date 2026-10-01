@@ -19,7 +19,7 @@ def test_el_admin_ve_el_aviso(como_mostrador, como_admin, mostrador, caja, db, n
     [a] = avisos(como_admin, estado="pendiente")
     assert (a["producto"], a["folio"], a["caja"], a["vendio"]) == ("AGOTADO", v["folio"], "Mostrador 1", mostrador.nombre_completo)
     assert (a["vendidas"], a["faltantes"], a["existencia_actual"]) == ("3.00", "2.00", "-2.00")
-    assert como_admin.get("/notificaciones/pendientes").json() == {"solicitudes": 0, "inventario": 1, "respaldo": 0, "encargos": 0, "whatsapp": 0, "total": 1}
+    assert como_admin.get("/notificaciones/pendientes").json() == {"solicitudes": 0, "inventario": 1, "respaldo": 0, "encargos": 0, "whatsapp": 0, "actualizacion": 0, "total": 1}
 
 
 def test_conteo_ajusta_la_existencia_y_cierra_los_avisos_del_producto(como_mostrador, como_admin, admin, caja, db, negocio):

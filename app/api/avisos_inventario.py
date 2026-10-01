@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.models import AvisoInventario, EstadoAviso, RolUsuario, Usuario
-from app.services import avisos_inventario, encargos, inventario, respaldos, solicitudes
+from app.services import actualizaciones, avisos_inventario, encargos, inventario, respaldos, solicitudes
 from app.whatsapp import bot as whatsapp_bot
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
@@ -108,4 +108,7 @@ def pendientes(usuario: Usuario = Depends(usuario_actual), db: Session = Depends
     e = encargos.contar_por_pedir(db, usuario.negocio_id) if usuario.rol == RolUsuario.ADMIN else 0
     # Clientes de WhatsApp que esperan a una persona (o con mensajes sin leer).
     w = whatsapp_bot.contar_pendientes(db, usuario.negocio_id) if usuario.rol == RolUsuario.ADMIN else 0
-    return {"solicitudes": s, "inventario": a, "respaldo": r, "encargos": e, "whatsapp": w, "total": s + a + r + e + w}
+    # La última actualización automática falló.
+    u = 1 if usuario.rol == RolUsuario.ADMIN and actualizaciones.necesita_atencion() else 0
+    return {"solicitudes": s, "inventario": a, "respaldo": r, "encargos": e, "whatsapp": w, "actualizacion": u,
+            "total": s + a + r + e + w + u}

@@ -10,7 +10,8 @@ Pasos (cada uno se salta si ya está hecho, así que se puede volver a correr):
   5. Certificado HTTPS de la red local (cámara de la tableta).
   6. El servidor como tarea de Windows que arranca sola al prender la
      computadora (puerto 8000; y 8443 con HTTPS para la tableta) y se
-     vuelve a levantar si se cierra.
+     vuelve a levantar si se cierra; y la tarea que instala sola las
+     versiones nuevas de GitHub (con la farmacia cerrada).
   7. Firewall: abre esos puertos solo en redes privadas.
   8. Google Chrome y el acceso directo "Cuadra" en el escritorio.
 Al final muestra la dirección para las demás computadoras.
@@ -44,8 +45,11 @@ function Paso([int]$n, [string]$texto) { Write-Host "`n[$n/$total] $texto" -Fore
 function Bien([string]$texto) { Write-Host "    $texto" -ForegroundColor Green }
 function Aviso([string]$texto) { Write-Host "    $texto" -ForegroundColor Yellow }
 
+# Los programas externos (pip, alembic...) escriben avisos por la salida de
+# errores; en PowerShell 5.1 eso no debe detener nada: cuenta su código de salida.
 function Correr([string]$exe, [string[]]$argumentos, [string]$error) {
-    & $exe @argumentos
+    $ErrorActionPreference = "Continue"
+    & $exe @argumentos 2>&1 | ForEach-Object { Write-Host "    $_" }
     if ($LASTEXITCODE -ne 0) { throw "$error (código $LASTEXITCODE)" }
 }
 
@@ -251,9 +255,9 @@ try {
     foreach ($t in @("Cuadra - servidor", "Cuadra - servidor HTTPS")) {
         if (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue) { Stop-ScheduledTask -TaskName $t }
     }
-    Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" |
-        Where-Object { $_.CommandLine -like "*uvicorn app.main:app*" } |
-        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    # Lo que siga escuchando en los puertos del servidor (el proceso de Python).
+    Get-NetTCPConnection -LocalPort $Puerto, $PuertoHttps -State Listen -ErrorAction SilentlyContinue |
+        ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
     Start-Sleep -Seconds 2
     $ocupado = Get-NetTCPConnection -LocalPort $Puerto -State Listen -ErrorAction SilentlyContinue
     if ($ocupado) { throw "Otro programa usa el puerto $Puerto (proceso $($ocupado[0].OwningProcess)). Ciérralo y vuelve a correr el instalador." }
@@ -268,6 +272,14 @@ try {
             -Description "Punto de venta Cuadra (lo creó el instalador)" -Force | Out-Null
         Start-ScheduledTask -TaskName $t[0]
     }
+    # Actualizaciones automáticas: cada 30 minutos revisa GitHub; instala solo con la farmacia cerrada.
+    $accion = New-ScheduledTaskAction -Execute "powershell.exe" -WorkingDirectory $Destino `
+        -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$Destino\instalador\actualizar.ps1`" -Automatico"
+    $cada30 = New-ScheduledTaskTrigger -Once -At ((Get-Date).AddMinutes(5)) -RepetitionInterval (New-TimeSpan -Minutes 30)
+    $ajustesAct = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
+        -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName "Cuadra - actualizar" -Action $accion -Trigger $cada30 -Settings $ajustesAct -Principal $quien `
+        -Description "Instala las versiones nuevas de Cuadra desde GitHub con la farmacia cerrada (lo creó el instalador)" -Force | Out-Null
     Write-Host "    Esperando a que el servidor responda..."
     $listo = $false
     for ($i = 0; $i -lt 40; $i++) {
@@ -317,7 +329,7 @@ try {
     Write-Host "Para instalar una caja o la bodega, en esa computadora corre (PowerShell como administrador):"
     Write-Host "  irm https://raw.githubusercontent.com/DValerioR/POS-Cuadra/master/instalador/instalar_caja.ps1 -OutFile `$env:TEMP\caja.ps1; powershell -ExecutionPolicy Bypass -File `$env:TEMP\caja.ps1" -ForegroundColor White
     Aviso "Importante: fija la IP de esta computadora en el módem (reservación DHCP) para que no cambie."
-    Write-Host "Para actualizar el programa más adelante: $Destino\instalador\actualizar.cmd (como administrador)."
+    Write-Host "Las versiones nuevas se instalan solas con la farmacia cerrada (Configuración → Actualizaciones)."
 } catch {
     Write-Host "`nNo se pudo terminar la instalación: $($_.Exception.Message)" -ForegroundColor Red
     Write-Host "Lo que pasó quedó en $carpetaLog\instalacion.log. Corrige el problema y vuelve a correr el instalador: lo ya hecho se salta."

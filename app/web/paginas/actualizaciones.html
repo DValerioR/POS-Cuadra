@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Actualizaciones · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Actualizaciones automáticas (solo administradores): qué versión está
+    // instalada, si hay una nueva en GitHub, cuándo se instalará (cuando cierre
+    // la farmacia) y el historial. "Instalar ahora" no espera al cierre.
+    // Ver instalador\actualizar.ps1 y services/actualizaciones.py.
+    function pantallaActualizaciones() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        aviso: "",
+        e: null,
+        confirmar: false,
+        pidiendo: false,
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (this.esAdmin) await this.cargar();
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.cargando = false;
+          }
+          setInterval(() => this.esAdmin && this.cargar().catch(() => {}), 15000);
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        async cargar() {
+          this.e = await API.get("/sistema/actualizaciones");
+        },
+        async instalarAhora() {
+          this.pidiendo = true;
+          this.error = "";
+          try {
+            this.e = await API.post("/sistema/actualizaciones/instalar-ahora", {});
+            this.confirmar = false;
+            this.avisar("Listo: se está buscando e instalando. El sistema se reinicia en un momento.");
+          } catch (err) {
+            this.error = err.message;
+          } finally {
+            this.pidiendo = false;
+          }
+        },
+        fecha(f) {
+          return f ? new Date(f).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" }) : "—";
+        },
+        get titulo() {
+          const e = this.e;
+          if (!e.automaticas) return "Actualizaciones automáticas no instaladas";
+          return {
+            al_dia: "El sistema está al día", ok: "El sistema está al día",
+            pendiente: "Hay una versión nueva", instalando: "Instalando la versión nueva…",
+            error: "La última actualización falló",
+          }[e.estado] || "Todavía no se ha revisado";
+        },
+        get clase() {
+          if (!this.e.automaticas) return "info";
+          return { error: "error", pendiente: "aviso", instalando: "info" }[this.e.estado] || "ok";
+        },
+        avisar(texto) {
+          this.aviso = texto;
+          clearTimeout(this._aviso);
+          this._aviso = setTimeout(() => (this.aviso = ""), 5000);
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaActualizaciones()">
+
+  <header class="barra" data-pagina="actualizaciones"></header>
+
+  <main class="contenido negocio-datos" x-cloak x-show="!cargando">
+    <div class="mensaje error" x-show="error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+    <template x-if="usuario && !esAdmin">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">Las actualizaciones las ve un administrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="esAdmin && e">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#subir"/></svg></span>
+          <div><h1>Actualizaciones</h1>
+            <p class="suave">El servidor revisa cada 30 minutos si hay una versión nueva y la instala solo cuando la farmacia está cerrada
+              (según el horario de Datos del negocio), con un respaldo antes. Si algo sale mal, regresa a la versión anterior y lo avisa en la campana.</p></div>
+        </div>
+
+        <div class="panel">
+          <div class="mensaje" :class="clase" style="margin: 0 0 12px">
+            <svg class="ico"><use :href="`/static/iconos.svg#${clase === 'error' ? 'alerta' : clase === 'ok' ? 'palomita' : 'info'}`"/></svg>
+            <span><strong x-text="titulo"></strong><span x-show="e.mensaje" x-text="' — ' + e.mensaje"></span></span>
+          </div>
+          <p class="suave" x-show="!e.automaticas" style="margin-top: 0">Solo funcionan en la computadora donde se instaló el servidor con el instalador
+            (tarea de Windows "Cuadra - actualizar").</p>
+          <div class="rejilla-2">
+            <div><label style="margin-top: 0">Versión instalada</label><strong x-text="e.version"></strong></div>
+            <div><label style="margin-top: 0">Última revisión</label><span x-text="fecha(e.ultima_revision)"></span></div>
+          </div>
+
+          <template x-if="e.disponible">
+            <div style="margin-top: 14px">
+              <div class="paso" style="margin-top: 0" x-text="`Versión nueva: ${e.disponible}`"></div>
+              <ul class="lista-cambios" x-show="e.cambios.length">
+                <template x-for="c in e.cambios" :key="c"><li x-text="c"></li></template>
+              </ul>
+            </div>
+          </template>
+
+          <div class="fila" style="gap: 8px; margin-top: 14px; flex-wrap: wrap" x-show="e.automaticas">
+            <button type="button" x-show="!confirmar" :disabled="e.estado === 'instalando' || e.pedida" @click="confirmar = true"
+                    x-text="e.pedida ? 'Instalación pedida…' : (e.disponible ? 'Instalar ahora' : 'Buscar ahora')"></button>
+            <template x-if="confirmar">
+              <div class="mensaje aviso" style="margin: 0; flex: 1 1 auto">
+                <span>El sistema se reinicia (alrededor de un minuto): las cajas no podrán cobrar mientras tanto. ¿Seguir?</span>
+                <button type="button" class="primario" :disabled="pidiendo" @click="instalarAhora()">Sí, ahora</button>
+                <button type="button" @click="confirmar = false">No</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="panel" x-show="e.historial.length">
+          <div class="paso" style="margin-top: 0">Historial</div>
+          <template x-for="h in e.historial" :key="h.fecha">
+            <div class="fila-historial">
+              <span class="etiqueta" :class="h.resultado === 'ok' ? 'verde' : 'peligro'" x-text="h.resultado === 'ok' ? 'Instalada' : 'Falló'"></span>
+              <span x-text="`${h.de} → ${h.a}`"></span>
+              <span class="suave" x-text="fecha(h.fecha)"></span>
+              <span class="suave" x-show="h.mensaje" x-text="h.mensaje" style="flex-basis: 100%"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+  </main>
+
+  <div class="aviso-flotante" x-show="aviso" x-transition.opacity x-cloak>
+    <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="aviso"></span>
+  </div>
+</body>
+</html>

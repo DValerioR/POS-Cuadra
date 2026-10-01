@@ -261,6 +261,7 @@ const SECCIONES = [
   { id: "terminal", texto: "Terminal Mercado Pago", icono: "tarjeta", grupo: "Configuración", ruta: "/terminal-mp", existe: true, roles: ["admin"] },
   { id: "respaldos", texto: "Respaldos", icono: "subir", grupo: "Configuración", ruta: "/respaldos", existe: true, roles: ["admin"] },
   { id: "whatsapp-config", texto: "WhatsApp y bot", icono: "mensaje", grupo: "Configuración", ruta: "/whatsapp", existe: true, roles: ["admin"] },
+  { id: "actualizaciones", texto: "Actualizaciones", icono: "subir", grupo: "Configuración", ruta: "/actualizaciones", existe: true, roles: ["admin"] },
   { id: "negocio", texto: "Datos del negocio", icono: "tienda", grupo: "Configuración", ruta: "/negocio-datos", existe: true, roles: ["admin"] },
   { id: "imagen", texto: "Imagen de inicio", icono: "imagen", grupo: "Configuración", accion: "imagen", existe: true, roles: ["admin"] },
   { id: "ia", texto: "Asistente de IA (clave de Claude)", icono: "chispa", grupo: "Configuración", accion: "ia", existe: true, roles: ["admin"] },
@@ -439,6 +440,44 @@ function vigilarSolicitudes(campana) {
 }
 
 document.addEventListener("DOMContentLoaded", pintarBarra);
+
+// --- Versión nueva del sistema -------------------------------------------------
+// El servidor se actualiza solo (Configuración → Actualizaciones). Cada pantalla
+// abierta revisa la versión cada 2 minutos; si cambió, avisa para recargar.
+// Las pantallas donde no se captura nada a medias (o que lo protegen, como
+// Vender) se recargan solas si nadie las ha usado en 5 minutos.
+const RECARGA_SOLA = ["/inicio", "/venta", "/tableta", "/notificaciones", "/conversaciones", "/encargos", "/turno"];
+function vigilarVersion() {
+  let inicial = null;
+  let ultimoUso = Date.now();
+  const usar = () => (ultimoUso = Date.now());
+  ["keydown", "pointerdown", "input"].forEach((ev) => window.addEventListener(ev, usar, true));
+  const aviso = () => {
+    if (document.querySelector(".aviso-version")) return;
+    const div = document.createElement("div");
+    div.className = "aviso-version";
+    div.innerHTML = `${icono("subir")}<span>Hay una versión nueva del sistema.</span><button type="button">Recargar</button>`;
+    div.querySelector("button").addEventListener("click", () => Salida.permitir() && location.reload());
+    document.body.appendChild(div);
+  };
+  const revisar = async () => {
+    let v;
+    try {
+      const r = await fetch("/sistema/version", { cache: "no-store" });
+      if (!r.ok) return;
+      v = (await r.json()).version;
+    } catch {
+      return; // sin conexión (o el servidor reiniciando): se revisa después
+    }
+    if (inicial === null) inicial = v;
+    if (v === inicial) return;
+    aviso();
+    if (RECARGA_SOLA.includes(location.pathname) && Date.now() - ultimoUso > 5 * 60 * 1000 && !Salida.motivo()) location.reload();
+  };
+  revisar();
+  setInterval(revisar, 2 * 60 * 1000);
+}
+document.addEventListener("DOMContentLoaded", vigilarVersion);
 
 // --- Consultar precio (todos) -----------------------------------------------
 // Ventana para escanear un código (o buscar por nombre) y ver el precio de

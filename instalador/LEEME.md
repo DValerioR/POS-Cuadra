@@ -34,7 +34,7 @@ copiar a una USB el respaldo más reciente (Configuración → Respaldos →
    - deja el servidor como tarea de Windows ("Cuadra - servidor" en el puerto
      8000 y "Cuadra - servidor HTTPS" en el 8443) que arranca sola al prender
      la computadora, aunque nadie inicie sesión, y se vuelve a levantar si se
-     cierra;
+     cierra; y la tarea "Cuadra - actualizar" (ver abajo);
    - abre esos puertos en el firewall solo para la red privada (si la red está
      marcada como pública, pregunta si se cambia);
    - instala Chrome si falta y crea el acceso directo "Cuadra" en el escritorio.
@@ -66,13 +66,37 @@ en `C:\POS-agente`, que arranca solo al prender la computadora y solo acepta
 conexiones del servidor. Después, en Cajas e impresoras, pon la IP de esa
 computadora y usa "Imprimir prueba" y "Probar cajón".
 
-## 3. Actualizar
+## 3. Actualizaciones (automáticas)
 
-En el servidor, doble clic en `C:\POS\instalador\actualizar.cmd` (pide permiso
-de administrador). Respalda la base, baja la versión nueva de GitHub, instala
-lo que haga falta, pone al día la base y vuelve a prender el servidor. Las
-demás computadoras toman la versión nueva solas al recargar la página.
-Lo que pasó queda en `C:\ProgramData\Cuadra\actualizacion.log`.
+No hay que ir a la farmacia: basta con subir la versión nueva a GitHub (rama
+`master`). La tarea de Windows **"Cuadra - actualizar"** revisa cada 30 minutos
+y, si hay versión nueva, la instala **solo cuando la farmacia está cerrada**
+(horario de Datos del negocio y al menos 30 minutos antes de abrir; si no hay
+horario capturado, de 1 a 5 de la mañana):
+
+1. Respalda la base.
+2. Baja la versión nueva, instala librerías y pone al día la base.
+3. Reinicia el servidor y revisa que responda.
+4. **Si algo falla, regresa sola a la versión anterior** (código y base), lo
+   avisa en la campana y no vuelve a intentar esa versión hasta que haya otra
+   más nueva o un administrador pida "Instalar ahora".
+
+En **Configuración → Actualizaciones** se ve la versión instalada, si hay una
+nueva (con la lista de cambios), el historial y el botón **"Instalar ahora"**
+(no espera al cierre; el sistema se reinicia alrededor de un minuto).
+
+Las pantallas abiertas en las cajas avisan "Hay una versión nueva del
+sistema" con un botón para recargar. Inicio, Vender, Turno, la tableta,
+Encargos, Conversaciones y Notificaciones se recargan solas si nadie las ha
+usado en 5 minutos (Vender nunca a media venta). Las demás esperan a que
+alguien presione "Recargar", para no perder algo capturado a medias.
+
+Para instalar en ese momento desde el servidor: doble clic en
+`C:\POS\instalador\actualizar.cmd` (pide permiso de administrador).
+Registro: `C:\ProgramData\Cuadra\actualizacion.log`.
+
+**Cuidado:** todo lo que se sube a `master` llega a la farmacia esa misma
+noche. Sube solo cambios terminados y con las pruebas pasando.
 
 ## Si algo falla
 

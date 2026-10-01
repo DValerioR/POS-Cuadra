@@ -18,6 +18,7 @@ function pantallaNotificaciones() {
     respaldo: null, // estado de /respaldos; se avisa si falló o está atrasado
     encargosPorPedir: 0,
     whatsappPendientes: 0, // clientes de WhatsApp que esperan a una persona
+    actualizacionFallo: false, // la última actualización automática falló
     conteos: {}, // producto_id -> lo que se escribió en "¿Cuántas hay?"
     rechazando: null, // id de la solicitud a la que se le escribe el motivo del rechazo
     respuesta: "",
@@ -36,7 +37,7 @@ function pantallaNotificaciones() {
       }
       setInterval(() => this.esAdmin && !this.ocupado && this.cargar(), 15000);
       document.addEventListener("solicitudes-pendientes", (ev) => {
-        if (ev.detail !== this.pendientes.length + this.avisos.length + (this.alertaRespaldo ? 1 : 0) + this.encargosPorPedir + this.whatsappPendientes && !this.ocupado) this.cargar();
+        if (ev.detail !== this.pendientes.length + this.avisos.length + (this.alertaRespaldo ? 1 : 0) + this.encargosPorPedir + this.whatsappPendientes + (this.actualizacionFallo ? 1 : 0) && !this.ocupado) this.cargar();
       });
       window.addEventListener("keydown", (ev) => {
         if (ev.key === "Escape" && this.rechazando) this.rechazando = null;
@@ -73,7 +74,9 @@ function pantallaNotificaciones() {
         ]);
         this.respaldo = respaldo;
         this.encargosPorPedir = encargosAbiertos.filter((e) => e.estado === "por_pedir").length;
-        this.whatsappPendientes = (await API.get("/notificaciones/pendientes")).whatsapp || 0;
+        const cuenta = await API.get("/notificaciones/pendientes");
+        this.whatsappPendientes = cuenta.whatsapp || 0;
+        this.actualizacionFallo = Boolean(cuenta.actualizacion);
         this.pendientes = pendientes;
         this.respondidas = hechas.filter((s) => s.estado !== "pendiente");
         this.avisos = avisos;
