@@ -43,8 +43,10 @@ const API = {
 function mensajeDeError(datos, estado) {
   if (datos && typeof datos.detail === "string") return datos.detail;
   if (datos && Array.isArray(datos.detail)) {
-    // Errores de validación (422): "campo: mensaje"
-    return datos.detail.map((e) => `${e.loc.slice(1).join(".")}: ${e.msg}`).join("; ");
+    // Errores de validación (422): "campo: mensaje"; los mensajes propios
+    // (ValueError de los validadores) ya están escritos para la persona.
+    return datos.detail.map((e) => e.type === "value_error" ? e.msg.replace(/^Value error, /, "")
+      : `${e.loc.slice(1).join(".")}: ${e.msg}`).join("; ");
   }
   return `Error ${estado}`;
 }

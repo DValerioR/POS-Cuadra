@@ -43,6 +43,8 @@ def actualizar_negocio(datos: NegocioUpdate, usuario: Usuario = Depends(solo_adm
     negocio = db.get(Negocio, usuario.negocio_id)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(negocio, campo, valor)
+    if "horario" in datos.model_fields_set:  # JSON: las fechas van como texto
+        negocio.horario = datos.horario.model_dump(mode="json") if datos.horario else None
     try:
         db.commit()
     except IntegrityError:

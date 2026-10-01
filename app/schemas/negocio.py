@@ -1,8 +1,10 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.services.horario import DIAS
 
 # Regímenes fiscales del SAT que pueden aplicar a una farmacia.
 REGIMENES = {
@@ -17,6 +19,62 @@ REGIMENES = {
 }
 
 
+class Turno(BaseModel):
+    abre: str
+    cierra: str
+
+    @field_validator("abre", "cierra")
+    @classmethod
+    def _hora(cls, v):
+        v = v.strip()
+        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d|24:00", v):
+            raise ValueError("La hora va como 09:00 (24 horas)")
+        return v
+
+
+def _revisar_turnos(turnos: list[Turno], cuando: str) -> list[Turno]:
+    if len(turnos) > 2:
+        raise ValueError(f"{cuando}: máximo dos horarios por día")
+    for t in turnos:
+        if t.abre >= t.cierra:
+            raise ValueError(f"{cuando}: la hora de cerrar ({t.cierra}) debe ser después de la de abrir ({t.abre})")
+    if len(turnos) == 2:
+        primero, segundo = sorted(turnos, key=lambda t: t.abre)
+        if segundo.abre < primero.cierra:
+            raise ValueError(f"{cuando}: los dos horarios se enciman")
+        turnos = [primero, segundo]
+    return turnos
+
+
+class DiaEspecial(BaseModel):
+    fecha: date
+    turnos: list[Turno] = []  # [] = cerrado ese día
+    nota: str | None = Field(default=None, max_length=80)
+
+
+class Horario(BaseModel):
+    semana: dict[str, list[Turno]]
+    especiales: list[DiaEspecial] = []
+
+    @field_validator("semana")
+    @classmethod
+    def _semana(cls, v):
+        extras = set(v) - set(DIAS)
+        if extras:
+            raise ValueError(f"Día no reconocido: {', '.join(sorted(extras))}")
+        return {d: _revisar_turnos(v.get(d, []), d.capitalize()) for d in DIAS}
+
+    @field_validator("especiales")
+    @classmethod
+    def _especiales(cls, v):
+        fechas = [e.fecha for e in v]
+        if len(fechas) != len(set(fechas)):
+            raise ValueError("Hay un día especial repetido")
+        for e in v:
+            e.turnos = _revisar_turnos(e.turnos, e.fecha.strftime("%d/%m/%Y"))
+        return sorted(v, key=lambda e: e.fecha)
+
+
 class NegocioUpdate(BaseModel):
     nombre: str | None = Field(default=None, min_length=1, max_length=80)
     redondeo_precio_venta: Decimal | None = Field(default=None, gt=0)
@@ -27,6 +85,7 @@ class NegocioUpdate(BaseModel):
     rfc: str | None = None
     regimen_fiscal: str | None = None
     codigo_postal: str | None = None
+    horario: Horario | None = None
 
     @field_validator("nombre", "razon_social")
     @classmethod
@@ -78,4 +137,5 @@ class NegocioOut(BaseModel):
     rfc: str | None = None
     regimen_fiscal: str | None = None
     codigo_postal: str | None = None
+    horario: dict | None = None
     created_at: datetime

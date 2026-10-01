@@ -1510,3 +1510,24 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
   .barra nav.menus .menu-lista { position: static; min-width: 0; box-shadow: none; margin: 0 8px 8px; }
 }
 .barra.compacta .menu-titulo { padding: 0 10px; font-size: 16px; }
+
+/* Datos del negocio: horario de atención */
+.horario-semana { display: flex; flex-direction: column; gap: 6px; }
+.horario-dia {
+  display: grid; grid-template-columns: 110px 120px 1fr; align-items: center; gap: 12px;
+  padding: 8px 12px; border: 1px solid var(--borde); border-radius: var(--radio-chico);
+}
+.horario-dia.especial { grid-template-columns: 160px 120px 1fr auto; margin-bottom: 6px; }
+.horario-dia.cerrado { background: var(--fondo); }
+.horario-dia.cerrado .nombre-dia { color: var(--texto-suave); }
+.horario-dia .casilla { margin: 0; }
+.horario-dia .turnos { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.horario-dia .turno { display: inline-flex; align-items: center; gap: 6px; }
+.horario-dia input[type="time"] { width: auto; }
+.horario-dia .turnos > input { flex: 1 1 160px; }
+.horario-dia button.enlace, .horario-dia button.texto-peligro { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .horario-dia, .horario-dia.especial { grid-template-columns: 1fr auto; }
+  .horario-dia .turnos { grid-column: 1 / -1; }
+}
+.horario-dia button.enlace { background: none; border: 0; padding: 4px 0; color: var(--primario); font-weight: 600; min-height: 0; }

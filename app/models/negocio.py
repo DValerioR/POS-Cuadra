@@ -2,6 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, LargeBinary, Numeric, false, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -41,4 +42,7 @@ class Negocio(Base):
     ticket_pie: Mapped[str | None] = mapped_column(default=None)
     # Imprimir el logo de la farmacia centrado arriba del ticket.
     ticket_logo: Mapped[bool] = mapped_column(default=False, server_default=false())
+    # Horario de atención por día de la semana y días especiales; ver
+    # services/horario.py. None = aún no se captura.
+    horario: Mapped[dict | None] = mapped_column(JSONB, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
