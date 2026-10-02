@@ -78,18 +78,32 @@ def _raster(huella: str, datos: bytes, ancho_papel: int, ancho_logo: int, alinea
     return bytes_renglon, alto, bytes(bits)
 
 
+# Tamaño máximo del logo en el ticket, en puntos. Chico a propósito: un logo
+# grande alarga cada ticket y gasta papel.
+ALTO_MAXIMO_LOGO = 112
+
+
+def _medidas(datos: bytes, columnas: int) -> tuple[int, int]:
+    """(ancho del papel, ancho del logo) en puntos. 48 columnas = papel de
+    80 mm (576 puntos, Epson); 42 = 80 mm en la Bixolon, que imprime a 180 dpi
+    (512 puntos); 32 = 58 mm (384 puntos). El logo se achica si con ese ancho
+    quedaría más alto que ALTO_MAXIMO_LOGO."""
+    ancho_papel = 576 if columnas >= 45 else 512 if columnas >= 38 else 384
+    ancho_logo = 144 if ancho_papel == 384 else 192
+    ancho, alto = Image.open(BytesIO(datos)).size
+    return ancho_papel, max(1, min(ancho_logo, ALTO_MAXIMO_LOGO * ancho // alto))
+
+
 def raster_para_ticket(datos: bytes, columnas: int, alineacion: str = "centro") -> tuple[int, int, bytes]:
-    """(bytes por renglón, alto en puntos, bits) del logo para ESC/POS.
-    48 columnas = papel de 80 mm (576 puntos); 32 = 58 mm (384 puntos)."""
-    ancho_papel = 576 if columnas >= 42 else 384
-    ancho_logo = 240 if ancho_papel == 576 else 180
+    """(bytes por renglón, alto en puntos, bits) del logo para ESC/POS."""
+    ancho_papel, ancho_logo = _medidas(datos, columnas)
     return _raster(sha256(datos).hexdigest(), datos, ancho_papel, ancho_logo, alineacion)
 
 
 def vista_previa_png(datos: bytes, columnas: int = 48) -> bytes:
     """El logo tal como sale en el ticket (los mismos puntos), en PNG."""
     bytes_renglon, alto, bits = raster_para_ticket(datos, columnas, alineacion="izquierda")
-    ancho_logo = 240 if columnas >= 42 else 180
+    ancho_logo = _medidas(datos, columnas)[1]
     imagen = Image.frombytes("1", (bytes_renglon * 8, alto), bytes(b ^ 0xFF for b in bits)).crop((0, 0, ancho_logo, alto))
     salida = BytesIO()
     imagen.save(salida, "PNG")

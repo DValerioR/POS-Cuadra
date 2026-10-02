@@ -38,13 +38,12 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
 
     if datos.logo:
         t.imagen(*datos.logo)
-    t.linea(datos.negocio, "centro", negrita=True, doble=True)
+    t.linea(datos.negocio, "centro", negrita=True)
     for renglon in (datos.encabezado or "").splitlines():
         t.linea(renglon.strip(), "centro")
     t.separador()
     t.columnas_izq_der(f"Folio: {venta.folio}", fecha.strftime("%d/%m/%Y %H:%M"))
-    t.linea(f"Caja: {datos.caja}")
-    t.linea(f"Atendió: {datos.cajero}")
+    t.izq_der_o_dos_renglones(f"Caja: {datos.caja}", f"Atendió: {datos.cajero}")
     if reimpresion:
         t.linea("REIMPRESIÓN", "centro", negrita=True)
     if venta.cambio_origen is not None:
@@ -52,8 +51,11 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
     t.separador()
 
     for r in venta.renglones:
-        t.linea(r.nombre)
-        t.columnas_izq_der(f"  {_cantidad(r.cantidad)} x {_dinero(r.precio_unitario)}", _dinero(r.importe + r.descuento))
+        if r.cantidad == 1:  # una pieza: nombre e importe en el mismo renglón
+            t.columnas_izq_der(r.nombre, _dinero(r.importe + r.descuento))
+        else:
+            t.linea(r.nombre)
+            t.columnas_izq_der(f"  {_cantidad(r.cantidad)} x {_dinero(r.precio_unitario)}", _dinero(r.importe + r.descuento))
         if r.descuento:
             t.columnas_izq_der(f"  {r.oferta_texto or 'Oferta'}", f"-{_dinero(r.descuento)}")
         for asignacion in r.lotes:
@@ -70,20 +72,16 @@ def armar_ticket(venta: Venta, datos: DatosTicket, abrir_cajon: bool = False, re
             t.linea("  " + "  ".join(partes))
     t.separador()
 
-    t.columnas_izq_der("Subtotal", _dinero(venta.subtotal))
-    if venta.ieps:
-        t.columnas_izq_der("IEPS", _dinero(venta.ieps))
-    t.columnas_izq_der("IVA", _dinero(venta.iva))
+    impuestos = ([f"IEPS {_dinero(venta.ieps)}"] if venta.ieps else []) + [f"IVA {_dinero(venta.iva)}"]
+    t.izq_der_o_dos_renglones(f"Subtotal {_dinero(venta.subtotal)}", "  ".join(impuestos))
     t.columnas_izq_der("TOTAL", _dinero(venta.total), negrita=True)
     ahorro = sum((r.descuento for r in venta.renglones), Decimal(0))
     if ahorro:
         t.columnas_izq_der("Usted ahorró", _dinero(ahorro), negrita=True)
-    t.separador()
 
     for pago in venta.pagos:
         if pago.metodo == MetodoPago.EFECTIVO:
-            t.columnas_izq_der("Efectivo", _dinero(pago.recibido))
-            t.columnas_izq_der("Cambio", _dinero(pago.cambio))
+            t.izq_der_o_dos_renglones(f"Efectivo {_dinero(pago.recibido)}", f"Cambio {_dinero(pago.cambio)}")
         elif pago.metodo == MetodoPago.SALDO_A_FAVOR:
             t.columnas_izq_der("Saldo por producto devuelto", _dinero(pago.monto))
         else:

@@ -16,7 +16,10 @@ ESC, GS = b"\x1b", b"\x1d"
 INICIALIZAR = ESC + b"@"
 # Tabla de caracteres PC850 (acentos y Ñ); en ambas impresoras es la 2.
 TABLA_PC850 = ESC + b"t\x02"
-CORTE_PARCIAL = GS + b"V\x42\x00"  # avanza el papel y corta
+# Interlineado más cerrado que el de fábrica (30) para que el ticket salga más
+# corto; la fuente normal mide 24 puntos de alto, así que no se encima.
+INTERLINEADO = ESC + b"3\x1a"
+CORTE_PARCIAL = GS + b"V\x42\x00"  # avanza el papel hasta la cuchilla y corta
 # Pulso al conector del cajón (pin 2): 25×2 ms encendido, 250×2 ms apagado.
 PULSO_CAJON = ESC + b"p\x00\x19\xfa"
 
@@ -25,9 +28,9 @@ _ALINEACION = {"izquierda": 0, "centro": 1, "derecha": 2}
 
 class Ticket:
     def __init__(self, columnas: int = 48):
-        # 48 columnas = papel de 80 mm con la fuente normal.
+        # Con la fuente normal: 48 columnas = 80 mm (Epson), 42 = 80 mm (Bixolon), 32 = 58 mm.
         self.columnas = columnas
-        self._bytes = bytearray(INICIALIZAR + TABLA_PC850)
+        self._bytes = bytearray(INICIALIZAR + TABLA_PC850 + INTERLINEADO)
         self._texto: list[str] = []
 
     # --- Texto ------------------------------------------------------------
@@ -70,9 +73,15 @@ class Ticket:
         punto, 1 = negro, `bytes_renglon` bytes por renglón."""
         self._bytes += ESC + b"a\x00" + GS + b"v0\x00" + bytes([
             bytes_renglon % 256, bytes_renglon // 256, alto % 256, alto // 256,
-        ]) + bits + b"\n"
+        ]) + bits
         self._texto.append("[logo]".center(self.columnas).rstrip())
         return self
+
+    def izq_der_o_dos_renglones(self, izquierda: str, derecha: str, negrita: bool = False) -> "Ticket":
+        """Dos datos en el mismo renglón (uno a cada lado) si caben; si no, uno abajo del otro."""
+        if len(izquierda) + len(derecha) + 2 <= self.columnas:
+            return self.columnas_izq_der(izquierda, derecha, negrita)
+        return self.linea(izquierda, negrita=negrita).linea(derecha, negrita=negrita)
 
     def separador(self, caracter: str = "-") -> "Ticket":
         self._escribir(caracter * self.columnas)
@@ -81,7 +90,8 @@ class Ticket:
     # --- Control ----------------------------------------------------------
 
     def cortar(self) -> "Ticket":
-        self._bytes += b"\n" * 4 + CORTE_PARCIAL
+        # El corte ya avanza el papel hasta la cuchilla: no hacen falta renglones en blanco.
+        self._bytes += CORTE_PARCIAL
         return self
 
     def abrir_cajon(self) -> "Ticket":

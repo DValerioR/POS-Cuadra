@@ -34,10 +34,11 @@ def test_fondo_transparente():
 
 def test_raster_centrado():
     bytes_renglon, alto, bits = raster_para_ticket(logo_de_prueba(), 48)
-    assert bytes_renglon == 72 and alto == 160 and len(bits) == 72 * 160  # 576 puntos; logo de 240 × 160
-    renglon = bits[80 * 72:81 * 72]  # a media altura: la barra naranja sale en negro, al centro
+    assert bytes_renglon == 72 and alto == 112 and len(bits) == 72 * 112  # 576 puntos; logo de 168 × 112 (alto máximo)
+    renglon = bits[56 * 72:57 * 72]  # a media altura: la barra naranja sale en negro, al centro
     assert not any(renglon[:15]) and not any(renglon[-15:]) and any(renglon[30:42])
     assert raster_para_ticket(logo_de_prueba(), 32)[0] == 48  # papel de 58 mm
+    assert raster_para_ticket(logo_de_prueba(), 42)[0] == 64  # 80 mm en la Bixolon (512 puntos)
 
 
 def test_logo_al_subir_y_en_el_ticket(como_admin, db, negocio, caja, shampoo, impresora_red):
