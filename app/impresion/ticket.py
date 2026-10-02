@@ -19,7 +19,7 @@ class DatosTicket:
     pie: str | None  # "Gracias por su compra", políticas...
     caja: str
     cajero: str
-    columnas: int = 48
+    columnas: int = 42
     logo: tuple[int, int, bytes] | None = None  # ver impresion/logo.py
 
 

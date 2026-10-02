@@ -30,8 +30,9 @@ class Caja(Base):
     impresora_direccion: Mapped[str | None] = mapped_column(default=None)
     # Token compartido con el agente (solo modo AGENTE). Nunca se regresa por la API.
     impresora_token: Mapped[str | None] = mapped_column(default=None)
-    # 48 = papel de 80 mm con fuente normal; 32 = papel de 58 mm.
-    impresora_columnas: Mapped[int] = mapped_column(default=48, server_default="48")
+    # 42 = papel de 80 mm con fuente normal (cabe en todas, también en la
+    # Bixolon a 180 dpi); 32 = papel de 58 mm.
+    impresora_columnas: Mapped[int] = mapped_column(default=42, server_default="42")
     # Terminal Mercado Pago Point de esta caja (su id en Mercado Pago). Sin
     # ella, el pago con tarjeta se registra a mano.
     terminal_mp: Mapped[str | None] = mapped_column(default=None)

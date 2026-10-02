@@ -84,10 +84,10 @@ ALTO_MAXIMO_LOGO = 112
 
 
 def _medidas(datos: bytes, columnas: int) -> tuple[int, int]:
-    """(ancho del papel, ancho del logo) en puntos. 48 columnas = papel de
-    80 mm (576 puntos, Epson); 42 = 80 mm en la Bixolon, que imprime a 180 dpi
-    (512 puntos); 32 = 58 mm (384 puntos). El logo se achica si con ese ancho
-    quedaría más alto que ALTO_MAXIMO_LOGO."""
+    """(ancho del papel, ancho del logo) en puntos. 42 columnas = papel de
+    80 mm (512 puntos: lo que imprime la Bixolon a 180 dpi, y cabe en las de
+    576); 32 = 58 mm (384 puntos); 48, solo si se configura a mano, 576. El
+    logo se achica si con ese ancho quedaría más alto que ALTO_MAXIMO_LOGO."""
     ancho_papel = 576 if columnas >= 45 else 512 if columnas >= 38 else 384
     ancho_logo = 144 if ancho_papel == 384 else 192
     ancho, alto = Image.open(BytesIO(datos)).size
@@ -100,7 +100,7 @@ def raster_para_ticket(datos: bytes, columnas: int, alineacion: str = "centro") 
     return _raster(sha256(datos).hexdigest(), datos, ancho_papel, ancho_logo, alineacion)
 
 
-def vista_previa_png(datos: bytes, columnas: int = 48) -> bytes:
+def vista_previa_png(datos: bytes, columnas: int = 42) -> bytes:
     """El logo tal como sale en el ticket (los mismos puntos), en PNG."""
     bytes_renglon, alto, bits = raster_para_ticket(datos, columnas, alineacion="izquierda")
     ancho_logo = _medidas(datos, columnas)[1]

@@ -27,8 +27,9 @@ _ALINEACION = {"izquierda": 0, "centro": 1, "derecha": 2}
 
 
 class Ticket:
-    def __init__(self, columnas: int = 48):
-        # Con la fuente normal: 48 columnas = 80 mm (Epson), 42 = 80 mm (Bixolon), 32 = 58 mm.
+    def __init__(self, columnas: int = 42):
+        # Con la fuente normal: 42 columnas = 80 mm (caben en cualquier
+        # impresora, también en la Bixolon a 180 dpi); 32 = 58 mm.
         self.columnas = columnas
         self._bytes = bytearray(INICIALIZAR + TABLA_PC850 + INTERLINEADO)
         self._texto: list[str] = []

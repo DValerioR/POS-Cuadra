@@ -23,8 +23,7 @@
 
     // Papel de la impresora -> letras por renglón (columnas del ticket).
     const PAPELES = [
-      { columnas: 48, texto: "80 mm" },
-      { columnas: 42, texto: "80 mm · Bixolon" },
+      { columnas: 42, texto: "80 mm" },
       { columnas: 32, texto: "58 mm" },
     ];
 
@@ -101,7 +100,7 @@
         },
         // Columnas guardadas -> la opción de papel más cercana.
         columnasDe(c) {
-          return c.impresora_columnas >= 45 ? 48 : c.impresora_columnas >= 38 ? 42 : 32;
+          return c.impresora_columnas >= 38 ? 42 : 32;
         },
         cerrar() {
           this.c = null;
@@ -286,7 +285,6 @@
                     <button type="button" :class="{ activo: c.columnas === p.columnas }" @click="c.columnas = p.columnas" x-text="p.texto"></button>
                   </template>
                 </div>
-                <p class="ayuda" style="margin: 4px 0 0">La Bixolon SRP-330II usa papel de 80 mm, pero le caben menos letras por renglón.</p>
               </div>
             </div>
 
