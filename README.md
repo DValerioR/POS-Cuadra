@@ -279,6 +279,23 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - Sin clave, la lectura de facturas con IA queda desactivada; lo demás funciona.
 - El servidor de demostración usa su propio `.env` temporal, nunca el real.
 
+### Usos y topes del plan (IA y facturas)
+
+- Tabla `usos_servicio`: un renglón por cada acción con IA que salió bien
+  (pregunta al asistente, factura de proveedor leída, foto de producto,
+  ofertas, sugerencias de pedido, respuesta o foto del bot de WhatsApp) y
+  por cada factura **real** timbrada (las de prueba no cuentan). Lógica en
+  `app/services/usos.py`: `revisar` antes de usar el servicio, `registrar`
+  solo si salió bien (se guarda con el commit de la misma operación).
+- Topes por mes de calendario en el `.env`: `TOPE_IA_MES` y
+  `TOPE_FACTURAS_MES` (vacío = sin tope). Los pone quien instala, no se
+  cambian desde el programa. Al llegar al tope, esa función responde 409 con
+  un mensaje que dice cuándo se renueva; vender y lo demás sigue igual. El
+  bot de WhatsApp pasa la conversación a una persona.
+- `GET /usos` (solo admin) — lo usado contra el tope de cada servicio, con
+  estado `sin_tope`, `bien`, `por_acabarse` (desde 80 %) o `agotado`. Se ve
+  en inicio → Configuración → Asistente de IA.
+
 ### Avisos de inventario (ventas sin existencia registrada)
 
 - Si se vende más de lo que el sistema tiene, la venta no se detiene: lo

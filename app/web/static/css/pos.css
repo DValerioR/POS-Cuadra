@@ -1389,6 +1389,9 @@ code.comando { display: block; margin-top: 6px; font-size: 13px; word-break: bre
 .barra-h { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin-bottom: 10px; font-size: 15px; }
 .barra-h .relleno { grid-column: 1 / -1; height: 8px; background: var(--fondo); border-radius: 999px; overflow: hidden; }
 .barra-h .relleno div { height: 100%; background: var(--primario); border-radius: 999px; }
+.barra-h .relleno div.por_acabarse { background: var(--aviso); }
+.barra-h .relleno div.agotado { background: var(--peligro); }
+.uso-mes h3 { margin: 0 0 10px; font-size: 17px; }
 @media (max-width: 900px) {
   .rejilla-ventas { grid-template-columns: 1fr; }
   .cifras-ventas { grid-template-columns: repeat(2, minmax(0, 1fr)); }

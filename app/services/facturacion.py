@@ -24,8 +24,9 @@ from app.core.config import settings
 from app.facturacion import catalogos
 from app.facturacion.pac import Concepto, FacturaDatos, es_de_prueba, obtener_pac, totales_xml
 from app.models import (
-    ClienteFiscal, Devolucion, EstadoVenta, Factura, MetodoPago, Negocio, Producto, RolUsuario, Usuario, Venta,
+    ClienteFiscal, Devolucion, EstadoVenta, Factura, MetodoPago, Negocio, Producto, RolUsuario, TipoUso, Usuario, Venta,
 )
+from app.services import usos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 ROLES = {RolUsuario.ADMIN, RolUsuario.MOSTRADOR}
@@ -176,7 +177,13 @@ def facturar(db: Session, usuario: Usuario, folio: int, rfc: str, nombre: str, c
         subtotal=venta.subtotal, iva=venta.iva, ieps=venta.ieps, total=venta.total,
     )
     pac = obtener_pac()
+    # Las de prueba no cuestan; solo las reales cuentan contra el tope del plan.
+    real = not es_de_prueba(pac.nombre)
+    if real:
+        usos.revisar(db, usuario.negocio_id, TipoUso.FACTURA)
     timbrado = pac.timbrar(datos)
+    if real:
+        usos.registrar(db, usuario.negocio_id, TipoUso.FACTURA, "factura")
     # Los importes como quedaron timbrados (el PAC real puede redondear algún centavo distinto).
     totales = ({"subtotal": venta.subtotal, "iva": venta.iva, "ieps": venta.ieps, "total": venta.total}
                if pac.nombre == "simulado" else totales_xml(timbrado.xml))

@@ -29,8 +29,8 @@ from sqlalchemy.orm import Session
 
 from app.asistente.consultas import hoy
 from app.core.config import settings
-from app.models import Categoria, EstadoVenta, Lote, Negocio, Producto, Venta
-from app.services import configuracion_ia
+from app.models import Categoria, EstadoVenta, Lote, Negocio, Producto, TipoUso, Venta
+from app.services import configuracion_ia, usos
 from app.services.errores import OperacionInvalida
 from app.services.precios import redondear_precio_venta
 from app.services.sugerencias_pedido import SEMANAS, ventas_por_semana
@@ -327,6 +327,7 @@ def recomendar(db: Session, negocio_id: int) -> dict:
     enviados = datos["candidatos"][:MAXIMO_A_LA_IA]
     ofertas = []
     if enviados:
+        usos.revisar(db, negocio_id, TipoUso.IA)
         cliente = configuracion_ia.cliente()
         try:
             texto = _llamar(cliente, f"Hoy es {hoy():%d/%m/%Y}. Candidatos a oferta:\n" + _tabla(enviados))
@@ -338,6 +339,7 @@ def recomendar(db: Session, negocio_id: int) -> dict:
             raise OperacionInvalida("No hay conexión con la API de Claude; revisa el internet del servidor")
         except anthropic.APIStatusError as e:
             raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
+        usos.registrar(db, negocio_id, TipoUso.IA, "ofertas")
         paso = db.get(Negocio, negocio_id).redondeo_precio_venta
         ofertas = interpretar(texto, enviados, paso)
     por_id = {c["producto_id"]: c for c in enviados}

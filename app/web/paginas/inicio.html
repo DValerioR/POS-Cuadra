@@ -146,6 +146,25 @@
           <span x-text="ia.configurada ? `Clave guardada (termina en …${ia.termina_en}).` : 'Todavía no hay clave: la lectura con IA está desactivada. El XML y la captura manual funcionan igual.'"></span>
         </div>
       </template>
+      <template x-if="usosMes">
+        <div class="uso-mes">
+          <h3>Uso de este mes</h3>
+          <template x-for="s in [{ clave: 'ia', nombre: 'Usos de IA' }, { clave: 'factura', nombre: 'Facturas reales' }]" :key="s.clave">
+            <div class="barra-h">
+              <span x-text="s.nombre"></span>
+              <strong x-text="usosMes[s.clave].tope === null ? `${usosMes[s.clave].usados} (sin tope)` : `${usosMes[s.clave].usados} de ${usosMes[s.clave].tope}`"></strong>
+              <div class="relleno" x-show="usosMes[s.clave].tope !== null">
+                <div :class="usosMes[s.clave].estado" :style="`width: ${usosMes[s.clave].porcentaje || 0}%`"></div>
+              </div>
+            </div>
+          </template>
+          <div class="mensaje aviso" x-show="['ia', 'factura'].some((k) => ['por_acabarse', 'agotado'].includes(usosMes[k].estado))">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+            <span x-text="['ia', 'factura'].some((k) => usosMes[k].estado === 'agotado') ? 'Ya se acabó lo de este mes en tu plan. Vender y lo demás funciona igual. Si necesitas más, pide a tu proveedor de Cuadra que amplíe tu plan.' : 'Ya casi se acaba lo de este mes en tu plan.'"></span>
+          </div>
+          <p class="ayuda" x-text="`Se renueva el ${usosMes.renueva_texto}. Cada pregunta al asistente, factura de proveedor o foto leída, sugerencia y respuesta del bot cuenta como un uso de IA.`"></p>
+        </div>
+      </template>
       <label for="clave-ia" style="margin-top: 0" x-text="ia && ia.configurada ? 'Cambiar por otra clave' : 'Clave de la API de Claude'"></label>
       <input id="clave-ia" type="password" x-model="claveIa" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
       <p class="ayuda">Se saca en console.anthropic.com (API Keys). Se cobra por uso: unos centavos por factura. El servidor necesita internet para usarla. Se guarda en el archivo .env del servidor y no se vuelve a mostrar.</p>

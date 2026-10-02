@@ -37,7 +37,9 @@ def reporte_excel(proveedor_id: int, sugerencias: bool = False, usuario: Usuario
         r = faltantes.reporte(db, usuario, proveedor_id)
         ia = sugerencias_pedido.sugerir(db, usuario.negocio_id, r["del_proveedor"] + r["sin_proveedor"]) if sugerencias else None
     except ERRORES_NEGOCIO as e:
+        db.rollback()
         raise a_http(e)
+    db.commit()  # el uso de IA de las sugerencias
     extra = ["Sugerencia del asistente", "Motivo"] if ia is not None else []
 
     def columnas_ia(x):

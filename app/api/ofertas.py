@@ -35,9 +35,12 @@ def recomendar(usuario: Usuario = Depends(solo_admin), db: Session = Depends(get
     """Ofertas que propone el asistente para los candidatos más urgentes, ya
     revisadas por el código. Solo recomienda: no cambia ningún precio."""
     try:
-        return _exacto(ofertas.recomendar(db, usuario.negocio_id))
+        resultado = ofertas.recomendar(db, usuario.negocio_id)
     except ERRORES_NEGOCIO as e:
+        db.rollback()
         raise a_http(e)
+    db.commit()
+    return _exacto(resultado)
 
 
 def _texto_oferta(o: dict) -> str:

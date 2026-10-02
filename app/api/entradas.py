@@ -12,8 +12,8 @@ from app.core.auth import usuario_actual
 from app.core.database import get_db
 from app.importador import ia_facturas
 from app.importador.cfdi import XmlInvalido, leer_cfdi
-from app.models import ArchivoFactura, Entrada, Pedido, PedidoEntrada, Producto, Proveedor, Usuario
-from app.services import entradas, pedidos
+from app.models import ArchivoFactura, Entrada, Pedido, PedidoEntrada, Producto, Proveedor, TipoUso, Usuario
+from app.services import entradas, pedidos, usos
 from app.services.errores import ERRORES_NEGOCIO, NoEncontrado, OperacionInvalida, a_http
 
 router = APIRouter(tags=["entradas de mercancía"])
@@ -96,7 +96,9 @@ async def leer_con_ia(request: Request, usuario: Usuario = Depends(usuario_actua
         archivo = await _archivo(request, usuario, db)
         if archivo.tipo == "application/xml":
             raise OperacionInvalida("Es un XML: usa \"Subir XML\", que lo lee exacto y sin costo")
+        usos.revisar(db, usuario.negocio_id, TipoUso.IA)
         leida = await run_in_threadpool(ia_facturas.leer_con_ia, archivo.datos, archivo.tipo)
+        usos.registrar(db, usuario.negocio_id, TipoUso.IA, "lectura_factura")
         resultado = entradas.borrador(db, usuario, leida, archivo)
     except ERRORES_NEGOCIO as e:
         db.rollback()

@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     whatsapp_app_secret: str | None = None
     whatsapp_avisos_a: str | None = None
     whatsapp_bot_activo: bool = True
+    # Topes del plan de Cuadra por mes (ver services/usos.py): cuántas
+    # acciones con IA y cuántas facturas reales se pueden hacer. Vacío = sin
+    # tope. Los pone quien instala; no se cambian desde el programa.
+    tope_ia_mes: int | None = None
+    tope_facturas_mes: int | None = None
 
 
 settings = Settings()

@@ -32,6 +32,8 @@ function pantallaInicio() {
     // Asistente de IA: la clave nunca se muestra completa.
     ia: null, // {configurada, termina_en, modelo}
     claveIa: "",
+    // Lo usado este mes de IA y facturas contra los topes del plan.
+    usosMes: null,
     pruebaIa: null, // {ok, mensaje}
     ocupadoIa: false,
     archivo: null,
@@ -133,6 +135,8 @@ function pantallaInicio() {
         this.error = "";
         this.ventana = "ia";
         API.get("/ia/estado").then((e) => (this.ia = e)).catch((e) => (this.error = e.message));
+        this.usosMes = null;
+        API.get("/usos").then((u) => (this.usosMes = u)).catch(() => {});
       } else if (s.accion === "imagen") {
         this.archivo = null;
         this.vistaPrevia = null;

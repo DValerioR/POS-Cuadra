@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
-from app.models import Categoria, Negocio, PrecioHistorial, Producto, Usuario
+from app.models import Categoria, Negocio, PrecioHistorial, Producto, TipoUso, Usuario
 from app.schemas.producto import ProductoCreate, ProductoOut, ProductoUpdate
-from app.services import buscador, catalogo, entradas, revision_catalogo
+from app.services import buscador, catalogo, entradas, revision_catalogo, usos
 from app.services.errores import ERRORES_NEGOCIO, a_http
 from app.services.precios import redondear_precio_venta
 
@@ -124,9 +124,12 @@ async def identificar_foto(request: Request, usuario: Usuario = Depends(usuario_
     catálogo lo que dice. El cuerpo es la imagen tal cual. Solo sugiere."""
     datos = await request.body()
     try:
+        usos.revisar(db, usuario.negocio_id, TipoUso.IA)
         lectura = buscador.leer_foto(datos, entradas.tipo_de_archivo(datos))
     except ERRORES_NEGOCIO as e:
         raise a_http(e)
+    usos.registrar(db, usuario.negocio_id, TipoUso.IA, "foto_producto")
+    db.commit()
     candidatos = _sugeridos(db, buscador.buscar_lectura(db, usuario.negocio_id, lectura))
     mensaje = MENSAJES_FOTO.get(lectura.tipo)
     if mensaje is None and lectura.medicamentos and not candidatos:

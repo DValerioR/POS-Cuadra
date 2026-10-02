@@ -22,8 +22,8 @@ from sqlalchemy.orm import Session
 from app.asistente.consultas import CONSULTAS, ConsultaInvalida
 from app.asistente.herramientas import HERRAMIENTAS
 from app.core.config import settings
-from app.models import ConversacionAsistente, MensajeAsistente, Negocio, RolUsuario, Usuario
-from app.services import configuracion_ia
+from app.models import ConversacionAsistente, MensajeAsistente, Negocio, RolUsuario, TipoUso, Usuario
+from app.services import configuracion_ia, usos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 
 MAX_VUELTAS = 8  # consultas encadenadas por pregunta
@@ -102,6 +102,7 @@ def preguntar(db: Session, usuario: Usuario, texto: str, conversacion_id: int | 
         raise OperacionInvalida("Escribe tu pregunta")
     if len(texto) > 4000:
         raise OperacionInvalida("La pregunta es muy larga")
+    usos.revisar(db, usuario.negocio_id, TipoUso.IA)
     cliente = configuracion_ia.cliente()
 
     if conversacion_id is None:
@@ -164,6 +165,7 @@ def preguntar(db: Session, usuario: Usuario, texto: str, conversacion_id: int | 
 
     db.add_all(nuevos)
     conversacion.updated_at = func.now()
+    usos.registrar(db, usuario.negocio_id, TipoUso.IA, "asistente")
     db.flush()
     return {"conversacion_id": conversacion.id, "respuesta": respuesta_texto or "(sin respuesta)", "consultas": usadas}
 

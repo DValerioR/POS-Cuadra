@@ -21,8 +21,8 @@ from sqlalchemy.orm import Session
 
 from app.asistente.consultas import _zona, hoy
 from app.core.config import settings
-from app.models import EstadoVenta, Venta, VentaRenglon
-from app.services import configuracion_ia
+from app.models import EstadoVenta, TipoUso, Venta, VentaRenglon
+from app.services import configuracion_ia, usos
 from app.services.errores import OperacionInvalida
 
 SEMANAS = 12
@@ -140,6 +140,7 @@ def sugerir(db: Session, negocio_id: int, renglones: list[dict]) -> dict[int, di
     """{producto_id: {cantidad, motivo}} para los renglones del reporte."""
     if not renglones:
         return {}
+    usos.revisar(db, negocio_id, TipoUso.IA)
     _, ventas = ventas_por_semana(db, negocio_id, {r["producto_id"] for r in renglones})
     cliente = configuracion_ia.cliente()
     resultado: dict[int, dict] = {}
@@ -156,4 +157,5 @@ def sugerir(db: Session, negocio_id: int, renglones: list[dict]) -> dict[int, di
         except anthropic.APIStatusError as e:
             raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
         resultado.update(interpretar(texto, parte, ventas))
+    usos.registrar(db, negocio_id, TipoUso.IA, "sugerencias_pedido")
     return resultado

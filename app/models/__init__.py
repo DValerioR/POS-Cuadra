@@ -21,6 +21,7 @@ from app.models.oferta import Oferta
 from app.models.cobro_terminal import CobroTerminal
 from app.models.encargo import Encargo, EstadoEncargo
 from app.models.whatsapp import ConversacionWhatsApp, EstadoConversacion, MensajeWhatsApp
+from app.models.uso_servicio import TipoUso, UsoServicio
 
 __all__ = [
     "Negocio",
@@ -72,4 +73,6 @@ __all__ = [
     "ConversacionWhatsApp",
     "EstadoConversacion",
     "MensajeWhatsApp",
+    "TipoUso",
+    "UsoServicio",
 ]

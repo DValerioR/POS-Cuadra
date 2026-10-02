@@ -36,8 +36,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models import (ConversacionWhatsApp, EstadoConversacion, MensajeWhatsApp, Negocio, Producto, RolUsuario,
-                        Usuario)
-from app.services import buscador, configuracion_ia, encargos, horario, inventario, ofertas_venta
+                        TipoUso, Usuario)
+from app.services import buscador, configuracion_ia, encargos, horario, inventario, ofertas_venta, usos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
 from app.whatsapp import cliente as whatsapp
 
@@ -300,7 +300,8 @@ def _correr(db: Session, conversacion: ConversacionWhatsApp, nombre: str, entrad
 
 def responder_con_ia(db: Session, conversacion: ConversacionWhatsApp) -> str:
     """La respuesta del bot al último mensaje del cliente. Lanza
-    OperacionInvalida si la IA no está disponible."""
+    OperacionInvalida si la IA no está disponible o se acabaron los usos del mes."""
+    usos.revisar(db, conversacion.negocio_id, TipoUso.IA)
     cliente = configuracion_ia.cliente()
     n = db.get(Negocio, conversacion.negocio_id)
     mensajes = _historia(conversacion)
@@ -351,9 +352,11 @@ def _conversacion(db: Session, negocio_id: int, telefono: str, nombre: str | Non
 
 def _resumen_foto(db: Session, negocio_id: int, datos: bytes, tipo: str | None) -> str:
     try:
+        usos.revisar(db, negocio_id, TipoUso.IA)
         lectura = buscador.leer_foto(datos, tipo)
     except (OperacionInvalida, NoEncontrado) as e:
         return f"El cliente envió una foto, pero no se pudo leer: {e}"
+    usos.registrar(db, negocio_id, TipoUso.IA, "foto_whatsapp")
     if lectura.tipo == "pastilla_suelta":
         return "El cliente envió una foto de una pastilla o cápsula suelta; no se identifica por su forma o color (pídale foto de la caja o la receta)"
     if lectura.tipo in ("ilegible", "otra_cosa") or not lectura.medicamentos:
@@ -411,8 +414,12 @@ def recibir(db: Session, negocio_id: int, telefono: str, nombre: str | None, tex
         log.warning("El bot no pudo responder: %s", e)
         db.rollback()
         c = db.get(ConversacionWhatsApp, c.id)
-        pasar_a_persona(db, c, "El bot no pudo responder (falla de la IA)")
+        motivo = ("Se acabaron los usos de IA del mes" if usos.agotado(db, c.negocio_id, TipoUso.IA)
+                  else "El bot no pudo responder (falla de la IA)")
+        pasar_a_persona(db, c, motivo)
         respuesta = MENSAJE_FALLA
+    else:
+        usos.registrar(db, c.negocio_id, TipoUso.IA, "bot_whatsapp")
     if respuesta:
         _enviar(db, c, respuesta, de="bot")
     if c.estado != EstadoConversacion.BOT:
