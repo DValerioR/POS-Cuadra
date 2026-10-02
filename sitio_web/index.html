@@ -154,6 +154,11 @@ section { padding-block: 84px; }
 .pronto { font: 600 0.95rem var(--mono); background: var(--aviso-suave); color: var(--aviso); padding: 8px 14px; border-radius: 999px; white-space: nowrap; }
 .planes-titulo { display: grid; gap: 4px; margin-bottom: 18px; }
 .planes-titulo p { color: var(--tinta-suave); }
+.periodos { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; margin-bottom: 26px; background: var(--fondo); border: 1px solid var(--linea); border-radius: 14px; }
+.periodo-boton { min-height: 46px; padding: 0 20px; border: 0; border-radius: 10px; background: transparent; color: var(--tinta-suave); font: 600 1rem var(--texto); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.periodo-boton[aria-pressed="true"] { background: var(--panel); color: var(--tinta); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.periodo-boton .descuento { font-size: 0.78rem; font-weight: 700; background: var(--verde-suave); color: var(--verde); padding: 2px 8px; border-radius: 999px; }
+.plan .ahorro { display: block; margin-top: -10px; font-size: 0.92rem; color: var(--verde); font-weight: 600; min-height: 1.4em; }
 .planes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 @media (max-width: 860px) { .planes { grid-template-columns: 1fr; } }
 .plan {
@@ -326,13 +331,18 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
       </div>
 
       <div class="planes-titulo">
-        <h3>Elige tu mensualidad</h3>
-        <p>Toca un plan para elegirlo. Puedes cambiarlo cuando quieras.</p>
+        <h3>Elige tu plan</h3>
+        <p>Toca un plan para elegirlo. Paga cada mes o una vez al año y llévate 2 meses gratis.</p>
       </div>
-      <div class="planes" role="group" aria-label="Planes de mensualidad">
-        <button type="button" class="plan" data-plan="Esencial" data-precio="249" aria-pressed="false">
+      <div class="periodos" role="group" aria-label="Forma de pago">
+        <button type="button" class="periodo-boton" data-periodo="mensual" aria-pressed="true">Pago mensual</button>
+        <button type="button" class="periodo-boton" data-periodo="anual" aria-pressed="false">Pago anual <span class="descuento">2 meses gratis</span></button>
+      </div>
+      <div class="planes" role="group" aria-label="Planes">
+        <button type="button" class="plan" data-plan="Esencial" data-mensual="249" aria-pressed="false">
           <span class="nombre">Esencial</span>
-          <span class="precio">$249 <small>MXN al mes</small></span>
+          <span class="precio"><span class="cifra">$249</span> <small class="periodo">MXN al mes</small></span>
+          <span class="ahorro"></span>
           <span class="para">Para un negocio con una caja que factura poco.</span>
           <ul>
             <li><span>Facturas al mes</span><b>50</b></li>
@@ -341,10 +351,11 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
           </ul>
           <span class="elegido">✓ Plan elegido</span>
         </button>
-        <button type="button" class="plan" data-plan="Negocio" data-precio="349" aria-pressed="true">
+        <button type="button" class="plan" data-plan="Negocio" data-mensual="349" aria-pressed="true">
           <span class="popular">El más elegido</span>
           <span class="nombre">Negocio</span>
-          <span class="precio">$349 <small>MXN al mes</small></span>
+          <span class="precio"><span class="cifra">$349</span> <small class="periodo">MXN al mes</small></span>
+          <span class="ahorro"></span>
           <span class="para">Para farmacias con varias cajas y clientes que piden factura.</span>
           <ul>
             <li><span>Facturas al mes</span><b>150</b></li>
@@ -353,9 +364,10 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
           </ul>
           <span class="elegido">✓ Plan elegido</span>
         </button>
-        <button type="button" class="plan" data-plan="Plus" data-precio="499" aria-pressed="false">
+        <button type="button" class="plan" data-plan="Plus" data-mensual="499" aria-pressed="false">
           <span class="nombre">Plus</span>
-          <span class="precio">$499 <small>MXN al mes</small></span>
+          <span class="precio"><span class="cifra">$499</span> <small class="periodo">MXN al mes</small></span>
+          <span class="ahorro"></span>
           <span class="para">Para negocios con mucho movimiento y muchas facturas.</span>
           <ul>
             <li><span>Facturas al mes</span><b>400</b></li>
@@ -367,10 +379,10 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
       </div>
 
       <div class="resumen">
-        <p id="resumen-texto">Elegiste <b>Negocio</b>: $349 MXN al mes, más la licencia.</p>
+        <p id="resumen-texto">Elegiste <b>Negocio</b> con pago mensual: $349 MXN al mes, más la licencia.</p>
         <a class="boton boton-principal" href="#contacto" id="resumen-boton">Pedir este plan</a>
       </div>
-      <p class="letra-chica">Un uso de IA es una pregunta al asistente o una factura de proveedor leída desde foto o PDF. Los XML de proveedor se leen sin gastar usos. Si un mes te pasas del tope, te avisamos antes de cobrar algo extra. Precios más IVA.</p>
+      <p class="letra-chica">Un uso de IA es una pregunta al asistente o una factura de proveedor leída desde foto o PDF. Los XML de proveedor se leen sin gastar usos. Si un mes te pasas del tope, te avisamos antes de cobrar algo extra. Con pago anual los topes siguen siendo por mes. Precios más IVA.</p>
     </div>
   </section>
 
@@ -429,13 +441,37 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
     correo: CONTACTO.correo === "contacto@ejemplo.com"
   };
 
-  var planElegido = { nombre: "Negocio", precio: "349" };
+  var planElegido = { nombre: "Negocio", mensual: 349 };
+  var periodo = "mensual";
+  var MESES_PAGADOS_AL_ANIO = 10; // pago anual = 12 meses por el precio de 10
+
+  function pesos(n) {
+    return "$" + n.toLocaleString("es-MX", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  }
+  function precioTexto(mensual) {
+    return periodo === "anual" ? pesos(mensual * MESES_PAGADOS_AL_ANIO) + " MXN al año" : pesos(mensual) + " MXN al mes";
+  }
+  function pintarPrecios() {
+    document.querySelectorAll(".plan").forEach(function (b) {
+      var m = Number(b.dataset.mensual);
+      var anual = periodo === "anual";
+      b.querySelector(".cifra").textContent = pesos(anual ? m * MESES_PAGADOS_AL_ANIO : m);
+      b.querySelector(".periodo").textContent = anual ? "MXN al año" : "MXN al mes";
+      b.querySelector(".ahorro").textContent = anual
+        ? "Ahorras " + pesos(m * (12 - MESES_PAGADOS_AL_ANIO)) + " · equivale a " + pesos(Math.round(m * MESES_PAGADOS_AL_ANIO / 12 * 100) / 100) + " al mes"
+        : "";
+    });
+    document.getElementById("resumen-texto").innerHTML =
+      "Elegiste <b>" + planElegido.nombre + "</b> con pago " + periodo + ": " + precioTexto(planElegido.mensual) + ", más la licencia.";
+    document.getElementById("resumen-boton").textContent = "Pedir el plan " + planElegido.nombre;
+    actualizarEnlaces();
+  }
 
   function textoWhatsapp(n) {
     return n.length === 12 ? "+" + n.slice(0, 2) + " " + n.slice(2, 5) + " " + n.slice(5, 8) + " " + n.slice(8) : "+" + n;
   }
   function mensajeContacto() {
-    return "Hola, me interesa Cuadra para mi negocio. Me gustaría el plan " + planElegido.nombre + " ($" + planElegido.precio + " al mes).";
+    return "Hola, me interesa Cuadra para mi negocio. Me gustaría el plan " + planElegido.nombre + " con pago " + periodo + " (" + precioTexto(planElegido.mensual) + ").";
   }
   function actualizarEnlaces() {
     document.getElementById("ir-whatsapp").href = "https://wa.me/" + CONTACTO.whatsapp + "?text=" + encodeURIComponent(mensajeContacto());
@@ -453,11 +489,17 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
     boton.addEventListener("click", function () {
       document.querySelectorAll(".plan").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
       boton.setAttribute("aria-pressed", "true");
-      planElegido = { nombre: boton.dataset.plan, precio: boton.dataset.precio };
-      document.getElementById("resumen-texto").innerHTML =
-        "Elegiste <b>" + planElegido.nombre + "</b>: $" + planElegido.precio + " MXN al mes, más la licencia.";
-      document.getElementById("resumen-boton").textContent = "Pedir el plan " + planElegido.nombre;
-      actualizarEnlaces();
+      planElegido = { nombre: boton.dataset.plan, mensual: Number(boton.dataset.mensual) };
+      pintarPrecios();
+    });
+  });
+
+  document.querySelectorAll(".periodo-boton").forEach(function (boton) {
+    boton.addEventListener("click", function () {
+      document.querySelectorAll(".periodo-boton").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+      boton.setAttribute("aria-pressed", "true");
+      periodo = boton.dataset.periodo;
+      pintarPrecios();
     });
   });
 
@@ -478,7 +520,7 @@ footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-betw
     });
   });
 
-  actualizarEnlaces();
+  pintarPrecios();
 </script>
 </body>
 </html>
