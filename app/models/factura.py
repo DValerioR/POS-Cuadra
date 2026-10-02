@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, ForeignKey, LargeBinary, Numeric, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -67,3 +68,31 @@ class Factura(Base):
     xml: Mapped[str] = mapped_column(Text, deferred=True)
     pdf: Mapped[bytes | None] = mapped_column(LargeBinary, default=None, deferred=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class IntentoFactura(Base):
+    """Una factura que se mandó a timbrar y todavía no se confirma. Se guarda
+    (con commit) ANTES de llamar al PAC: si se corta la conexión a la mitad,
+    el PAC pudo haberla timbrado, y volver a timbrar sin revisar haría un
+    CFDI duplicado ante el SAT. Mientras exista, la venta no se factura de
+    nuevo: "Reintentar" primero busca la factura en el PAC y solo si no está
+    la timbra (con la misma serie y folio). Al quedar guardada la Factura, el
+    intento se borra; si el PAC la rechazó, también."""
+
+    __tablename__ = "intentos_factura"
+    __table_args__ = (UniqueConstraint("negocio_id", "serie", "folio", name="uq_intento_factura_folio"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    negocio_id: Mapped[int] = mapped_column(ForeignKey("negocios.id"), index=True)
+    venta_id: Mapped[int] = mapped_column(ForeignKey("ventas.id"), unique=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"))
+    serie: Mapped[str]
+    folio: Mapped[int]
+    pac: Mapped[str]  # con qué PAC se mandó (no se recupera con otro)
+    pac_id: Mapped[str | None] = mapped_column(default=None)  # si el PAC alcanzó a contestar
+    # Lo capturado: rfc, nombre, codigo_postal, regimen, uso_cfdi, email, tarjeta.
+    datos: Mapped[dict] = mapped_column(JSONB)
+    mensaje: Mapped[str | None] = mapped_column(default=None)  # por qué no se pudo confirmar
+    intentos: Mapped[int] = mapped_column(default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

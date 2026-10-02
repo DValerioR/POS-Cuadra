@@ -1,8 +1,15 @@
 """Los datos de una factura y el PAC que la timbra.
 
-Cada PAC es una clase con el mismo método `timbrar`, que recibe
-`FacturaDatos` y regresa `Timbrado`. Se elige con la variable PAC del .env:
-"simulado" (de prueba, sin validez) o "facturapi" (con FACTURAPI_KEY).
+Cada PAC es una clase con los mismos métodos: `timbrar`, que recibe
+`FacturaDatos` y regresa `Timbrado`, y `recuperar`, que busca en el PAC una
+factura que quizá ya se timbró (misma serie y folio) y la regresa, o None si
+no está. Se elige con la variable PAC del .env: "simulado" (de prueba, sin
+validez) o "facturapi" (con FACTURAPI_KEY).
+
+`timbrar` lanza OperacionInvalida cuando es seguro que NO se timbró (el PAC
+la rechazó o ni siquiera hubo conexión) y TimbradoIncierto cuando no se sabe
+(se cortó la conexión con la petición ya enviada, el PAC falló por dentro o
+se timbró y no se pudo bajar el XML). Ver services/facturacion.py.
 """
 
 import uuid
@@ -56,6 +63,15 @@ class FacturaDatos:
     total: Decimal = Decimal(0)
 
 
+class TimbradoIncierto(Exception):
+    """No se sabe si el PAC timbró la factura. `pac_id` va si el PAC alcanzó
+    a contestar (entonces sí se timbró y solo falta bajarla)."""
+
+    def __init__(self, mensaje: str, pac_id: str | None = None):
+        super().__init__(mensaje)
+        self.pac_id = pac_id
+
+
 @dataclass
 class Timbrado:
     uuid: str
@@ -70,6 +86,9 @@ class PacSimulado:
     sin sello y con un timbre falso. NO tiene validez fiscal."""
 
     nombre = "simulado"
+
+    def recuperar(self, f: FacturaDatos, pac_id: str | None = None) -> Timbrado | None:
+        return None  # el simulado nunca se queda a medias
 
     def timbrar(self, f: FacturaDatos) -> Timbrado:
         folio_fiscal = str(uuid.uuid4()).upper()
@@ -163,35 +182,66 @@ class PacFacturapi:
         }
 
     def timbrar(self, f: FacturaDatos) -> Timbrado:
-        try:
-            with self._cliente() as http:
+        with self._cliente() as http:
+            try:
                 r = http.post("/invoices", json=self._cuerpo(f))
-                if r.status_code >= 400:
-                    raise self._error(r)
-                factura = r.json()
-                # Ya está timbrada: si falla la descarga, se reintenta.
-                xml = pdf = None
-                for _ in range(3):
-                    try:
-                        if xml is None:
-                            rx = http.get(f"/invoices/{factura['id']}/xml")
-                            rx.raise_for_status()
-                            xml = rx.content.decode("utf-8")
-                        if pdf is None:
-                            rp = http.get(f"/invoices/{factura['id']}/pdf")
-                            rp.raise_for_status()
-                            pdf = rp.content
-                        break
-                    except httpx.HTTPError:
-                        continue
-        except httpx.HTTPError:
-            raise OperacionInvalida("No hay conexión con Facturapi (¿el servidor tiene internet?). La factura no se timbró")
+            except (httpx.ConnectError, httpx.ConnectTimeout):
+                # No llegó a salir: seguro que no se timbró.
+                raise OperacionInvalida("No hay conexión con Facturapi (¿el servidor tiene internet?). La factura no se timbró")
+            except httpx.HTTPError:
+                raise TimbradoIncierto("Se cortó la conexión con Facturapi mientras timbraba")
+            if r.status_code >= 500:
+                raise TimbradoIncierto(f"Facturapi tuvo un problema por dentro ({r.status_code}) mientras timbraba")
+            if r.status_code >= 400:
+                raise self._error(r)
+            return self._descargar(http, r.json())
+
+    @staticmethod
+    def _descargar(http: httpx.Client, factura: dict) -> Timbrado:
+        """XML y PDF de una factura ya timbrada (con reintentos)."""
+        xml = pdf = None
+        for _ in range(3):
+            try:
+                if xml is None:
+                    rx = http.get(f"/invoices/{factura['id']}/xml")
+                    rx.raise_for_status()
+                    xml = rx.content.decode("utf-8")
+                if pdf is None:
+                    rp = http.get(f"/invoices/{factura['id']}/pdf")
+                    rp.raise_for_status()
+                    pdf = rp.content
+                break
+            except httpx.HTTPError:
+                continue
         if xml is None:
-            raise OperacionInvalida(f"La factura se timbró en Facturapi (UUID {factura.get('uuid')}) pero no se pudo bajar "
-                           "el XML. Búscala en el panel de Facturapi antes de volver a intentar")
+            raise TimbradoIncierto(f"La factura se timbró en Facturapi (UUID {factura.get('uuid')}) pero no se pudo "
+                                   "bajar el XML", pac_id=factura["id"])
         stamp = factura.get("stamp") or {}
         fecha = datetime.fromisoformat(stamp["date"].replace("Z", "+00:00")) if stamp.get("date") else datetime.now()
         return Timbrado(uuid=factura["uuid"], fecha_timbrado=fecha, xml=xml, pdf=pdf, pac_id=factura["id"])
+
+    def recuperar(self, f: FacturaDatos, pac_id: str | None = None) -> Timbrado | None:
+        """La factura ya timbrada en Facturapi, o None si no está. Sin pac_id
+        se busca entre las del cliente (por RFC) la de la misma serie y folio
+        que no esté cancelada. Si no se puede consultar, TimbradoIncierto:
+        sin saberlo no se vuelve a timbrar."""
+        try:
+            with self._cliente() as http:
+                if pac_id:
+                    r = http.get(f"/invoices/{pac_id}")
+                    if r.status_code == 404:
+                        return None
+                    r.raise_for_status()
+                    return self._descargar(http, r.json())
+                r = http.get("/invoices", params={"q": f.receptor_rfc, "limit": 50})
+                r.raise_for_status()
+                for factura in r.json().get("data", []):
+                    if (str(factura.get("series") or "") == f.serie and str(factura.get("folio_number")) == str(f.folio)
+                            and factura.get("status") != "canceled"):
+                        return self._descargar(http, factura)
+                return None
+        except httpx.HTTPError:
+            raise TimbradoIncierto("No se pudo consultar Facturapi para revisar si la factura ya estaba timbrada", pac_id)
 
     def probar(self) -> dict:
         """Confirma que la clave sirve (consulta una factura; no timbra nada)."""

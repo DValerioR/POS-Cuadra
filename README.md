@@ -302,6 +302,24 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   estado `sin_tope`, `bien`, `por_acabarse` (desde 80 %) o `agotado`. Se ve
   en inicio → Configuración → Asistente de IA.
 
+### Facturas que no se pudieron confirmar (sin duplicar ante el SAT)
+
+- `POST /cfdi` timbra en dos pasos: primero guarda un `IntentoFactura` (serie
+  y folio apartados, con commit) y luego llama al PAC. Si el PAC la rechaza,
+  el intento se borra. Si no se sabe qué pasó (se cortó la conexión con la
+  petición ya enviada, error 5xx, o se timbró y no se bajó el XML), el
+  intento se queda y la venta no se puede volver a facturar desde el
+  formulario.
+- `GET /cfdi/pendientes` — los intentos sin confirmar.
+- `POST /cfdi/pendientes/{id}/reintentar` — busca la factura en el PAC (por
+  su id si se conoce; si no, entre las del RFC del cliente con la misma serie
+  y folio, sin contar canceladas). Si está, la baja y la guarda; si no, la
+  timbra con el mismo folio. Si no se puede consultar, sigue pendiente.
+- `DELETE /cfdi/pendientes/{id}` — la descarta solo si el PAC confirma que
+  no se timbró (para corregir datos del cliente y empezar de nuevo).
+- En la pantalla Facturar un ticket aparecen arriba con Reintentar y
+  Descartar.
+
 ### Avisos de inventario (ventas sin existencia registrada)
 
 - Si se vende más de lo que el sistema tiene, la venta no se detiene: lo

@@ -28,12 +28,15 @@
         timbrando: false,
         hecha: null,
         recientes: [],
+        pendientes: [], // facturas que no se pudieron confirmar
+        ocupadoPendiente: null,
 
         async init() {
           try {
             this.usuario = await API.get("/auth/yo");
             if (!this.puedeUsar) return;
-            [this.cat, this.recientes] = await Promise.all([API.get("/cfdi/catalogos"), API.get("/cfdi?limite=15")]);
+            [this.cat, this.recientes, this.pendientes] = await Promise.all([API.get("/cfdi/catalogos"), API.get("/cfdi?limite=15"),
+                                                                            API.get("/cfdi/pendientes")]);
             const folio = new URLSearchParams(location.search).get("folio");
             if (folio) { this.folio = folio; await this.buscar(); }
           } catch (e) {
@@ -155,8 +158,40 @@
             this.c = { rfc: "", nombre: "", codigo_postal: "", regimen_fiscal: "", uso_cfdi: "G03", email: "" };
           } catch (e) {
             this.error = e.message;
+            // Si no se pudo confirmar, la factura queda pendiente: se muestra con su botón Reintentar.
+            this.pendientes = await API.get("/cfdi/pendientes").catch(() => this.pendientes);
+            if (this.t) this.t = await API.get(`/cfdi/ticket/${this.t.folio}`).catch(() => this.t);
           } finally {
             this.timbrando = false;
+          }
+        },
+        async reintentar(p) {
+          this.ocupadoPendiente = p.id;
+          this.error = "";
+          try {
+            this.hecha = await API.post(`/cfdi/pendientes/${p.id}/reintentar`);
+            this.t = null;
+            this.folio = "";
+            this.recientes = await API.get("/cfdi?limite=15");
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.pendientes = await API.get("/cfdi/pendientes").catch(() => this.pendientes);
+            this.ocupadoPendiente = null;
+          }
+        },
+        async descartar(p) {
+          if (!confirm(`¿Descartar la factura ${p.serie}-${p.folio}? Solo se puede si Facturapi confirma que no se timbró. Después podrás facturar el ticket ${p.folio_ticket} con otros datos.`)) return;
+          this.ocupadoPendiente = p.id;
+          this.error = "";
+          try {
+            await API.borrar(`/cfdi/pendientes/${p.id}`);
+            if (this.t && this.t.pendiente && this.t.pendiente.id === p.id) await this.buscar();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.pendientes = await API.get("/cfdi/pendientes").catch(() => this.pendientes);
+            this.ocupadoPendiente = null;
           }
         },
         otra() {
@@ -210,6 +245,28 @@
 
         <div class="mensaje error" x-show="error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
 
+        <!-- Facturas que no se pudieron confirmar -->
+        <div class="panel pendientes-factura" x-show="pendientes.length && !hecha">
+          <div class="mensaje aviso" style="margin-top: 0">
+            <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+            <span><strong>Facturas sin confirmar.</strong> Se mandaron a timbrar pero se cortó la comunicación con Facturapi. Usa <strong>Reintentar</strong>: primero revisa si ya quedaron timbradas, así no se duplican ante el SAT.</span>
+          </div>
+          <template x-for="p in pendientes" :key="p.id">
+            <div class="pendiente-factura">
+              <div>
+                <strong x-text="`${p.serie}-${p.folio} · Ticket ${p.folio_ticket} · ${dinero(p.total)}`"></strong>
+                <div class="suave" x-text="`${p.receptor_nombre} · ${p.receptor_rfc}`"></div>
+                <div class="suave" style="font-size: 14px" x-show="p.mensaje" x-text="p.mensaje"></div>
+              </div>
+              <div class="fila" style="gap: 8px; flex: 0 0 auto">
+                <button type="button" class="primario" :disabled="ocupadoPendiente" @click="reintentar(p)"
+                        x-text="ocupadoPendiente === p.id ? 'Revisando…' : 'Reintentar'"></button>
+                <button type="button" :disabled="ocupadoPendiente" @click="descartar(p)">Descartar</button>
+              </div>
+            </div>
+          </template>
+        </div>
+
         <!-- Factura hecha -->
         <template x-if="hecha">
           <div class="panel factura-hecha">
@@ -261,6 +318,10 @@
             <div class="panel">
               <template x-if="!t.puede_facturar">
                 <div class="mensaje error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="t.motivo"></span></div>
+              </template>
+              <template x-if="t.pendiente">
+                <button type="button" class="primario grande separado" :disabled="ocupadoPendiente" @click="reintentar(t.pendiente)"
+                        x-text="ocupadoPendiente ? 'Revisando…' : 'Reintentar la factura'"></button>
               </template>
               <template x-if="t.puede_facturar">
                 <form @submit.prevent="timbrar()">

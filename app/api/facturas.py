@@ -97,14 +97,57 @@ def cliente(rfc: str, usuario: Usuario = Depends(usuario_actual), db: Session = 
 
 @router.post("", status_code=201)
 def facturar(datos: FacturarIn, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Timbra en dos pasos: primero guarda el intento (serie y folio) y luego
+    llama al PAC. Si el PAC falla, se hace commit igual: o se borró el
+    intento (la rechazó) o se queda para «Reintentar» (no se sabe si se timbró)."""
     try:
-        f = facturacion.facturar(db, usuario, datos.folio_ticket, datos.rfc, datos.nombre, datos.codigo_postal,
-                                 datos.regimen_fiscal, datos.uso_cfdi, datos.email, datos.tarjeta)
+        intento = facturacion.facturar(db, usuario, datos.folio_ticket, datos.rfc, datos.nombre, datos.codigo_postal,
+                                       datos.regimen_fiscal, datos.uso_cfdi, datos.email, datos.tarjeta)
     except ERRORES_NEGOCIO as e:
         db.rollback()
         raise a_http(e)
     db.commit()
+    try:
+        f = facturacion.timbrar(db, usuario, intento)
+    except ERRORES_NEGOCIO as e:
+        db.commit()
+        raise a_http(e)
+    db.commit()
     return _exacto(facturacion.resumen(f, datos.folio_ticket))
+
+
+@router.get("/pendientes")
+def pendientes(usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Facturas que se mandaron a timbrar y no se pudieron confirmar."""
+    try:
+        return _exacto(facturacion.pendientes(db, usuario))
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+
+
+@router.post("/pendientes/{intento_id}/reintentar", status_code=201)
+def reintentar(intento_id: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Busca la factura en el PAC; si no está, la timbra. Nunca la duplica."""
+    try:
+        f = facturacion.reintentar(db, usuario, intento_id)
+    except ERRORES_NEGOCIO as e:
+        db.commit()
+        raise a_http(e)
+    db.commit()
+    venta = db.get(Venta, f.venta_id)
+    return _exacto(facturacion.resumen(f, venta.folio))
+
+
+@router.delete("/pendientes/{intento_id}", status_code=204)
+def descartar(intento_id: int, usuario: Usuario = Depends(usuario_actual), db: Session = Depends(get_db)):
+    """Quita una factura pendiente solo si el PAC confirma que no se timbró."""
+    try:
+        facturacion.descartar(db, usuario, intento_id)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("")

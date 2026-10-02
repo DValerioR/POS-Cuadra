@@ -10,6 +10,10 @@ Reglas:
 - La forma de pago sale de cómo se cobró (la de mayor monto si fue mixto);
   con tarjeta se pregunta si fue de crédito (04) o de débito (28).
 - El negocio necesita sus datos fiscales completos (Datos del negocio).
+- Antes de llamar al PAC se guarda un IntentoFactura con su serie y folio.
+  Si la conexión se corta a la mitad no se sabe si quedó timbrada: el
+  intento se queda y «Reintentar» primero la busca en el PAC, para no hacer
+  un CFDI duplicado ante el SAT.
 """
 
 import re
@@ -22,9 +26,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.facturacion import catalogos
-from app.facturacion.pac import Concepto, FacturaDatos, es_de_prueba, obtener_pac, totales_xml
+from app.facturacion.pac import Concepto, FacturaDatos, TimbradoIncierto, es_de_prueba, obtener_pac, totales_xml
 from app.models import (
-    ClienteFiscal, Devolucion, EstadoVenta, Factura, MetodoPago, Negocio, Producto, RolUsuario, TipoUso, Usuario, Venta,
+    ClienteFiscal, Devolucion, EstadoVenta, Factura, IntentoFactura, MetodoPago, Negocio, Producto, RolUsuario, TipoUso,
+    Usuario, Venta,
 )
 from app.services import usos
 from app.services.errores import NoEncontrado, OperacionInvalida, SinPermiso
@@ -111,6 +116,9 @@ def preparar(db: Session, usuario: Usuario, folio: int) -> dict:
     conceptos, sin_clave = _conceptos(db, venta)
     if sin_clave:
         avisos.append(f"{sin_clave} producto(s) sin clave SAT: se facturan con la genérica {catalogos.CLAVE_GENERICA}.")
+    pendiente = _intento_de(db, venta)
+    if pendiente is not None and not bloqueo:
+        bloqueo = _aviso_pendiente(pendiente)
     metodos = {p.metodo for p in venta.pagos}
     return {
         "venta_id": venta.id, "folio": venta.folio, "fecha": venta.created_at, "total": venta.total,
@@ -121,6 +129,7 @@ def preparar(db: Session, usuario: Usuario, folio: int) -> dict:
                        "valor_unitario": c.valor_unitario, "importe": c.importe, "iva": c.iva, "ieps": c.ieps}
                       for c in conceptos],
         "puede_facturar": bloqueo is None, "motivo": bloqueo, "avisos": avisos,
+        "pendiente": _resumen_intento(pendiente, venta.folio, venta.total) if pendiente else None,
     }
 
 
@@ -131,12 +140,16 @@ def buscar_cliente(db: Session, usuario: Usuario, rfc: str) -> ClienteFiscal | N
 
 
 def facturar(db: Session, usuario: Usuario, folio: int, rfc: str, nombre: str, codigo_postal: str,
-             regimen: str, uso_cfdi: str, email: str | None = None, tarjeta: str = "04") -> Factura:
-    """Timbra la factura del ticket y la guarda. No hace commit."""
+             regimen: str, uso_cfdi: str, email: str | None = None, tarjeta: str = "04") -> IntentoFactura:
+    """Revisa los datos, guarda al cliente y aparta serie y folio en un
+    IntentoFactura. No timbra ni hace commit: quien llama hace commit (para
+    que el intento quede guardado antes de llamar al PAC) y luego `timbrar`."""
     venta = buscar_venta(db, usuario, folio)
     bloqueo, _ = _problemas(db, venta)
     if bloqueo:
         raise OperacionInvalida(bloqueo)
+    if (pendiente := _intento_de(db, venta)) is not None:
+        raise OperacionInvalida(_aviso_pendiente(pendiente))
     negocio = db.get(Negocio, usuario.negocio_id)
     if faltan := _faltantes_negocio(negocio):
         raise OperacionInvalida(f"Faltan datos fiscales del negocio: {', '.join(faltan)}")
@@ -164,41 +177,174 @@ def facturar(db: Session, usuario: Usuario, folio: int, rfc: str, nombre: str, c
     cliente.email = (email or "").strip() or cliente.email
     db.flush()
 
+    pac = obtener_pac()
+    if not es_de_prueba(pac.nombre):  # las de prueba no cuestan ni cuentan contra el tope
+        usos.revisar(db, usuario.negocio_id, TipoUso.FACTURA)
+    serie = negocio.factura_serie
+    folio_factura = max(
+        db.scalar(select(func.max(Factura.folio)).where(Factura.negocio_id == usuario.negocio_id, Factura.serie == serie)) or 0,
+        db.scalar(select(func.max(IntentoFactura.folio)).where(IntentoFactura.negocio_id == usuario.negocio_id,
+                                                               IntentoFactura.serie == serie)) or 0,
+    ) + 1
+    intento = IntentoFactura(
+        negocio_id=usuario.negocio_id, venta_id=venta.id, usuario_id=usuario.id, serie=serie, folio=folio_factura,
+        pac=pac.nombre, datos={"rfc": rfc, "nombre": nombre, "codigo_postal": codigo_postal, "regimen": regimen,
+                               "uso_cfdi": uso_cfdi, "tarjeta": tarjeta},
+    )
+    db.add(intento)
+    db.flush()
+    return intento
+
+
+def _datos(db: Session, negocio: Negocio, venta: Venta, intento: IntentoFactura) -> FacturaDatos:
+    d = intento.datos
     conceptos, _ = _conceptos(db, venta)
-    folio_factura = (db.scalar(select(func.max(Factura.folio)).where(
-        Factura.negocio_id == usuario.negocio_id, Factura.serie == negocio.factura_serie)) or 0) + 1
-    forma_pago = _forma_pago(venta, tarjeta)
-    datos = FacturaDatos(
-        serie=negocio.factura_serie, folio=folio_factura, fecha=datetime.now(_zona()).replace(microsecond=0, tzinfo=None),
-        lugar_expedicion=negocio.codigo_postal, forma_pago=forma_pago, metodo_pago="PUE",
+    return FacturaDatos(
+        serie=intento.serie, folio=intento.folio, fecha=datetime.now(_zona()).replace(microsecond=0, tzinfo=None),
+        lugar_expedicion=negocio.codigo_postal, forma_pago=_forma_pago(venta, d["tarjeta"]), metodo_pago="PUE",
         emisor_rfc=negocio.rfc, emisor_nombre=negocio.razon_social.upper(), emisor_regimen=negocio.regimen_fiscal,
-        receptor_rfc=rfc, receptor_nombre=nombre, receptor_codigo_postal=codigo_postal, receptor_regimen=regimen,
-        uso_cfdi=uso_cfdi, conceptos=conceptos,
+        receptor_rfc=d["rfc"], receptor_nombre=d["nombre"], receptor_codigo_postal=d["codigo_postal"],
+        receptor_regimen=d["regimen"], uso_cfdi=d["uso_cfdi"], conceptos=conceptos,
         subtotal=venta.subtotal, iva=venta.iva, ieps=venta.ieps, total=venta.total,
     )
+
+
+def _pac_del_intento(intento: IntentoFactura):
     pac = obtener_pac()
-    # Las de prueba no cuestan; solo las reales cuentan contra el tope del plan.
-    real = not es_de_prueba(pac.nombre)
-    if real:
-        usos.revisar(db, usuario.negocio_id, TipoUso.FACTURA)
-    timbrado = pac.timbrar(datos)
-    if real:
-        usos.registrar(db, usuario.negocio_id, TipoUso.FACTURA, "factura")
+    if pac.nombre != intento.pac:
+        raise OperacionInvalida(f"Esta factura se mandó a timbrar con «{intento.pac}» y ahora está configurado "
+                                f"«{pac.nombre}». Regresa la conexión anterior para poder revisarla")
+    return pac
+
+
+def _aviso_pendiente(intento: IntentoFactura) -> str:
+    detalle = f" ({intento.mensaje})" if intento.mensaje else ""
+    return (f"La factura {intento.serie}-{intento.folio} de este ticket no se pudo confirmar{detalle}. "
+            "Usa «Reintentar»: primero revisa si ya quedó timbrada, así no se duplica ante el SAT")
+
+
+def _incierto(intento: IntentoFactura, e: TimbradoIncierto) -> OperacionInvalida:
+    intento.mensaje = str(e)
+    intento.pac_id = e.pac_id or intento.pac_id
+    return OperacionInvalida(_aviso_pendiente(intento))
+
+
+def timbrar(db: Session, usuario: Usuario, intento: IntentoFactura) -> Factura:
+    """Manda a timbrar un intento ya guardado. Si el PAC la rechazó, el
+    intento se borra; si no se sabe qué pasó, se queda para «Reintentar».
+    En los dos casos lanza OperacionInvalida, y quien llama hace commit
+    igual, para guardar lo que pasó."""
+    venta = db.get(Venta, intento.venta_id)
+    datos = _datos(db, db.get(Negocio, intento.negocio_id), venta, intento)
+    pac = _pac_del_intento(intento)
+    try:
+        timbrado = pac.timbrar(datos)
+    except TimbradoIncierto as e:
+        raise _incierto(intento, e)
+    except OperacionInvalida:
+        db.delete(intento)
+        raise
+    return _guardar(db, intento, venta, datos, pac, timbrado)
+
+
+def reintentar(db: Session, usuario: Usuario, intento_id: int) -> Factura:
+    """Revisa en el PAC si la factura ya se timbró: si está, la guarda; si
+    no, la timbra con la misma serie y folio. Como `timbrar`, quien llama
+    hace commit aunque falle."""
+    intento = _intento(db, usuario, intento_id)
+    venta = db.get(Venta, intento.venta_id)
+    datos = _datos(db, db.get(Negocio, intento.negocio_id), venta, intento)
+    pac = _pac_del_intento(intento)
+    intento.intentos += 1
+    try:
+        timbrado = pac.recuperar(datos, intento.pac_id)
+    except TimbradoIncierto as e:
+        raise _incierto(intento, e)
+    if timbrado is None:
+        # Confirmado que no se timbró: se vuelve a mandar, si el ticket todavía se puede facturar.
+        bloqueo, _ = _problemas(db, venta)
+        if bloqueo:
+            db.delete(intento)
+            raise OperacionInvalida(f"La factura no llegó a timbrarse y el ticket ya no se puede facturar: {bloqueo}")
+        try:
+            timbrado = pac.timbrar(datos)
+        except TimbradoIncierto as e:
+            raise _incierto(intento, e)
+        except OperacionInvalida:
+            db.delete(intento)
+            raise
+    return _guardar(db, intento, venta, datos, pac, timbrado)
+
+
+def descartar(db: Session, usuario: Usuario, intento_id: int) -> None:
+    """Quita un intento solo si el PAC confirma que no se timbró (para
+    corregir los datos del cliente y empezar de nuevo). No hace commit."""
+    intento = _intento(db, usuario, intento_id)
+    datos = _datos(db, db.get(Negocio, intento.negocio_id), db.get(Venta, intento.venta_id), intento)
+    pac = _pac_del_intento(intento)
+    try:
+        timbrado = pac.recuperar(datos, intento.pac_id)
+    except TimbradoIncierto as e:
+        raise OperacionInvalida(f"Todavía no se puede descartar: {e}. Intenta más tarde")
+    if timbrado is not None:
+        raise OperacionInvalida("Esa factura sí quedó timbrada. Usa «Reintentar» para guardarla; si tenía un error, "
+                                "cancélala después")
+    db.delete(intento)
+    db.flush()
+
+
+def _guardar(db: Session, intento: IntentoFactura, venta: Venta, datos: FacturaDatos, pac, timbrado) -> Factura:
+    d = intento.datos
     # Los importes como quedaron timbrados (el PAC real puede redondear algún centavo distinto).
     totales = ({"subtotal": venta.subtotal, "iva": venta.iva, "ieps": venta.ieps, "total": venta.total}
                if pac.nombre == "simulado" else totales_xml(timbrado.xml))
+    cliente = db.scalar(select(ClienteFiscal).where(ClienteFiscal.negocio_id == intento.negocio_id,
+                                                    ClienteFiscal.rfc == d["rfc"]))
     factura = Factura(
-        negocio_id=usuario.negocio_id, venta_id=venta.id, cliente_id=cliente.id, usuario_id=usuario.id,
-        serie=datos.serie, folio=datos.folio, receptor_rfc=rfc, receptor_nombre=nombre,
-        receptor_codigo_postal=codigo_postal, receptor_regimen=regimen, uso_cfdi=uso_cfdi, forma_pago=forma_pago,
-        **totales, pac=pac.nombre, pac_id=timbrado.pac_id, uuid=timbrado.uuid, fecha_timbrado=timbrado.fecha_timbrado.replace(tzinfo=_zona())
+        negocio_id=intento.negocio_id, venta_id=venta.id, cliente_id=cliente.id, usuario_id=intento.usuario_id,
+        serie=intento.serie, folio=intento.folio, receptor_rfc=d["rfc"], receptor_nombre=d["nombre"],
+        receptor_codigo_postal=d["codigo_postal"], receptor_regimen=d["regimen"], uso_cfdi=d["uso_cfdi"],
+        forma_pago=datos.forma_pago, **totales, pac=pac.nombre, pac_id=timbrado.pac_id, uuid=timbrado.uuid,
+        fecha_timbrado=timbrado.fecha_timbrado.replace(tzinfo=_zona())
         if timbrado.fecha_timbrado.tzinfo is None else timbrado.fecha_timbrado,
         xml=timbrado.xml, pdf=timbrado.pdf,
     )
+    negocio_id = intento.negocio_id
+    db.delete(intento)
+    db.flush()
     db.add(factura)
+    if not es_de_prueba(pac.nombre):
+        usos.registrar(db, negocio_id, TipoUso.FACTURA, "factura")
     db.flush()
     return factura
 
+
+def _intento_de(db: Session, venta: Venta) -> IntentoFactura | None:
+    return db.scalar(select(IntentoFactura).where(IntentoFactura.venta_id == venta.id))
+
+
+def _intento(db: Session, usuario: Usuario, intento_id: int) -> IntentoFactura:
+    _validar_rol(usuario)
+    intento = db.get(IntentoFactura, intento_id)
+    if intento is None or intento.negocio_id != usuario.negocio_id:
+        raise NoEncontrado("Esa factura pendiente ya no existe (quizá ya se resolvió)")
+    return intento
+
+
+def pendientes(db: Session, usuario: Usuario) -> list[dict]:
+    """Las facturas que no se pudieron confirmar, para «Reintentar»."""
+    _validar_rol(usuario)
+    filas = db.execute(
+        select(IntentoFactura, Venta.folio, Venta.total).join(Venta, Venta.id == IntentoFactura.venta_id)
+        .where(IntentoFactura.negocio_id == usuario.negocio_id).order_by(IntentoFactura.created_at)
+    ).all()
+    return [_resumen_intento(i, folio, total) for i, folio, total in filas]
+
+
+def _resumen_intento(i: IntentoFactura, folio_ticket: int, total: Decimal) -> dict:
+    return {"id": i.id, "serie": i.serie, "folio": i.folio, "folio_ticket": folio_ticket, "total": total,
+            "receptor_rfc": i.datos["rfc"], "receptor_nombre": i.datos["nombre"], "mensaje": i.mensaje,
+            "intentos": i.intentos, "created_at": i.created_at, "de_prueba": es_de_prueba(i.pac)}
 
 def obtener(db: Session, usuario: Usuario, factura_id: int) -> Factura:
     _validar_rol(usuario)
