@@ -60,7 +60,8 @@ class Factura(Base):
     ieps: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     # Lo que regresa el PAC.
-    pac: Mapped[str]  # qué PAC la timbró ("simulado" = de prueba, sin validez)
+    pac: Mapped[str]  # qué PAC la timbró ("simulado" y "facturapi-pruebas" = de prueba, sin validez)
+    pac_id: Mapped[str | None] = mapped_column(default=None)  # su identificador en el PAC (para cancelarla)
     uuid: Mapped[str] = mapped_column(unique=True)
     fecha_timbrado: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     xml: Mapped[str] = mapped_column(Text, deferred=True)

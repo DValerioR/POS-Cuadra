@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # PAC para timbrar facturas. "simulado" = de prueba, sin validez fiscal
     # (ver app/facturacion/pac.py); vacío = facturación apagada.
     pac: str = "simulado"
+    # Clave secreta de Facturapi (PAC=facturapi). sk_test_ = modo de pruebas,
+    # sk_live_ = facturas reales. Se captura desde Facturar un ticket.
+    facturapi_key: str | None = None
     # Token de acceso de Mercado Pago (terminal Point para cobrar con
     # tarjeta). Se captura desde Configuración → Terminal Mercado Pago.
     mercadopago_token: str | None = None

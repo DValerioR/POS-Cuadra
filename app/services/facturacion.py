@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.facturacion import catalogos
-from app.facturacion.pac import Concepto, FacturaDatos, obtener_pac
+from app.facturacion.pac import Concepto, FacturaDatos, es_de_prueba, obtener_pac, totales_xml
 from app.models import (
     ClienteFiscal, Devolucion, EstadoVenta, Factura, MetodoPago, Negocio, Producto, RolUsuario, Usuario, Venta,
 )
@@ -177,12 +177,14 @@ def facturar(db: Session, usuario: Usuario, folio: int, rfc: str, nombre: str, c
     )
     pac = obtener_pac()
     timbrado = pac.timbrar(datos)
+    # Los importes como quedaron timbrados (el PAC real puede redondear algún centavo distinto).
+    totales = ({"subtotal": venta.subtotal, "iva": venta.iva, "ieps": venta.ieps, "total": venta.total}
+               if pac.nombre == "simulado" else totales_xml(timbrado.xml))
     factura = Factura(
         negocio_id=usuario.negocio_id, venta_id=venta.id, cliente_id=cliente.id, usuario_id=usuario.id,
         serie=datos.serie, folio=datos.folio, receptor_rfc=rfc, receptor_nombre=nombre,
         receptor_codigo_postal=codigo_postal, receptor_regimen=regimen, uso_cfdi=uso_cfdi, forma_pago=forma_pago,
-        subtotal=venta.subtotal, iva=venta.iva, ieps=venta.ieps, total=venta.total,
-        pac=pac.nombre, uuid=timbrado.uuid, fecha_timbrado=timbrado.fecha_timbrado.replace(tzinfo=_zona())
+        **totales, pac=pac.nombre, pac_id=timbrado.pac_id, uuid=timbrado.uuid, fecha_timbrado=timbrado.fecha_timbrado.replace(tzinfo=_zona())
         if timbrado.fecha_timbrado.tzinfo is None else timbrado.fecha_timbrado,
         xml=timbrado.xml, pdf=timbrado.pdf,
     )
@@ -204,7 +206,7 @@ def resumen(f: Factura, folio_ticket: int | None = None) -> dict:
         "id": f.id, "serie": f.serie, "folio": f.folio, "uuid": f.uuid, "estado": f.estado.value,
         "fecha_timbrado": f.fecha_timbrado, "receptor_rfc": f.receptor_rfc, "receptor_nombre": f.receptor_nombre,
         "uso_cfdi": f.uso_cfdi, "forma_pago": f.forma_pago, "total": f.total, "pac": f.pac,
-        "de_prueba": f.pac == "simulado", "folio_ticket": folio_ticket,
+        "de_prueba": es_de_prueba(f.pac), "folio_ticket": folio_ticket,
     }
 
 

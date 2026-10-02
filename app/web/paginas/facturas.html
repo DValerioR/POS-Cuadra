@@ -47,7 +47,68 @@
           return this.usuario && (this.usuario.rol === "admin" || this.usuario.rol === "mostrador");
         },
         get dePrueba() {
-          return this.cat.pac === "simulado";
+          return this.cat.de_prueba;
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+
+        // --- Conexión con Facturapi (administrador) ---
+        conexion: null,
+        verConexion: false,
+        clavePac: "",
+        pruebaPac: null,
+        ocupadoPac: false,
+        errorPac: "",
+        async abrirConexion() {
+          this.clavePac = "";
+          this.pruebaPac = null;
+          this.errorPac = "";
+          this.verConexion = true;
+          try {
+            this.conexion = await API.get("/cfdi/conexion");
+          } catch (e) {
+            this.errorPac = e.message;
+          }
+          this.$nextTick(() => document.getElementById("clave-pac").focus());
+        },
+        async conexionCambio(c) {
+          this.conexion = c;
+          this.cat = await API.get("/cfdi/catalogos");
+        },
+        async guardarClavePac() {
+          this.ocupadoPac = true;
+          this.errorPac = "";
+          this.pruebaPac = null;
+          try {
+            await this.conexionCambio(await API.put("/cfdi/conexion/clave", { clave: this.clavePac }));
+            this.clavePac = "";
+            this.pruebaPac = await API.post("/cfdi/conexion/probar");
+          } catch (e) {
+            this.errorPac = e.message;
+          } finally {
+            this.ocupadoPac = false;
+          }
+        },
+        async probarPac() {
+          this.ocupadoPac = true;
+          this.pruebaPac = null;
+          try {
+            this.pruebaPac = await API.post("/cfdi/conexion/probar");
+          } catch (e) {
+            this.errorPac = e.message;
+          } finally {
+            this.ocupadoPac = false;
+          }
+        },
+        async quitarClavePac() {
+          if (!confirm("¿Quitar la clave de Facturapi? Las facturas volverán a salir de prueba, sin validez fiscal.")) return;
+          try {
+            await this.conexionCambio(await API.borrar("/cfdi/conexion/clave"));
+            this.pruebaPac = null;
+          } catch (e) {
+            this.errorPac = e.message;
+          }
         },
         async buscar() {
           const folio = String(this.folio).trim();
@@ -136,7 +197,12 @@
 
         <div class="mensaje aviso" x-show="dePrueba" style="margin: 0">
           <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
-          <span><strong>Modo de prueba:</strong> las facturas salen marcadas "PRUEBA" y <strong>no tienen validez fiscal</strong> hasta conectar un PAC. Mientras, las facturas reales se siguen haciendo en PVWin.</span>
+          <span x-show="cat.pac !== 'facturapi'"><strong>Modo de prueba:</strong> las facturas salen marcadas "PRUEBA" y <strong>no tienen validez fiscal</strong> hasta conectar Facturapi. Mientras, las facturas reales se siguen haciendo en PVWin.</span>
+          <span x-show="cat.pac === 'facturapi'"><strong>Facturapi en modo de pruebas:</strong> las facturas salen marcadas "PRUEBA" y <strong>no tienen validez fiscal</strong>. Para facturar de verdad, pon la clave real (sk_live_).</span>
+          <button type="button" x-show="esAdmin" style="flex: 0 0 auto" @click="abrirConexion()">Conexión con Facturapi</button>
+        </div>
+        <div class="fila" x-show="esAdmin && !dePrueba" style="justify-content: flex-end; margin: 0">
+          <button type="button" @click="abrirConexion()">Conexión con Facturapi</button>
         </div>
         <div class="mensaje error" x-show="!cat.pac" style="margin: 0">
           <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span>Todavía no hay un PAC configurado para timbrar facturas.</span>
@@ -258,5 +324,39 @@
       </div>
     </template>
   </main>
+
+  <!-- Conexión con Facturapi (administrador) -->
+  <div class="velo" x-show="verConexion" x-cloak @click.self="verConexion = false" @keydown.escape.window="verConexion = false">
+    <form class="panel ventana-texto" @submit.prevent="guardarClavePac()">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#ticket"/></svg></span>
+        <div><h2>Conexión con Facturapi</h2><p class="suave">Facturapi timbra las facturas ante el SAT con el sello (CSD) del negocio.</p></div>
+      </div>
+      <template x-if="conexion">
+        <div class="mensaje" :class="conexion.configurada ? (conexion.de_prueba ? 'aviso' : 'ok') : 'aviso'" style="margin-top: 0">
+          <svg class="ico"><use :href="'/static/iconos.svg#' + (conexion.configurada && !conexion.de_prueba ? 'palomita' : 'alerta')"/></svg>
+          <span x-text="!conexion.configurada ? 'Todavía no hay clave: las facturas salen de prueba, sin validez fiscal.'
+            : conexion.de_prueba ? `Clave de pruebas guardada (termina en …${conexion.termina_en}). Las facturas NO tienen validez fiscal.`
+            : `Clave real guardada (termina en …${conexion.termina_en}). Las facturas tienen validez fiscal.`"></span>
+        </div>
+      </template>
+      <label for="clave-pac" style="margin-top: 0" x-text="conexion && conexion.configurada ? 'Cambiar por otra clave' : 'Clave secreta de Facturapi'"></label>
+      <input id="clave-pac" type="password" x-model="clavePac" placeholder="sk_test_... o sk_live_..." autocomplete="off" spellcheck="false">
+      <p class="ayuda">En el panel de Facturapi, dentro del negocio, en "API Keys". Primero usa la de pruebas (sk_test_) y, cuando todo salga bien, cámbiala por la real (sk_live_). Antes hay que subir ahí el CSD (.cer, .key y su contraseña). Se guarda en el archivo .env del servidor y no se vuelve a mostrar.</p>
+      <div class="mensaje" :class="pruebaPac && pruebaPac.ok ? 'ok' : 'error'" x-show="pruebaPac" x-cloak>
+        <svg class="ico"><use :href="'/static/iconos.svg#' + (pruebaPac && pruebaPac.ok ? 'palomita' : 'alerta')"/></svg>
+        <span x-text="pruebaPac && pruebaPac.mensaje"></span>
+      </div>
+      <div class="mensaje error" x-show="errorPac">
+        <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorPac"></span>
+      </div>
+      <button class="primario grande" :disabled="!clavePac.trim() || ocupadoPac" x-text="ocupadoPac ? 'Guardando…' : 'Guardar y probar'"></button>
+      <div class="fila separado" x-show="conexion && conexion.configurada">
+        <button type="button" :disabled="ocupadoPac" @click="probarPac()">Probar la clave</button>
+        <button type="button" class="texto-peligro" @click="quitarClavePac()">Quitar la clave</button>
+      </div>
+      <button type="button" class="separado" @click="verConexion = false">Cerrar</button>
+    </form>
+  </div>
 </body>
 </html>

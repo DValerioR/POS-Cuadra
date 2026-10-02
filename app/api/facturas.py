@@ -6,12 +6,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, undefer
 
 from app.api.entradas import _exacto
-from app.core.auth import usuario_actual
+from app.core.auth import solo_admin, usuario_actual
 from app.core.config import settings
 from app.core.database import get_db
 from app.facturacion import catalogos
 from app.models import Factura, Negocio, Usuario, Venta
-from app.services import facturacion
+from app.services import configuracion_facturacion, facturacion
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
 # La pantalla es /facturas; el API va en /cfdi para no chocar con ella.
@@ -35,8 +35,42 @@ def catalogos_sat(usuario: Usuario = Depends(usuario_actual)):
         "regimenes": {k: v[0] for k, v in catalogos.REGIMENES.items()},
         "usos": {k: v[0] for k, v in catalogos.USOS_CFDI.items()},
         "formas_pago": catalogos.FORMAS_PAGO,
-        "pac": settings.pac or None,  # "simulado" = modo de prueba
+        "pac": settings.pac or None,
+        "de_prueba": configuracion_facturacion.estado()["de_prueba"],  # las facturas salen sin validez fiscal
     }
+
+
+class ClaveIn(BaseModel):
+    clave: str = Field(max_length=400)
+
+
+@router.get("/conexion")
+def conexion(usuario: Usuario = Depends(solo_admin)):
+    """Con qué PAC se timbra y si hay clave (solo sus últimos 4 caracteres)."""
+    return configuracion_facturacion.estado()
+
+
+@router.put("/conexion/clave")
+def guardar_clave(datos: ClaveIn, usuario: Usuario = Depends(solo_admin)):
+    """Guarda la clave de Facturapi en el .env y timbra con ella desde ese momento."""
+    try:
+        return configuracion_facturacion.guardar(datos.clave)
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+
+
+@router.delete("/conexion/clave")
+def quitar_clave(usuario: Usuario = Depends(solo_admin)):
+    """Regresa a las facturas de prueba."""
+    return configuracion_facturacion.quitar()
+
+
+@router.post("/conexion/probar")
+def probar_clave(usuario: Usuario = Depends(solo_admin)):
+    try:
+        return configuracion_facturacion.probar()
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
 
 
 @router.get("/ticket/{folio}")
