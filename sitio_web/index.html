@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cuadra · Punto de venta</title>
+<meta name="description" content="Cuadra es un punto de venta para farmacias y negocios: ventas con escáner, lotes y caducidades, corte de caja, facturas y asistente con IA. Funciona en tu red local, sin depender de internet.">
+<link rel="icon" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Diseño: una página de una columna con el "corte de caja que cuadra" como idea central;
+   el ticket de papel aparece en el inicio y su lenguaje (renglones, montos, línea punteada)
+   se repite en los precios. Colores tomados del logo y del programa. */
+:root {
+  --fondo: #f3f6f5;
+  --panel: #ffffff;
+  --tinta: #13201d;
+  --tinta-suave: #556661;
+  --linea: #d9e2df;
+  --verde: #0f7a63;
+  --verde-hover: #0b6150;
+  --verde-suave: #def2ea;
+  --menta: #3fd69a;
+  --oscuro: #121a19;
+  --sobre-oscuro: #f1f6f4;
+  --papel: #fffefa;
+  --papel-tinta: #26302d;
+  --aviso: #8a5a00;
+  --aviso-suave: #fff1cc;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --texto: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --ancho: 1080px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fondo: #0f1514; --panel: #172120; --tinta: #e8efed; --tinta-suave: #9db0aa;
+    --linea: #2a3936; --verde: #3fd69a; --verde-hover: #6be3b3; --verde-suave: #16352b;
+    --oscuro: #0a0f0e; --papel: #f6f3ea; --papel-tinta: #26302d;
+    --aviso: #ffcf66; --aviso-suave: #3a2e10; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --fondo: #0f1514; --panel: #172120; --tinta: #e8efed; --tinta-suave: #9db0aa;
+  --linea: #2a3936; --verde: #3fd69a; --verde-hover: #6be3b3; --verde-suave: #16352b;
+  --oscuro: #0a0f0e; --papel: #f6f3ea; --papel-tinta: #26302d;
+  --aviso: #ffcf66; --aviso-suave: #3a2e10; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; transition: none !important; } }
+body {
+  margin: 0; background: var(--fondo); color: var(--tinta);
+  font-family: var(--texto); font-size: 17px; line-height: 1.6;
+}
+img { max-width: 100%; }
+a { color: var(--verde); }
+:focus-visible { outline: 3px solid var(--menta); outline-offset: 2px; border-radius: 6px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.1; text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 800; letter-spacing: -0.02em; }
+h3 { font-size: 1.2rem; font-weight: 600; }
+p { margin: 0; }
+.contenedor { max-width: var(--ancho); margin: 0 auto; padding-inline: 20px; }
+.etiqueta { font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--verde); }
+.boton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 52px; padding: 0 24px; border-radius: 12px; border: 2px solid transparent;
+  font: 600 1.05rem var(--texto); text-decoration: none; cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+.boton:active { transform: translateY(1px); }
+.boton-principal { background: var(--menta); color: #0b1a15; }
+.boton-principal:hover { background: #6be3b3; }
+.boton-borde { background: transparent; color: inherit; border-color: currentColor; }
+.boton[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+
+/* Encabezado */
+.barra {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  background: color-mix(in srgb, var(--fondo) 88%, transparent);
+  backdrop-filter: blur(10px); border-bottom: 1px solid var(--linea);
+}
+.barra .contenedor { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; }
+.marca { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--tinta); font: 800 1.35rem var(--display); }
+.marca img { width: 36px; height: 36px; border-radius: 9px; }
+.menu { display: flex; gap: 22px; align-items: center; }
+.menu a { color: var(--tinta-suave); text-decoration: none; font-weight: 600; }
+.menu a:hover { color: var(--tinta); }
+.menu .boton { min-height: 42px; padding: 0 18px; font-size: 0.95rem; color: #0b1a15; }
+@media (max-width: 720px) { .menu a:not(.boton) { display: none; } }
+
+/* Inicio */
+.inicio { background: var(--oscuro); color: var(--sobre-oscuro); padding-block: 72px 80px; overflow: hidden; }
+.inicio .contenedor { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 56px; align-items: center; }
+.inicio h1 { font-size: clamp(2.6rem, 6.5vw, 4.6rem); font-weight: 800; letter-spacing: -0.035em; }
+.inicio h1 em { font-style: normal; color: var(--menta); }
+.inicio .bajada { margin-top: 20px; font-size: 1.2rem; color: #b8c9c3; max-width: 34ch; }
+.inicio .acciones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.inicio .nota { margin-top: 18px; font-size: 0.92rem; color: #8fa49d; }
+@media (max-width: 860px) { .inicio .contenedor { grid-template-columns: 1fr; gap: 40px; } }
+
+/* Ticket de corte */
+.ticket {
+  --diente: 10px;
+  background: var(--papel); color: var(--papel-tinta);
+  font-family: var(--mono); font-size: 0.92rem; line-height: 1.5;
+  padding: 28px 26px 34px; max-width: 360px; justify-self: center; width: 100%;
+  transform: rotate(1.5deg); box-shadow: 0 30px 60px -20px rgba(0,0,0,.6);
+  -webkit-mask: radial-gradient(var(--diente) at 50% 100%, #0000 98%, #000) 50% / calc(2 * var(--diente)) 100% repeat-x;
+          mask: radial-gradient(var(--diente) at 50% 100%, #0000 98%, #000) 50% / calc(2 * var(--diente)) 100% repeat-x;
+  animation: imprime 1.1s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes imprime { from { clip-path: inset(0 0 60% 0); transform: rotate(1.5deg) translateY(-12px); } to { clip-path: inset(0 0 0 0); transform: rotate(1.5deg); } }
+.ticket .cab { text-align: center; font-weight: 600; letter-spacing: 0.12em; }
+.ticket .sub { text-align: center; font-size: 0.8rem; color: #6c7672; }
+.ticket hr { border: 0; border-top: 2px dashed #c5c9c4; margin: 14px 0; }
+.ticket .renglon { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.ticket .renglon.fuerte { font-weight: 600; }
+.ticket .sello {
+  margin-top: 18px; text-align: center; font: 800 1.6rem var(--display); letter-spacing: 0.04em;
+  color: #0f7a63; border: 3px solid #0f7a63; border-radius: 8px; padding: 4px 0;
+  transform: rotate(-4deg); width: 70%; margin-inline: auto;
+}
+
+/* Secciones */
+section { padding-block: 84px; }
+.cabeza { display: grid; gap: 12px; max-width: 640px; margin-bottom: 44px; }
+.cabeza p { color: var(--tinta-suave); font-size: 1.1rem; }
+
+.funciones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 40px; }
+@media (max-width: 900px) { .funciones { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .funciones { grid-template-columns: 1fr; } }
+.funcion { display: grid; gap: 10px; align-content: start; padding-top: 18px; border-top: 2px solid var(--linea); }
+.funcion svg { width: 34px; height: 34px; color: var(--verde); }
+.funcion p { color: var(--tinta-suave); }
+
+.pasos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; counter-reset: paso; }
+@media (max-width: 760px) { .pasos { grid-template-columns: 1fr; } }
+.paso { background: var(--panel); border: 1px solid var(--linea); border-radius: 16px; padding: 26px; display: grid; gap: 10px; align-content: start; }
+.paso::before { counter-increment: paso; content: counter(paso); font: 800 2.4rem var(--display); color: var(--verde); line-height: 1; }
+.paso p { color: var(--tinta-suave); }
+
+/* Precios */
+.precios-fondo { background: var(--panel); border-block: 1px solid var(--linea); }
+.licencia {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 32px;
+  border: 2px dashed var(--linea); border-radius: 16px; padding: 24px 28px; margin-bottom: 28px;
+}
+.licencia .texto { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; }
+.licencia .texto p { color: var(--tinta-suave); }
+.pronto { font: 600 0.95rem var(--mono); background: var(--aviso-suave); color: var(--aviso); padding: 8px 14px; border-radius: 999px; white-space: nowrap; }
+.planes-titulo { display: grid; gap: 4px; margin-bottom: 18px; }
+.planes-titulo p { color: var(--tinta-suave); }
+.planes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 860px) { .planes { grid-template-columns: 1fr; } }
+.plan {
+  position: relative; display: grid; gap: 18px; align-content: start; text-align: left;
+  background: var(--fondo); color: var(--tinta); border: 2px solid var(--linea); border-radius: 16px;
+  padding: 26px; font: inherit; cursor: pointer; transition: border-color .15s, transform .15s;
+}
+.plan:hover { border-color: var(--verde); }
+.plan[aria-pressed="true"] { border-color: var(--verde); background: var(--verde-suave); }
+.plan .nombre { font: 600 1.25rem var(--display); }
+.plan .precio { font: 800 2.6rem var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.plan .precio small { font: 500 1rem var(--texto); color: var(--tinta-suave); letter-spacing: 0; }
+.plan ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; font-family: var(--mono); font-size: 0.88rem; }
+.plan li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--linea); font-variant-numeric: tabular-nums; }
+.plan li b { font-weight: 600; }
+.plan .para { color: var(--tinta-suave); font-size: 0.95rem; }
+.plan .elegido { font-size: 0.85rem; font-weight: 700; color: var(--verde); }
+.plan[aria-pressed="false"] .elegido { visibility: hidden; }
+.popular { position: absolute; top: -13px; right: 20px; background: var(--verde); color: var(--panel); font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .04em; text-transform: uppercase; }
+.resumen { margin-top: 26px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.resumen p { color: var(--tinta-suave); max-width: 60ch; }
+.letra-chica { margin-top: 22px; font-size: 0.9rem; color: var(--tinta-suave); max-width: 75ch; }
+
+/* Descarga y contacto */
+.dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 760px) { .dos { grid-template-columns: 1fr; } }
+.tarjeta { background: var(--panel); border: 1px solid var(--linea); border-radius: 16px; padding: 28px; display: grid; gap: 14px; align-content: start; }
+.tarjeta p { color: var(--tinta-suave); }
+.dato { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dato code { font: 600 1.05rem var(--mono); background: var(--fondo); border: 1px solid var(--linea); padding: 8px 12px; border-radius: 10px; user-select: all; overflow-wrap: anywhere; }
+.copiar { min-height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--linea); background: var(--panel); color: var(--tinta); font: 600 0.9rem var(--texto); cursor: pointer; }
+.copiar:hover { border-color: var(--verde); }
+.ejemplo { font-size: 0.78rem; font-weight: 700; background: var(--aviso-suave); color: var(--aviso); padding: 2px 8px; border-radius: 999px; }
+.mensaje { min-height: 1.5em; font-size: 0.9rem; color: var(--verde); }
+
+footer { border-top: 1px solid var(--linea); padding-block: 32px; color: var(--tinta-suave); font-size: 0.9rem; }
+footer .contenedor { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+</style>
+</head>
+<body>
+
+<header class="barra">
+  <div class="contenedor">
+    <a class="marca" href="#"><img src="logo.png" alt="">Cuadra</a>
+    <nav class="menu" aria-label="Secciones">
+      <a href="#funciones">Qué hace</a>
+      <a href="#precios">Precios</a>
+      <a href="#descarga">Descarga</a>
+      <a class="boton boton-principal" href="#contacto">Contáctanos</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="inicio">
+    <div class="contenedor">
+      <div>
+        <p class="etiqueta" style="color: var(--menta)">Punto de venta para farmacias</p>
+        <h1 style="margin-top:14px">Que tu caja <em>cuadre</em> todos los días.</h1>
+        <p class="bajada">Vende con el escáner, controla lotes y caducidades y cierra el turno sabiendo exactamente cuánto debe haber.</p>
+        <div class="acciones">
+          <a class="boton boton-principal" href="#contacto">Quiero Cuadra en mi negocio</a>
+          <a class="boton boton-borde" href="#precios">Ver precios</a>
+        </div>
+        <p class="nota">Hecho y probado todos los días en una farmacia familiar.</p>
+      </div>
+
+      <div class="ticket" aria-label="Ejemplo de corte de caja">
+        <div class="cab">CORTE DE CAJA</div>
+        <div class="sub">Caja 1 · Turno matutino</div>
+        <hr>
+        <div class="renglon"><span>Fondo inicial</span><span>$1,000.00</span></div>
+        <div class="renglon"><span>Ventas efectivo</span><span>$9,842.50</span></div>
+        <div class="renglon"><span>Ventas tarjeta</span><span>$3,215.00</span></div>
+        <div class="renglon"><span>Devoluciones</span><span>-$128.00</span></div>
+        <hr>
+        <div class="renglon fuerte"><span>Esperado en caja</span><span>$10,714.50</span></div>
+        <div class="renglon fuerte"><span>Contado</span><span>$10,714.50</span></div>
+        <div class="renglon"><span>Diferencia</span><span>$0.00</span></div>
+        <div class="sello">CUADRA</div>
+      </div>
+    </div>
+  </div>
+
+  <section id="funciones">
+    <div class="contenedor">
+      <div class="cabeza">
+        <p class="etiqueta">Qué hace</p>
+        <h2>Todo lo del mostrador y la bodega, en un solo programa.</h2>
+        <p>Pantallas grandes y claras para que cualquier persona del equipo lo use desde el primer día.</p>
+      </div>
+      <div class="funciones">
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M14 5v14M18 5v14M21 5v14"/></svg>
+          <h3>Ventas rápidas con escáner</h3>
+          <p>Escaneas, cobras y das el cambio sin tocar el ratón. Efectivo, tarjeta o pago mixto.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M8 14h3"/></svg>
+          <h3>Lotes y caducidades</h3>
+          <p>Cada pieza sabe de qué lote es. Se vende primero lo que caduca antes y te avisa lo que está por vencer.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z"/><path d="M9 7h6M9 11h6M9 15h4"/></svg>
+          <h3>Turnos y corte de caja</h3>
+          <p>Abre y cierra turnos por cajero. Al final ves lo esperado, lo contado y la diferencia.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6M9 15l3 3 3-3"/></svg>
+          <h3>Entradas desde la factura del proveedor</h3>
+          <p>Sube el XML o la foto de la factura y la mercancía se captura sola, con costos, lotes y caducidades.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12z"/><path d="M9 10h.01M12 10h.01M15 10h.01"/></svg>
+          <h3>Asistente con inteligencia artificial</h3>
+          <p>Pregúntale en español cuánto vendiste, qué se está acabando o qué ofertas conviene hacer.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 2h12v20H6z"/><path d="M9 6h6M9 10h6M9 14l2 2 4-4"/></svg>
+          <h3>Facturas para tus clientes</h3>
+          <p>Timbra facturas CFDI desde la venta, sin entrar a otra página.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="4" width="14" height="10" rx="1"/><path d="M6 18h6M9 14v4"/><rect x="17" y="8" width="5" height="12" rx="1"/></svg>
+          <h3>Varias cajas y una tableta</h3>
+          <p>Mostrador y bodega trabajan sobre la misma información. La tableta sirve para consultar precios y capturar caducidades.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01"/><path d="M3 3l18 18"/></svg>
+          <h3>Sigue vendiendo sin internet</h3>
+          <p>Funciona en la red de tu negocio. Si se cae el internet, las cajas siguen cobrando.</p>
+        </div>
+        <div class="funcion">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+          <h3>Respaldos y mejoras automáticas</h3>
+          <p>Tu información se respalda sola y el programa se actualiza con el negocio cerrado.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="contenedor">
+      <div class="cabeza">
+        <p class="etiqueta">Cómo empezar</p>
+        <h2>De la primera llamada a tu primera venta.</h2>
+      </div>
+      <div class="pasos">
+        <div class="paso"><h3>Platicamos</h3><p>Nos cuentas cuántas cajas tienes y cómo trabajas hoy. Te decimos qué plan te conviene.</p></div>
+        <div class="paso"><h3>Instalamos</h3><p>Dejamos Cuadra funcionando en tus computadoras y pasamos tus productos desde tu sistema anterior.</p></div>
+        <div class="paso"><h3>Te enseñamos</h3><p>Una capacitación corta para tu equipo. Las pantallas se explican solas, pero estamos para dudas.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="precios" class="precios-fondo">
+    <div class="contenedor">
+      <div class="cabeza">
+        <p class="etiqueta">Precios</p>
+        <h2>Pagas el programa una vez y una mensualidad pequeña.</h2>
+        <p>La mensualidad cubre las facturas, la inteligencia artificial y las actualizaciones. Tú eliges cuánto necesitas.</p>
+      </div>
+
+      <div class="licencia">
+        <div class="texto">
+          <h3>Licencia de Cuadra · pago único</h3>
+          <p>El programa para todas las cajas de tu negocio, con instalación y capacitación.</p>
+        </div>
+        <span class="pronto">Precio próximamente</span>
+      </div>
+
+      <div class="planes-titulo">
+        <h3>Elige tu mensualidad</h3>
+        <p>Toca un plan para elegirlo. Puedes cambiarlo cuando quieras.</p>
+      </div>
+      <div class="planes" role="group" aria-label="Planes de mensualidad">
+        <button type="button" class="plan" data-plan="Esencial" data-precio="249" aria-pressed="false">
+          <span class="nombre">Esencial</span>
+          <span class="precio">$249 <small>MXN al mes</small></span>
+          <span class="para">Para un negocio con una caja que factura poco.</span>
+          <ul>
+            <li><span>Facturas al mes</span><b>50</b></li>
+            <li><span>Usos de IA al mes</span><b>100</b></li>
+            <li><span>Actualizaciones</span><b>Incluidas</b></li>
+          </ul>
+          <span class="elegido">✓ Plan elegido</span>
+        </button>
+        <button type="button" class="plan" data-plan="Negocio" data-precio="349" aria-pressed="true">
+          <span class="popular">El más elegido</span>
+          <span class="nombre">Negocio</span>
+          <span class="precio">$349 <small>MXN al mes</small></span>
+          <span class="para">Para farmacias con varias cajas y clientes que piden factura.</span>
+          <ul>
+            <li><span>Facturas al mes</span><b>150</b></li>
+            <li><span>Usos de IA al mes</span><b>300</b></li>
+            <li><span>Actualizaciones</span><b>Incluidas</b></li>
+          </ul>
+          <span class="elegido">✓ Plan elegido</span>
+        </button>
+        <button type="button" class="plan" data-plan="Plus" data-precio="499" aria-pressed="false">
+          <span class="nombre">Plus</span>
+          <span class="precio">$499 <small>MXN al mes</small></span>
+          <span class="para">Para negocios con mucho movimiento y muchas facturas.</span>
+          <ul>
+            <li><span>Facturas al mes</span><b>400</b></li>
+            <li><span>Usos de IA al mes</span><b>1,000</b></li>
+            <li><span>Actualizaciones</span><b>Incluidas</b></li>
+          </ul>
+          <span class="elegido">✓ Plan elegido</span>
+        </button>
+      </div>
+
+      <div class="resumen">
+        <p id="resumen-texto">Elegiste <b>Negocio</b>: $349 MXN al mes, más la licencia.</p>
+        <a class="boton boton-principal" href="#contacto" id="resumen-boton">Pedir este plan</a>
+      </div>
+      <p class="letra-chica">Un uso de IA es una pregunta al asistente o una factura de proveedor leída desde foto o PDF. Los XML de proveedor se leen sin gastar usos. Si un mes te pasas del tope, te avisamos antes de cobrar algo extra. Precios más IVA.</p>
+    </div>
+  </section>
+
+  <section id="descarga">
+    <div class="contenedor dos">
+      <div class="tarjeta">
+        <p class="etiqueta">Descarga</p>
+        <h2>Descarga Cuadra</h2>
+        <p>Muy pronto podrás descargar el instalador desde aquí. Por ahora nosotros lo instalamos en tu negocio para dejarlo listo.</p>
+        <div><span class="boton boton-borde" aria-disabled="true">Descarga próximamente</span></div>
+        <p style="font-size:.9rem">Funciona en computadoras con Windows 10 u 11 y en tabletas Android.</p>
+      </div>
+
+      <div class="tarjeta" id="contacto">
+        <p class="etiqueta">Contacto</p>
+        <h2>Escríbenos</h2>
+        <p>Te respondemos el mismo día. Cuéntanos qué negocio tienes y cuántas cajas usas.</p>
+        <div class="dato">
+          <strong style="min-width:96px">WhatsApp</strong>
+          <code id="dato-whatsapp"></code>
+          <button type="button" class="copiar" data-copiar="dato-whatsapp">Copiar</button>
+          <span class="ejemplo" data-ejemplo="whatsapp">Dato de ejemplo</span>
+        </div>
+        <div class="dato">
+          <strong style="min-width:96px">Correo</strong>
+          <code id="dato-correo"></code>
+          <button type="button" class="copiar" data-copiar="dato-correo">Copiar</button>
+          <span class="ejemplo" data-ejemplo="correo">Dato de ejemplo</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          <a class="boton boton-principal" id="ir-whatsapp" href="#" target="_blank" rel="noopener">Abrir WhatsApp</a>
+          <a class="boton boton-borde" id="ir-correo" href="#">Enviar correo</a>
+        </div>
+        <p class="mensaje" id="mensaje" role="status"></p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="contenedor">
+    <span>© <span id="anio">2026</span> Cuadra · Punto de venta</span>
+    <span>Hecho en México</span>
+  </div>
+</footer>
+
+<script>
+  // ===== Datos de contacto: cámbialos aquí =====
+  // WhatsApp con lada de país, solo números (México = 52 + 10 dígitos).
+  var CONTACTO = {
+    whatsapp: "520000000000",
+    correo: "contacto@ejemplo.com"
+  };
+  var ES_EJEMPLO = {
+    whatsapp: CONTACTO.whatsapp === "520000000000",
+    correo: CONTACTO.correo === "contacto@ejemplo.com"
+  };
+
+  var planElegido = { nombre: "Negocio", precio: "349" };
+
+  function textoWhatsapp(n) {
+    return n.length === 12 ? "+" + n.slice(0, 2) + " " + n.slice(2, 5) + " " + n.slice(5, 8) + " " + n.slice(8) : "+" + n;
+  }
+  function mensajeContacto() {
+    return "Hola, me interesa Cuadra para mi negocio. Me gustaría el plan " + planElegido.nombre + " ($" + planElegido.precio + " al mes).";
+  }
+  function actualizarEnlaces() {
+    document.getElementById("ir-whatsapp").href = "https://wa.me/" + CONTACTO.whatsapp + "?text=" + encodeURIComponent(mensajeContacto());
+    document.getElementById("ir-correo").href = "mailto:" + CONTACTO.correo + "?subject=" + encodeURIComponent("Quiero Cuadra") + "&body=" + encodeURIComponent(mensajeContacto());
+  }
+
+  document.getElementById("dato-whatsapp").textContent = textoWhatsapp(CONTACTO.whatsapp);
+  document.getElementById("dato-correo").textContent = CONTACTO.correo;
+  document.querySelectorAll("[data-ejemplo]").forEach(function (el) {
+    el.hidden = !ES_EJEMPLO[el.dataset.ejemplo];
+  });
+  document.getElementById("anio").textContent = new Date().getFullYear();
+
+  document.querySelectorAll(".plan").forEach(function (boton) {
+    boton.addEventListener("click", function () {
+      document.querySelectorAll(".plan").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+      boton.setAttribute("aria-pressed", "true");
+      planElegido = { nombre: boton.dataset.plan, precio: boton.dataset.precio };
+      document.getElementById("resumen-texto").innerHTML =
+        "Elegiste <b>" + planElegido.nombre + "</b>: $" + planElegido.precio + " MXN al mes, más la licencia.";
+      document.getElementById("resumen-boton").textContent = "Pedir el plan " + planElegido.nombre;
+      actualizarEnlaces();
+    });
+  });
+
+  document.querySelectorAll(".copiar").forEach(function (boton) {
+    boton.addEventListener("click", function () {
+      var el = document.getElementById(boton.dataset.copiar);
+      var aviso = document.getElementById("mensaje");
+      function seleccionar() {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        aviso.textContent = "Quedó seleccionado; cópialo con Ctrl+C.";
+      }
+      try {
+        navigator.clipboard.writeText(el.textContent).then(function () {
+          aviso.textContent = "Copiado: " + el.textContent;
+        }, seleccionar);
+      } catch (e) { seleccionar(); }
+    });
+  });
+
+  actualizarEnlaces();
+</script>
+</body>
+</html>
