@@ -148,14 +148,8 @@ def sugerir(db: Session, negocio_id: int, renglones: list[dict]) -> dict[int, di
         parte = renglones[i:i + POR_LLAMADA]
         try:
             texto = _llamar(cliente, "Productos por pedir:\n" + _tabla(parte, ventas))
-        except anthropic.AuthenticationError:
-            raise OperacionInvalida("La clave de la API de Claude no es válida; revísala en Configuración → Asistente de IA")
-        except anthropic.RateLimitError:
-            raise OperacionInvalida("La API de Claude está ocupada; intenta en un minuto")
-        except anthropic.APIConnectionError:
-            raise OperacionInvalida("No hay conexión con la API de Claude; revisa el internet del servidor")
-        except anthropic.APIStatusError as e:
-            raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
+        except anthropic.APIError as e:
+            raise OperacionInvalida(configuracion_ia.mensaje_error(e)) from e
         resultado.update(interpretar(texto, parte, ventas))
     usos.registrar(db, negocio_id, TipoUso.IA, "sugerencias_pedido")
     return resultado

@@ -331,14 +331,8 @@ def recomendar(db: Session, negocio_id: int) -> dict:
         cliente = configuracion_ia.cliente()
         try:
             texto = _llamar(cliente, f"Hoy es {hoy():%d/%m/%Y}. Candidatos a oferta:\n" + _tabla(enviados))
-        except anthropic.AuthenticationError:
-            raise OperacionInvalida("La clave de la API de Claude no es válida; revísala en Configuración → Asistente de IA")
-        except anthropic.RateLimitError:
-            raise OperacionInvalida("La API de Claude está ocupada; intenta en un minuto")
-        except anthropic.APIConnectionError:
-            raise OperacionInvalida("No hay conexión con la API de Claude; revisa el internet del servidor")
-        except anthropic.APIStatusError as e:
-            raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
+        except anthropic.APIError as e:
+            raise OperacionInvalida(configuracion_ia.mensaje_error(e)) from e
         usos.registrar(db, negocio_id, TipoUso.IA, "ofertas")
         paso = db.get(Negocio, negocio_id).redondeo_precio_venta
         ofertas = interpretar(texto, enviados, paso)

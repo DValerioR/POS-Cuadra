@@ -127,14 +127,8 @@ def preguntar(db: Session, usuario: Usuario, texto: str, conversacion_id: int | 
     for _ in range(MAX_VUELTAS):
         try:
             respuesta = _llamar(cliente, sistema, mensajes)
-        except anthropic.AuthenticationError:
-            raise OperacionInvalida("La clave de la API de Claude no es válida; revísala en Configuración → Asistente de IA")
-        except anthropic.RateLimitError:
-            raise OperacionInvalida("La API de Claude está ocupada; intenta en un minuto")
-        except anthropic.APIConnectionError:
-            raise OperacionInvalida("No hay conexión con la API de Claude; revisa el internet del servidor")
-        except anthropic.APIStatusError as e:
-            raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
+        except anthropic.APIError as e:
+            raise OperacionInvalida(configuracion_ia.mensaje_error(e)) from e
 
         bloques = [b.to_dict() for b in respuesta.content]
         nuevos.append(MensajeAsistente(

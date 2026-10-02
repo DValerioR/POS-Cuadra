@@ -232,12 +232,8 @@ def leer_foto(datos: bytes, tipo: str | None) -> Lectura:
         raise OperacionInvalida("La foto pesa más de 5 MB; tómala con menos resolución")
     try:
         texto = _llamar_foto(datos, tipo)
-    except anthropic.AuthenticationError:
-        raise OperacionInvalida("La clave de la API de Claude no es válida; revísala en Configuración → Asistente de IA")
-    except anthropic.APIConnectionError:
-        raise OperacionInvalida("No hay conexión con la API de Claude; revisa el internet del servidor")
-    except anthropic.APIStatusError as e:
-        raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
+    except anthropic.APIError as e:
+        raise OperacionInvalida(configuracion_ia.mensaje_error(e)) from e
     try:
         d = json.loads(texto)
     except json.JSONDecodeError:

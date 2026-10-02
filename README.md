@@ -277,6 +277,12 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - `PUT /ia/clave` con `{clave}`, `DELETE /ia/clave`, `POST /ia/probar` (consulta
   el modelo sin gastar tokens) — solo admin.
 - Sin clave, la lectura de facturas con IA queda desactivada; lo demás funciona.
+- Los errores de la API se traducen en un solo lugar,
+  `configuracion_ia.mensaje_error`. Sin saldo (o con el límite de gasto del
+  workspace alcanzado) Anthropic responde un 400 que se reconoce por el
+  texto y se muestra "Se acabó el saldo de la IA…"; el bot de WhatsApp pasa
+  la conversación a una persona con ese motivo. "Probar la clave" no revisa
+  el saldo (no gasta tokens).
 - El servidor de demostración usa su propio `.env` temporal, nunca el real.
 
 ### Usos y topes del plan (IA y facturas)

@@ -318,7 +318,7 @@ def responder_con_ia(db: Session, conversacion: ConversacionWhatsApp) -> str:
         try:
             r = _llamar(cliente, sistema, mensajes)
         except anthropic.APIError as e:
-            raise OperacionInvalida(f"La IA no respondió: {e.__class__.__name__}")
+            raise OperacionInvalida(configuracion_ia.mensaje_error(e)) from e
         bloques = [b.to_dict() for b in r.content]
         mensajes.append({"role": "assistant", "content": bloques})
         texto = "\n\n".join(b.text for b in r.content if b.type == "text").strip()
@@ -415,6 +415,7 @@ def recibir(db: Session, negocio_id: int, telefono: str, nombre: str | None, tex
         db.rollback()
         c = db.get(ConversacionWhatsApp, c.id)
         motivo = ("Se acabaron los usos de IA del mes" if usos.agotado(db, c.negocio_id, TipoUso.IA)
+                  else "Se acabó el saldo de la IA" if str(e) == configuracion_ia.SALDO_AGOTADO
                   else "El bot no pudo responder (falla de la IA)")
         pasar_a_persona(db, c, motivo)
         respuesta = MENSAJE_FALLA

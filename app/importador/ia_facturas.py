@@ -195,14 +195,6 @@ def leer_con_ia(datos: bytes, tipo: str) -> FacturaLeida:
     cliente = configuracion_ia.cliente()
     try:
         texto = _llamar(cliente, bloque)
-    except anthropic.AuthenticationError:
-        raise OperacionInvalida("La clave de la API de Claude no es válida; revísala en Configuración → Asistente de IA")
-    except anthropic.RateLimitError:
-        raise OperacionInvalida("La API de Claude está ocupada; intenta en un minuto")
-    except anthropic.APIConnectionError:
-        raise OperacionInvalida("No hay conexión con la API de Claude; revisa el internet del servidor")
-    except anthropic.BadRequestError as e:
-        raise OperacionInvalida(f"La API no aceptó el archivo ({e.message})")
-    except anthropic.APIStatusError as e:
-        raise OperacionInvalida(f"La API de Claude respondió con un error ({e.status_code}); intenta más tarde")
+    except anthropic.APIError as e:
+        raise OperacionInvalida(configuracion_ia.mensaje_error(e, "La API no aceptó el archivo")) from e
     return interpretar(texto)
