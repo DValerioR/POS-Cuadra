@@ -117,7 +117,7 @@ def preparar(db: Session, usuario: Usuario, folio: int) -> dict:
     if sin_clave:
         avisos.append(f"{sin_clave} producto(s) sin clave SAT: se facturan con la genérica {catalogos.CLAVE_GENERICA}.")
     pendiente = _intento_de(db, venta)
-    if pendiente is not None and not bloqueo:
+    if pendiente is not None:  # va primero: hay que resolverla aunque el ticket ya no se pueda facturar
         bloqueo = _aviso_pendiente(pendiente)
     metodos = {p.metodo for p in venta.pagos}
     return {
@@ -197,6 +197,8 @@ def facturar(db: Session, usuario: Usuario, folio: int, rfc: str, nombre: str, c
 
 
 def _datos(db: Session, negocio: Negocio, venta: Venta, intento: IntentoFactura) -> FacturaDatos:
+    if faltan := _faltantes_negocio(negocio):
+        raise OperacionInvalida(f"Faltan datos fiscales del negocio: {', '.join(faltan)}")
     d = intento.datos
     conceptos, _ = _conceptos(db, venta)
     return FacturaDatos(

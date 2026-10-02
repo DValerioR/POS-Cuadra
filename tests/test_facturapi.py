@@ -291,3 +291,17 @@ def test_otro_negocio_no_ve_ni_reintenta(como_admin, fiscal, facturapi, caja, sh
     otro = cliente_de(crear_usuario(otro_negocio))
     assert otro.get("/cfdi/pendientes").json() == []
     assert otro.post(f"/cfdi/pendientes/{p['id']}/reintentar").status_code == 404
+
+
+def test_reintentar_sin_datos_fiscales_explica(como_admin, db, negocio, fiscal, facturapi, caja, shampoo):  # noqa: F811
+    facturapi.timbrar = httpx.ReadTimeout("se cortó")
+    v = vender(como_admin, caja, [r(shampoo, 1)], efectivo="200").json()
+    facturar(como_admin, v["folio"])
+    [p] = _pendientes(como_admin)
+    negocio.rfc = None
+    db.commit()
+    t = como_admin.get(f"/cfdi/ticket/{v['folio']}").json()
+    assert t["pendiente"] and "no se pudo confirmar" in t["motivo"]  # el pendiente se avisa primero
+    resp = como_admin.post(f"/cfdi/pendientes/{p['id']}/reintentar")
+    assert resp.status_code == 409 and "Faltan datos fiscales" in resp.json()["detail"]
+    assert len(_pendientes(como_admin)) == 1
