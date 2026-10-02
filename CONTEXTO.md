@@ -186,12 +186,11 @@ De la etapa 1 ya están hechos (ver README.md) la estructura del proyecto, la co
 
 De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja (un solo turno abierto por caja; ya existen "Mostrador 1" y "Mostrador 2" en la base real); ventas con cobro en efectivo, tarjeta y mixto, descuento de lotes por FEFO o por el lote que indica el vendedor, captura de caducidad al vender, desglose de IVA e IEPS y folios consecutivos; cancelaciones, devoluciones y cambios de producto (los hace el admin; el cajero pide devoluciones y cancelaciones y un admin las autoriza desde el centro de notificaciones); ventas en espera (hasta 5 por caja); tickets en ESC/POS con impresión por red o por agente USB y apertura del cajón solo con efectivo (encabezado y pie de Farmacia La Fe ya configurados); y las pantallas en HTML + Alpine.js: inicio de sesión, venta en mostrador (con escaneo, búsqueda por nombre con F2 y modo cobro con Esc), turno y corte, devoluciones, cancelaciones y cambios de producto, y el centro de notificaciones (solo admin). Hay casi 250 pruebas automáticas (`pytest`) que corren contra una base aparte.
 
-## Pendientes al 30/09/2026 (resumen para retomar)
+## Pendientes al 01/10/2026 (resumen para retomar)
 
-**Siguiente sesión (decidido por el dueño): hacer funcionar las facturas** de verdad. Hoy la facturación de un ticket ya existe (`/facturas`, `app/facturacion/`, PAC intercambiable en `app/facturacion/pac.py`), pero con PAC=simulado, que genera facturas "PRUEBA · SIN VALIDEZ FISCAL". Falta:
-- Hecho el 01/10/2026: se eligió Facturapi y se programó la conexión (ver "Facturación a clientes").
+**Facturas reales (en curso, decidido por el dueño):** la facturación de un ticket ya existe (`/facturas`, `app/facturacion/`) y desde el 01/10/2026 ya está programada la conexión con Facturapi, el PAC elegido (ver "Facturación a clientes"). Solo se probó contra una API simulada en las pruebas automáticas; falta probarla con la cuenta real. Siguiente paso:
 - El dueño: crear la cuenta en facturapi.io, dar de alta el negocio con sus datos fiscales y subir ahí el CSD (.cer, .key y su contraseña; nunca se escriben en el código).
-- Pegar la clave de pruebas (sk_test_) en Facturar un ticket → Conexión con Facturapi y timbrar una factura de prueba; revisar que los importes coincidan con el ticket (sobre todo con IEPS) y que el PDF se vea bien.
+- Pegar la clave de pruebas (sk_test_) en Facturar un ticket → Conexión con Facturapi y timbrar una factura de prueba; revisar que los importes coincidan con el ticket (sobre todo con IEPS, que se manda con el modo por omisión de Facturapi: el IEPS suma a la base del IVA) y que el PDF se vea bien.
 - Registrar la tarjeta en Facturapi, pegar la clave real (sk_live_), timbrar una factura real y verificarla en verificacfdi.facturaelectronica.sat.gob.mx.
 - Después: cancelación ante el SAT, factura global de público en general y autofacturación web.
 
