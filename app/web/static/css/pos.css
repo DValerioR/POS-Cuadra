@@ -1631,3 +1631,15 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
   .barra-menus { gap: 0 12px; }
   .barra-menus .menu-titulo { padding: 0 11px; font-size: 17px; }
 }
+
+/* Cargar productos desde Excel */
+.ventana-importar { width: min(720px, 100%); max-width: 720px; max-height: 90vh; overflow-y: auto; }
+.ventana-importar details { border: 1.5px solid var(--linea); border-radius: var(--radio-chico); padding: 8px 12px; }
+.ventana-importar summary { cursor: pointer; }
+.ventana-importar .tabla { margin-top: 8px; }
+.resumen-importar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.resumen-importar > div { border: 1.5px solid var(--linea); border-radius: var(--radio-chico); padding: 10px; text-align: center; }
+.resumen-importar strong { display: block; font-size: 24px; }
+.resumen-importar span { color: var(--texto-suave); font-size: 14px; }
+.resumen-importar .con_error { border-color: var(--peligro); color: var(--peligro); }
+@media (max-width: 560px) { .resumen-importar { grid-template-columns: repeat(2, 1fr); } }

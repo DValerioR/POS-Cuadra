@@ -64,6 +64,9 @@ function pantallaCatalogo() {
     guardando: false,
     errorEditor: "",
 
+    // Cargar productos desde Excel
+    importar: null, // { archivo, revision, resultado, ocupado, error }
+
     // Cambios en grupo
     grupo: null, // "categoria" | "iva"
     ivaGrupo: null,
@@ -417,6 +420,43 @@ function pantallaCatalogo() {
       }
     },
     // --- Claves SAT sugeridas ---------------------------------------------
+
+    abrirImportar() {
+      this.importar = { archivo: null, revision: null, resultado: null, ocupado: false, error: "" };
+    },
+    async elegirArchivo(evento) {
+      const archivo = evento.target.files[0];
+      evento.target.value = "";
+      if (!archivo) return;
+      Object.assign(this.importar, { archivo, revision: null, resultado: null, error: "", ocupado: true });
+      try {
+        this.importar.revision = await API.post("/productos/importar", archivo);
+      } catch (e) {
+        this.importar.error = e.message;
+      } finally {
+        this.importar.ocupado = false;
+      }
+    },
+    async guardarImportacion() {
+      const i = this.importar;
+      i.ocupado = true;
+      i.error = "";
+      try {
+        i.resultado = await API.post("/productos/importar?guardar=true", i.archivo);
+        await Promise.all([this.cargarLista(), this.cargarConteos(), this.cargarCategorias()]);
+      } catch (e) {
+        i.error = e.message;
+      } finally {
+        i.ocupado = false;
+      }
+    },
+    nombreColumna(campo) {
+      return {
+        clave: "Clave", nombre: "Nombre", precio: "Precio de venta", costo: "Costo", iva: "IVA", ieps: "IEPS",
+        categoria: "Categoría", laboratorio: "Laboratorio", clave_sat: "Clave SAT", minimo: "Mínimo",
+        maximo: "Máximo", existencia: "Existencia", receta: "Receta",
+      }[campo] || campo;
+    },
 
     async abrirClavesSat() {
       this.pestana = "claves";

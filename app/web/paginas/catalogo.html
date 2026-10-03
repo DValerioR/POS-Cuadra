@@ -41,7 +41,11 @@
           <button type="button" :class="{ activa: pestana === 'claves' }" @click="abrirClavesSat()">
             <svg class="ico"><use href="/static/iconos.svg#ticket"/></svg>Claves SAT
           </button>
-          <a class="boton" style="margin-left: auto" href="/productos/revision/excel" download
+          <button type="button" style="margin-left: auto" @click="abrirImportar()"
+                  title="Dar de alta o actualizar muchos productos desde un Excel">
+            <svg class="ico"><use href="/static/iconos.svg#subir"/></svg>Cargar desde Excel
+          </button>
+          <a class="boton" href="/productos/revision/excel" download
              title="Cada producto con algo que revisar (sin costo, sin clave SAT, IVA dudoso...) y la clave SAT que le correspondería. No cambia nada.">
             <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Reporte de revisión (Excel)
           </a>
@@ -240,6 +244,106 @@
       <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>Ya revisados
     </button>
     <button type="button" class="texto-suave" @click="seleccion = []">Quitar selección</button>
+  </div>
+
+  <!-- Ventana: cargar productos desde Excel -->
+  <div class="velo arriba" x-show="importar" x-cloak @click.self="!importar.ocupado && (importar = null)"
+       @keydown.escape.window="importar && !importar.ocupado && (importar = null)">
+    <template x-if="importar">
+      <div class="panel ventana-inventario ventana-importar">
+        <div class="encabezado">
+          <span class="circulo"><svg><use href="/static/iconos.svg#paquete"/></svg></span>
+          <div><h2>Cargar productos desde Excel</h2>
+            <p class="suave">Para dar de alta muchos productos de una vez, o actualizar precios y datos.</p></div>
+        </div>
+
+        <!-- 1. Elegir archivo -->
+        <template x-if="!importar.resultado">
+          <div class="pila" style="gap: 10px">
+            <p style="margin: 0"><strong>1.</strong> Baja la plantilla y llénala (o usa el Excel de tu sistema anterior: se reconocen columnas como «Código», «Descripción» y «Precio»).</p>
+            <a class="boton" href="/productos/importar/plantilla" download style="align-self: flex-start">
+              <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Bajar plantilla
+            </a>
+            <p style="margin: 6px 0 0"><strong>2.</strong> Elige el archivo (.xlsx o .csv). Primero se revisa; nada se guarda hasta que confirmes.</p>
+            <label class="boton" style="align-self: flex-start; cursor: pointer">
+              <svg class="ico"><use href="/static/iconos.svg#subir"/></svg>
+              <span x-text="importar.archivo ? 'Elegir otro archivo' : 'Elegir archivo'"></span>
+              <input type="file" accept=".xlsx,.csv" style="display: none" @change="elegirArchivo($event)" :disabled="importar.ocupado">
+            </label>
+            <p class="suave" style="margin: 0" x-show="importar.archivo" x-text="importar.archivo && importar.archivo.name"></p>
+          </div>
+        </template>
+
+        <p class="suave" x-show="importar.ocupado" x-text="importar.revision ? 'Guardando…' : 'Revisando el archivo…'"></p>
+        <div class="mensaje error" x-show="importar.error"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="importar.error"></span></div>
+
+        <!-- 3. Revisión -->
+        <template x-if="importar.revision && !importar.resultado">
+          <div class="pila" style="gap: 10px; margin-top: 8px">
+            <p class="suave" style="margin: 0" x-text="'Columnas que se usaron: ' + Object.keys(importar.revision.columnas).map(c => nombreColumna(c)).join(', ')"></p>
+            <div class="resumen-importar">
+              <div><strong x-text="importar.revision.nuevos"></strong><span>nuevos</span></div>
+              <div><strong x-text="importar.revision.actualizados"></strong><span>con cambios</span></div>
+              <div><strong x-text="importar.revision.sin_cambios"></strong><span>sin cambios</span></div>
+              <div :class="{ con_error: importar.revision.con_error }"><strong x-text="importar.revision.con_error"></strong><span>con error</span></div>
+            </div>
+            <p style="margin: 0" x-show="Number(importar.revision.piezas) > 0"
+               x-text="`Existencia inicial: ${cantidad(importar.revision.piezas)} piezas en los productos nuevos (en un lote sin caducidad).`"></p>
+            <p class="suave" style="margin: 0" x-show="importar.revision.existencia_ignorada"
+               x-text="`${importar.revision.existencia_ignorada} producto(s) que ya existían traen existencia: no se cambia (usa Inventario → ajuste).`"></p>
+            <p class="suave" style="margin: 0" x-show="importar.revision.categorias_nuevas.length"
+               x-text="'Categorías nuevas: ' + importar.revision.categorias_nuevas.join(', ')"></p>
+
+            <details x-show="importar.revision.con_error" open>
+              <summary><strong>Renglones con error (no se guardan)</strong></summary>
+              <table class="tabla">
+                <thead><tr><th class="ajustado">Renglón</th><th>Producto</th><th>Qué pasa</th></tr></thead>
+                <tbody>
+                  <template x-for="e in importar.revision.errores" :key="e.renglon">
+                    <tr><td x-text="e.renglon"></td><td x-text="e.nombre || e.clave || ''"></td><td x-text="e.error"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </details>
+            <details x-show="importar.revision.actualizados">
+              <summary>Productos que cambian <span class="suave">(primeros 30)</span></summary>
+              <table class="tabla">
+                <tbody>
+                  <template x-for="a in importar.revision.muestra_actualizados" :key="a.renglon">
+                    <tr><td x-text="a.nombre"></td><td class="suave" x-text="a.cambios"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </details>
+            <details x-show="importar.revision.nuevos">
+              <summary>Productos nuevos <span class="suave">(primeros 30)</span></summary>
+              <table class="tabla">
+                <tbody>
+                  <template x-for="n in importar.revision.muestra_nuevos" :key="n.renglon">
+                    <tr><td x-text="n.clave || ''"></td><td x-text="n.nombre"></td><td class="derecha" x-text="n.precio ? dinero(n.precio) : 'sin precio'"></td></tr>
+                  </template>
+                </tbody>
+              </table>
+            </details>
+
+            <button type="button" class="primario grande" :disabled="importar.ocupado || !(importar.revision.nuevos + importar.revision.actualizados)"
+                    @click="guardarImportacion()"
+                    x-text="importar.ocupado ? 'Guardando…' : `Guardar ${importar.revision.nuevos + importar.revision.actualizados} producto(s)`"></button>
+          </div>
+        </template>
+
+        <!-- 4. Listo -->
+        <template x-if="importar.resultado">
+          <div class="mensaje ok">
+            <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
+            <span x-text="`Listo: ${importar.resultado.nuevos} producto(s) nuevos y ${importar.resultado.actualizados} actualizados.` + (importar.resultado.con_error ? ` ${importar.resultado.con_error} renglón(es) con error no se guardaron.` : '')"></span>
+          </div>
+        </template>
+
+        <button type="button" class="separado" :disabled="importar.ocupado" @click="importar = null"
+                x-text="importar.resultado ? 'Cerrar' : 'Cancelar'"></button>
+      </div>
+    </template>
   </div>
 
   <!-- Ventana: categoría en grupo -->

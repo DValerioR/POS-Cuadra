@@ -46,6 +46,7 @@
   <template x-if="f">
     <article class="factura-papel" :class="{ prueba: f.de_prueba }">
       <div class="marca-agua" x-show="f.de_prueba">PRUEBA · SIN VALIDEZ FISCAL</div>
+      <div class="marca-agua" x-show="!f.de_prueba && f.estado === 'cancelada'">CANCELADA</div>
       <header class="factura-cabeza">
         <div class="factura-emisor">
           <img x-show="f.marca_url" :src="f.marca_url" alt="">
@@ -60,7 +61,9 @@
           <div class="tipo">FACTURA</div>
           <div class="numero" x-text="`${f.serie}-${f.folio}`"></div>
           <div x-text="`Fecha: ${f.fecha.replace('T', ' ')}`"></div>
-          <div x-text="`Ticket: ${f.folio_ticket}`"></div>
+          <div x-show="f.folio_ticket" x-text="`Ticket: ${f.folio_ticket}`"></div>
+          <div x-show="f.periodo" x-text="`Factura global · ${f.periodo}`"></div>
+          <div x-show="f.estado !== 'vigente'" x-text="f.estado === 'cancelada' ? 'CANCELADA ante el SAT' : 'Cancelación en espera del cliente'"></div>
           <div>Tipo: I - Ingreso · CFDI 4.0</div>
         </div>
       </header>

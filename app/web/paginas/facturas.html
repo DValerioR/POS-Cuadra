@@ -14,6 +14,8 @@
   <script>
     // Facturar un ticket (admin y mostrador): se busca por folio, se capturan
     // (o se recuerdan por RFC) los datos fiscales del cliente y se timbra.
+    // El administrador también hace la factura global del público en general
+    // y cancela facturas ante el SAT.
     function pantallaFacturas() {
       return {
         usuario: null,
@@ -30,6 +32,20 @@
         recientes: [],
         pendientes: [], // facturas que no se pudieron confirmar
         ocupadoPendiente: null,
+        modo: "ticket", // "ticket" o "global"
+
+        // --- Factura global (administrador) ---
+        g: { periodicidad: "04", fecha: "" },
+        gPrep: null,
+        gTarjeta: "04",
+        gOcupado: false,
+        gVerTickets: false,
+
+        // --- Cancelar (administrador) ---
+        cancelando: null,
+        motivoCancel: "02",
+        ocupadoCancel: false,
+        errorCancel: "",
 
         async init() {
           try {
@@ -37,6 +53,10 @@
             if (!this.puedeUsar) return;
             [this.cat, this.recientes, this.pendientes] = await Promise.all([API.get("/cfdi/catalogos"), API.get("/cfdi?limite=15"),
                                                                             API.get("/cfdi/pendientes")]);
+            // Por omisión, la global del mes pasado (el periodo ya cerró).
+            const hoy = new Date();
+            const mesPasado = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+            this.g.fecha = this.isoLocal(mesPasado);
             const folio = new URLSearchParams(location.search).get("folio");
             if (folio) { this.folio = folio; await this.buscar(); }
           } catch (e) {
@@ -196,7 +216,81 @@
         },
         otra() {
           this.hecha = null;
-          this.$nextTick(() => document.getElementById("folio-ticket").focus());
+          this.$nextTick(() => { const i = document.getElementById("folio-ticket"); if (i) i.focus(); });
+        },
+        cambiarModo(m) {
+          this.modo = m;
+          this.error = "";
+          this.hecha = null;
+          if (m === "global" && !this.gPrep) this.verGlobal();
+        },
+        isoLocal(d) {
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        },
+        async verGlobal() {
+          if (!this.g.fecha) return;
+          this.error = "";
+          this.gPrep = null;
+          this.gVerTickets = false;
+          try {
+            this.gPrep = await API.get(`/cfdi/global?periodicidad=${this.g.periodicidad}&fecha=${this.g.fecha}`);
+            this.gTarjeta = "04";
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        get gFormaTarjeta() {
+          return this.gPrep && (this.gPrep.forma_pago === "04" || this.gPrep.forma_pago === "28");
+        },
+        async timbrarGlobal() {
+          const p = this.gPrep;
+          if (!confirm(`¿Timbrar la factura global (${p.periodo}) con ${p.tickets.length} ticket(s) por ${dinero(p.total)}?`)) return;
+          this.gOcupado = true;
+          this.error = "";
+          try {
+            this.hecha = await API.post("/cfdi/global", { periodicidad: this.g.periodicidad, fecha: this.g.fecha, tarjeta: this.gTarjeta });
+            this.gPrep = null;
+            this.recientes = await API.get("/cfdi?limite=15");
+          } catch (e) {
+            this.error = e.message;
+            this.pendientes = await API.get("/cfdi/pendientes").catch(() => this.pendientes);
+            await this.verGlobal();
+          } finally {
+            this.gOcupado = false;
+          }
+        },
+        abrirCancelar(f) {
+          this.cancelando = f;
+          this.motivoCancel = "02";
+          this.errorCancel = "";
+        },
+        async confirmarCancelar() {
+          this.ocupadoCancel = true;
+          this.errorCancel = "";
+          try {
+            const r = await API.post(`/cfdi/${this.cancelando.id}/cancelar`, { motivo: this.motivoCancel });
+            this.cancelando = null;
+            this.recientes = await API.get("/cfdi?limite=15");
+            if (r.estado !== "cancelada" && r.cancelacion_mensaje) alert(r.cancelacion_mensaje);
+          } catch (e) {
+            this.errorCancel = e.message;
+          } finally {
+            this.ocupadoCancel = false;
+          }
+        },
+        async revisarCancelacion(f) {
+          this.error = "";
+          try {
+            const r = await API.post(`/cfdi/${f.id}/revisar-cancelacion`);
+            this.recientes = await API.get("/cfdi?limite=15");
+            if (r.estado === "cancelacion_pendiente") alert("El cliente todavía no responde. Revisa más tarde.");
+            else if (r.estado === "vigente" && r.cancelacion_mensaje) alert(r.cancelacion_mensaje);
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        textoEstado(f) {
+          return { cancelada: "Cancelada", cancelacion_pendiente: "Cancelación pendiente" }[f.estado] || "";
         },
         imprimir(id) {
           window.open(`/factura-imprimir?id=${id}`, "_blank");
@@ -227,7 +321,13 @@
       <div class="pila" style="gap: 16px">
         <div class="encabezado" style="margin: 0">
           <span class="circulo"><svg><use href="/static/iconos.svg#ticket"/></svg></span>
-          <div><h1>Facturar un ticket</h1><p class="suave">Busca el ticket por su folio y captura los datos fiscales del cliente.</p></div>
+          <div x-show="modo === 'ticket'"><h1>Facturar un ticket</h1><p class="suave">Busca el ticket por su folio y captura los datos fiscales del cliente.</p></div>
+          <div x-show="modo === 'global'"><h1>Factura global</h1><p class="suave">Los tickets que nadie pidió facturar, en una factura al público en general.</p></div>
+        </div>
+
+        <div class="interruptor" x-show="esAdmin" style="align-self: flex-start">
+          <button type="button" :class="{ activo: modo === 'ticket' }" @click="cambiarModo('ticket')">Un ticket</button>
+          <button type="button" :class="{ activo: modo === 'global' }" @click="cambiarModo('global')">Factura global</button>
         </div>
 
         <div class="mensaje aviso" x-show="dePrueba" style="margin: 0">
@@ -254,7 +354,7 @@
           <template x-for="p in pendientes" :key="p.id">
             <div class="pendiente-factura">
               <div>
-                <strong x-text="`${p.serie}-${p.folio} · Ticket ${p.folio_ticket} · ${dinero(p.total)}`"></strong>
+                <strong x-text="`${p.serie}-${p.folio} · ${p.tipo === 'global' ? 'Global ' + p.periodo : 'Ticket ' + p.folio_ticket} · ${dinero(p.total)}`"></strong>
                 <div class="suave" x-text="`${p.receptor_nombre} · ${p.receptor_rfc}`"></div>
                 <div class="suave" style="font-size: 14px" x-show="p.mensaje" x-text="p.mensaje"></div>
               </div>
@@ -273,18 +373,19 @@
             <div class="palomita"><svg><use href="/static/iconos.svg#palomita"/></svg></div>
             <h2 x-text="`Factura ${hecha.serie}-${hecha.folio} timbrada`"></h2>
             <p class="suave" x-text="`${hecha.receptor_nombre} · ${hecha.receptor_rfc} · ${dinero(hecha.total)}`"></p>
+            <p class="suave" x-show="hecha.periodo" x-text="`Factura global · ${hecha.periodo}`"></p>
             <p class="uuid"><span class="suave">Folio fiscal (UUID)</span><br><strong x-text="hecha.uuid"></strong></p>
             <span class="etiqueta peligro" x-show="hecha.de_prueba">PRUEBA · SIN VALIDEZ FISCAL</span>
             <div class="fila separado" style="justify-content: center; flex-wrap: wrap; gap: 8px">
               <button type="button" class="primario" @click="imprimir(hecha.id)"><svg class="ico"><use href="/static/iconos.svg#impresora"/></svg>Imprimir</button>
               <a class="boton" :href="`/cfdi/${hecha.id}/xml`"><svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>XML</a>
-              <button type="button" @click="otra()">Facturar otro ticket</button>
+              <button type="button" @click="otra()" x-text="modo === 'global' ? 'Listo' : 'Facturar otro ticket'"></button>
             </div>
           </div>
         </template>
 
         <!-- Buscar ticket -->
-        <form class="panel buscar-ticket" x-show="!hecha" @submit.prevent="buscar()">
+        <form class="panel buscar-ticket" x-show="!hecha && modo === 'ticket'" @submit.prevent="buscar()">
           <label for="folio-ticket" style="margin-top: 0">Folio del ticket</label>
           <div class="fila" style="gap: 8px">
             <input id="folio-ticket" x-model="folio" inputmode="numeric" placeholder="Ej. 1234" autocomplete="off">
@@ -292,7 +393,75 @@
           </div>
         </form>
 
-        <template x-if="t && !hecha">
+        <!-- Factura global (administrador) -->
+        <template x-if="modo === 'global' && !hecha">
+          <div class="pila" style="gap: 16px">
+            <form class="panel" @submit.prevent="verGlobal()">
+              <div class="paso" style="margin-top: 0">Factura global al público en general</div>
+              <p class="suave" style="margin-top: 0">Junta en una sola factura los tickets que no se facturaron a un cliente. Se hace cuando el periodo ya terminó.</p>
+              <div class="rejilla-2">
+                <div>
+                  <label>Periodo</label>
+                  <select x-model="g.periodicidad" @change="verGlobal()">
+                    <template x-for="(texto, clave) in cat.periodicidades" :key="clave">
+                      <option :value="clave" x-text="texto" :selected="clave === g.periodicidad"></option>
+                    </template>
+                  </select>
+                </div>
+                <div>
+                  <label>Cualquier día del periodo</label>
+                  <input type="date" x-model="g.fecha" @change="verGlobal()">
+                </div>
+              </div>
+            </form>
+
+            <template x-if="gPrep">
+              <div class="panel">
+                <div class="paso" style="margin-top: 0" x-text="gPrep.periodo"></div>
+                <template x-if="!gPrep.puede_facturar">
+                  <div class="mensaje error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="gPrep.motivo"></span></div>
+                </template>
+                <template x-if="gPrep.tickets.length">
+                  <div>
+                    <div class="totales-factura">
+                      <span>Tickets</span><strong x-text="gPrep.tickets.length"></strong>
+                      <span>Subtotal</span><strong x-text="dinero(gPrep.subtotal)"></strong>
+                      <span x-show="Number(gPrep.ieps) > 0">IEPS</span><strong x-show="Number(gPrep.ieps) > 0" x-text="dinero(gPrep.ieps)"></strong>
+                      <span>IVA</span><strong x-text="dinero(gPrep.iva)"></strong>
+                      <span class="total">Total</span><strong class="total" x-text="dinero(gPrep.total)"></strong>
+                    </div>
+                    <p class="suave" x-text="`Forma de pago: ${cat.formas_pago[gPrep.forma_pago] || gPrep.forma_pago} (la de mayor monto en el periodo)`"></p>
+                    <template x-if="gFormaTarjeta">
+                      <div>
+                        <label>La mayoría se cobró con tarjeta, ¿de qué tipo?</label>
+                        <div class="interruptor">
+                          <button type="button" :class="{ activo: gTarjeta === '04' }" @click="gTarjeta = '04'">Crédito</button>
+                          <button type="button" :class="{ activo: gTarjeta === '28' }" @click="gTarjeta = '28'">Débito</button>
+                        </div>
+                      </div>
+                    </template>
+                    <template x-for="a in gPrep.avisos"><p class="aviso-factura" x-text="a"></p></template>
+                    <button type="button" class="separado" @click="gVerTickets = !gVerTickets"
+                            x-text="gVerTickets ? 'Ocultar tickets' : 'Ver los tickets'"></button>
+                    <table class="tabla separado" x-show="gVerTickets">
+                      <thead><tr><th class="ajustado">Ticket</th><th>Fecha</th><th class="derecha ajustado">Total</th></tr></thead>
+                      <tbody>
+                        <template x-for="tk in gPrep.tickets" :key="tk.folio">
+                          <tr><td x-text="tk.folio"></td><td class="suave" x-text="fecha(tk.fecha)"></td><td class="derecha" x-text="dinero(tk.total)"></td></tr>
+                        </template>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+                <button type="button" class="primario grande separado" x-show="gPrep.puede_facturar" :disabled="gOcupado || !cat.pac"
+                        @click="timbrarGlobal()"
+                        x-text="gOcupado ? 'Timbrando…' : (dePrueba ? 'Timbrar factura global de prueba' : 'Timbrar factura global')"></button>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <template x-if="t && !hecha && modo === 'ticket'">
           <div class="rejilla-factura">
             <div class="panel" style="padding: 0; overflow: hidden">
               <div class="paso" style="margin: 14px 16px 4px" x-text="`Ticket ${t.folio} · ${fecha(t.fecha)}`"></div>
@@ -368,15 +537,21 @@
         <div class="panel" style="padding: 0; overflow: hidden" x-show="recientes.length">
           <div class="paso" style="margin: 14px 16px 4px">Facturas recientes</div>
           <table class="tabla tabla-clic">
-            <thead><tr><th class="ajustado">Factura</th><th>Cliente</th><th class="ajustado">Ticket</th><th class="derecha ajustado">Total</th><th class="ajustado">Fecha</th></tr></thead>
+            <thead><tr><th class="ajustado">Factura</th><th>Cliente</th><th class="ajustado">Ticket</th><th class="derecha ajustado">Total</th><th class="ajustado">Fecha</th><th class="ajustado" x-show="esAdmin"></th></tr></thead>
             <tbody>
               <template x-for="f in recientes" :key="f.id">
                 <tr @click="imprimir(f.id)">
-                  <td><strong x-text="`${f.serie}-${f.folio}`"></strong> <span class="etiqueta peligro" x-show="f.de_prueba">Prueba</span></td>
-                  <td><span x-text="f.receptor_nombre"></span><div class="suave" style="font-size: 13px" x-text="f.receptor_rfc"></div></td>
-                  <td x-text="f.folio_ticket"></td>
+                  <td><strong x-text="`${f.serie}-${f.folio}`" :style="f.estado === 'cancelada' && 'text-decoration: line-through'"></strong>
+                    <span class="etiqueta peligro" x-show="f.de_prueba">Prueba</span>
+                    <span class="etiqueta" :class="f.estado === 'cancelada' ? 'gris' : 'peligro'" x-show="f.estado !== 'vigente'" x-text="textoEstado(f)"></span></td>
+                  <td><span x-text="f.receptor_nombre"></span><div class="suave" style="font-size: 13px" x-text="f.periodo || f.receptor_rfc"></div></td>
+                  <td x-text="f.folio_ticket || 'Global'"></td>
                   <td class="derecha" x-text="dinero(f.total)"></td>
                   <td class="suave" style="white-space: nowrap" x-text="fecha(f.fecha_timbrado)"></td>
+                  <td x-show="esAdmin" @click.stop>
+                    <button type="button" class="texto-peligro" x-show="f.estado === 'vigente'" @click="abrirCancelar(f)">Cancelar</button>
+                    <button type="button" x-show="f.estado === 'cancelacion_pendiente'" @click="revisarCancelacion(f)">Revisar</button>
+                  </td>
                 </tr>
               </template>
             </tbody>
@@ -385,6 +560,30 @@
       </div>
     </template>
   </main>
+
+  <!-- Cancelar una factura ante el SAT (administrador) -->
+  <div class="velo" x-show="cancelando" x-cloak @click.self="cancelando = null" @keydown.escape.window="cancelando = null">
+    <form class="panel ventana-texto" @submit.prevent="confirmarCancelar()" x-show="cancelando">
+      <div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#alerta"/></svg></span>
+        <div>
+          <h2 x-text="cancelando && `Cancelar la factura ${cancelando.serie}-${cancelando.folio}`"></h2>
+          <p class="suave" x-text="cancelando && `${cancelando.receptor_nombre} · ${dinero(cancelando.total)}`"></p>
+        </div>
+      </div>
+      <label style="margin-top: 0">Motivo</label>
+      <template x-for="(texto, clave) in cat.motivos_cancelacion" :key="clave">
+        <label class="casilla" style="margin: 0 0 6px; font-weight: 400">
+          <input type="radio" name="motivo-cancelacion" :value="clave" x-model="motivoCancel">
+          <span x-text="`${clave} - ${texto}`"></span>
+        </label>
+      </template>
+      <p class="ayuda">Se pide al SAT. Si la factura es de más de $1,000 a un cliente con RFC, el cliente tiene que aceptar la cancelación (tiene 72 horas) y mientras tanto queda «Cancelación pendiente». <span x-text="cancelando && cancelando.tipo === 'global' ? 'Al cancelarse, sus tickets quedan libres para otra factura global o para facturarlos a un cliente.' : 'Al cancelarse, el ticket se puede volver a facturar.'"></span></p>
+      <div class="mensaje error" x-show="errorCancel"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorCancel"></span></div>
+      <button class="primario grande peligro" :disabled="ocupadoCancel" x-text="ocupadoCancel ? 'Cancelando…' : 'Cancelar la factura'"></button>
+      <button type="button" class="separado" @click="cancelando = null">No cancelar</button>
+    </form>
+  </div>
 
   <!-- Conexión con Facturapi (administrador) -->
   <div class="velo" x-show="verConexion" x-cloak @click.self="verConexion = false" @keydown.escape.window="verConexion = false">

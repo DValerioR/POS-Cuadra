@@ -43,6 +43,8 @@ class FacturapiFalso:
         self.lista = []  # lo que regresa la búsqueda GET /invoices
         self.xml_falla = False  # el XML no se puede bajar
         self.consulta_falla = False  # GET /invoices y /invoices/{id} sin conexión
+        self.cancelacion = {"status": "canceled", "cancellation_status": "accepted"}  # respuesta de DELETE (None: sin red)
+        self.estado = {}  # lo que cambia en GET /invoices/{id} (ej. después de una cancelación)
 
     @property
     def posts(self):
@@ -63,8 +65,12 @@ class FacturapiFalso:
             return httpx.Response(200, content=b"%PDF-1.4 falso")
         if self.consulta_falla and ruta.startswith("/v2/invoices"):
             raise httpx.ConnectError("sin red")
+        if pedido.method == "DELETE" and ruta == "/v2/invoices/inv_123":
+            if self.cancelacion is None:
+                raise httpx.ConnectError("sin red")
+            return httpx.Response(200, json={**self.FACTURA, **self.cancelacion})
         if pedido.method == "GET" and ruta == "/v2/invoices/inv_123":
-            return httpx.Response(200, json=self.FACTURA)
+            return httpx.Response(200, json={**self.FACTURA, **self.estado})
         if pedido.method == "GET" and ruta == "/v2/invoices":
             return httpx.Response(200, json={"data": self.lista, "page": 1})
         return httpx.Response(404, json={"message": "no existe"})
@@ -305,3 +311,56 @@ def test_reintentar_sin_datos_fiscales_explica(como_admin, db, negocio, fiscal, 
     resp = como_admin.post(f"/cfdi/pendientes/{p['id']}/reintentar")
     assert resp.status_code == 409 and "Faltan datos fiscales" in resp.json()["detail"]
     assert len(_pendientes(como_admin)) == 1
+
+
+# --- Cancelación y factura global ------------------------------------------------
+
+def test_cancelar_con_facturapi(como_admin, fiscal, facturapi, caja, shampoo):  # noqa: F811
+    v = vender(como_admin, caja, [r(shampoo, 2)], efectivo="300").json()
+    f = facturar(como_admin, v["folio"]).json()
+    c = como_admin.post(f"/cfdi/{f['id']}/cancelar", json={"motivo": "02"})
+    assert c.status_code == 200, c.text
+    assert c.json()["estado"] == "cancelada"
+    borrar = [p for p in facturapi.pedidos if p.method == "DELETE"][0]
+    assert borrar.url.path == "/v2/invoices/inv_123" and borrar.url.params["motive"] == "02"
+
+
+def test_cancelacion_que_espera_al_cliente(como_admin, fiscal, facturapi, caja, shampoo):  # noqa: F811
+    facturapi.cancelacion = {"status": "valid", "cancellation_status": "pending"}
+    v = vender(como_admin, caja, [r(shampoo, 2)], efectivo="300").json()
+    f = facturar(como_admin, v["folio"]).json()
+    c = como_admin.post(f"/cfdi/{f['id']}/cancelar", json={"motivo": "02"}).json()
+    assert c["estado"] == "cancelacion_pendiente" and "72 horas" in c["cancelacion_mensaje"]
+    # Mientras espera no se puede facturar el ticket otra vez.
+    assert como_admin.get(f"/cfdi/ticket/{v['folio']}").json()["puede_facturar"] is False
+    facturapi.estado = {"status": "valid", "cancellation_status": "rejected"}
+    c = como_admin.post(f"/cfdi/{f['id']}/revisar-cancelacion").json()
+    assert c["estado"] == "vigente" and "rechazó" in c["cancelacion_mensaje"]
+    facturapi.estado = {"status": "canceled", "cancellation_status": "accepted"}
+    como_admin.post(f"/cfdi/{f['id']}/cancelar", json={"motivo": "02"})
+    assert como_admin.post(f"/cfdi/{f['id']}/revisar-cancelacion").json()["estado"] == "cancelada"
+
+
+def test_cancelar_sin_conexion(como_admin, fiscal, facturapi, caja, shampoo):  # noqa: F811
+    v = vender(como_admin, caja, [r(shampoo, 2)], efectivo="300").json()
+    f = facturar(como_admin, v["folio"]).json()
+    facturapi.cancelacion = None
+    resp = como_admin.post(f"/cfdi/{f['id']}/cancelar", json={"motivo": "02"})
+    assert resp.status_code == 409 and "no se pidió" in resp.json()["detail"]
+    assert como_admin.get("/cfdi").json()[0]["estado"] == "vigente"
+
+
+def test_global_con_facturapi(como_admin, db, fiscal, facturapi, caja, shampoo):  # noqa: F811
+    from tests.test_factura_global import a_ayer, global_de_ayer
+
+    v = vender(como_admin, caja, [r(shampoo, 2)], efectivo="300").json()
+    a_ayer(db, v)
+    assert global_de_ayer(como_admin).status_code == 201
+    cuerpo = json.loads(facturapi.posts[0].content)
+    assert cuerpo["customer"] == {"legal_name": "PUBLICO EN GENERAL", "tax_id": "XAXX010101000", "tax_system": "616",
+                                  "address": {"zip": "46470"}}
+    assert cuerpo["use"] == "S01" and cuerpo["global"]["periodicity"] == "day"
+    from tests.test_factura_global import AYER
+    assert (cuerpo["global"]["months"], cuerpo["global"]["year"]) == (f"{AYER.month:02d}", AYER.year)
+    producto = cuerpo["items"][0]["product"]
+    assert (producto["product_key"], producto["unit_key"], producto["sku"], producto["price"]) ==         ("01010101", "ACT", str(v["folio"]), 200.0)

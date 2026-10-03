@@ -31,7 +31,7 @@ FORMAS_PAGO = {
 
 CLAVE_GENERICA = "01010101"  # "No existe en el catálogo": se usa si el producto no tiene clave SAT
 CLAVE_UNIDAD = "H87"  # pieza
-RFC_GENERICO = "XAXX010101000"  # público en general (no se usa en facturas a un cliente)
+RFC_GENERICO = "XAXX010101000"  # público en general (solo en la factura global)
 
 
 def es_persona_moral(rfc: str) -> bool:
@@ -57,3 +57,18 @@ def validar_receptor(rfc: str, regimen: str, uso: str) -> str | None:
     if permitidos is not None and regimen not in permitidos:
         return f"El uso {uso} no se puede usar con el régimen {regimen}"
     return None
+
+
+# Factura global al público en general.
+NOMBRE_GENERICO = "PUBLICO EN GENERAL"
+REGIMEN_GENERICO = "616"
+USO_GENERICO = "S01"
+CLAVE_UNIDAD_GLOBAL = "ACT"  # actividad: cada ticket es un concepto
+PERIODICIDADES = {"01": "Diaria", "02": "Semanal", "03": "Quincenal", "04": "Mensual", "05": "Bimestral"}
+
+# Motivos de cancelación que se ofrecen. El 01 (con una factura que la
+# sustituye) y el 04 (operación nominativa en una global) no se manejan aquí.
+MOTIVOS_CANCELACION = {
+    "02": "Comprobante emitido con errores sin relación",
+    "03": "No se llevó a cabo la operación",
+}

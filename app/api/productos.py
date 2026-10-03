@@ -11,7 +11,7 @@ from app.core.auth import solo_admin, usuario_actual
 from app.core.database import get_db
 from app.models import Categoria, Negocio, PrecioHistorial, Producto, TipoUso, Usuario
 from app.schemas.producto import ProductoCreate, ProductoOut, ProductoUpdate
-from app.services import buscador, catalogo, entradas, revision_catalogo, usos
+from app.services import buscador, catalogo, entradas, importar_catalogo, revision_catalogo, usos
 from app.services.errores import ERRORES_NEGOCIO, a_http
 from app.services.precios import redondear_precio_venta
 
@@ -149,6 +149,45 @@ def revision_excel(usuario: Usuario = Depends(solo_admin), db: Session = Depends
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="revision_catalogo_{fecha}.xlsx"'},
     )
+
+
+@router.get("/importar/plantilla")
+def plantilla_importar(usuario: Usuario = Depends(solo_admin)):
+    """Excel vacío con las columnas para cargar productos."""
+    return Response(importar_catalogo.plantilla(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="plantilla_productos.xlsx"'})
+
+
+@router.post("/importar")
+async def importar_excel(request: Request, guardar: bool = False, usuario: Usuario = Depends(solo_admin),
+                         db: Session = Depends(get_db)):
+    """Carga productos desde un Excel o CSV (el archivo va en el cuerpo).
+    Sin `guardar` solo revisa y dice qué pasaría; con `guardar`, lo guarda."""
+    datos = await request.body()
+    if len(datos) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El archivo pasa de 15 MB")
+    try:
+        r, encabezados = importar_catalogo.aplicar(db, usuario, datos, guardar)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    if guardar:
+        db.commit()
+    else:
+        db.rollback()
+    return {
+        "guardado": guardar, "renglones": r.renglones, "columnas": encabezados,
+        "nuevos": len(r.nuevos), "actualizados": len(r.actualizados), "sin_cambios": r.sin_cambios,
+        "con_error": len(r.errores), "existencia_ignorada": r.existencia_ignorada,
+        "categorias_nuevas": r.categorias_nuevas, "piezas": str(r.piezas),
+        # Muestras para la pantalla (el detalle completo no hace falta para decidir).
+        "muestra_nuevos": [{**n, "precio": str(n["precio"]) if n["precio"] is not None else None,
+                            "existencia": str(n["existencia"]) if n["existencia"] is not None else None}
+                           for n in r.nuevos[:30]],
+        "muestra_actualizados": r.actualizados[:30],
+        "errores": r.errores[:200],
+    }
 
 
 @router.get("/revision/claves-sat")

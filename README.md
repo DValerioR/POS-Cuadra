@@ -116,6 +116,15 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
     cambio de precio (catálogo, cambio en grupo, importador de precios) queda
     en `precios_historial` con quién y desde dónde.
   - `GET /categorias` incluye cuántos productos tiene cada una.
+  - Cargar desde Excel (botón en `/catalogo`; `app/services/importar_catalogo.py`):
+    `GET /productos/importar/plantilla` baja la plantilla y
+    `POST /productos/importar[?guardar=true]` (el archivo .xlsx o .csv en el
+    cuerpo) revisa o guarda. Reconoce las columnas de la plantilla y los
+    nombres comunes de otros sistemas («Código», «Descripción», «Precio»,
+    «Stock»...), busca por clave (también sin ceros) o por nombre, crea los
+    que no existen y en los que existen solo cambia las celdas llenas. La
+    existencia solo se usa en productos nuevos (lote sin caducidad). Los
+    renglones con error se listan y no detienen a los demás.
 - Inventario por lote:
   - `GET /inventario/productos/{id}` — existencia total y lotes en orden FEFO
     (primero el que caduca antes; los "sin caducidad" al final).
@@ -319,6 +328,33 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
   no se timbró (para corregir datos del cliente y empezar de nuevo).
 - En la pantalla Facturar un ticket aparecen arriba con Reintentar y
   Descartar.
+
+### Factura global y cancelación de facturas
+
+- Factura global al público en general (solo admin, pestaña «Factura global»
+  en `/facturas`; lógica en `app/services/factura_global.py`):
+  `GET /cfdi/global?periodicidad=01..05&fecha=AAAA-MM-DD` muestra los tickets
+  libres del periodo que contiene esa fecha y sus totales; `POST /cfdi/global`
+  `{periodicidad, fecha, tarjeta}` la timbra. Periodos: diario, semanal
+  (lunes a domingo, sin pasar del mes), quincenal, mensual y bimestral; solo
+  periodos ya terminados. Entran los tickets completados que no se
+  facturaron a un cliente ni van en otra global, con lo que se quedó el
+  cliente si hubo devoluciones. Un concepto por ticket y tasa de impuestos
+  (01010101, ACT, el folio del ticket como NoIdentificacion); receptor
+  XAXX010101000 / PUBLICO EN GENERAL / 616 / S01; InformacionGlobal con
+  periodicidad, meses (13-18 si es bimestral) y año. Usa el mismo
+  `IntentoFactura` y «Reintentar»; los tickets quedan apartados en
+  `ventas_en_global` desde el intento.
+- `POST /cfdi/{id}/cancelar` `{motivo: "02"|"03"}` (solo admin) pide la
+  cancelación al SAT por el PAC. Si el cliente debe aceptarla queda
+  `cancelacion_pendiente`; `POST /cfdi/{id}/revisar-cancelacion` consulta
+  cómo va (aceptada → `cancelada`; rechazada o vencida → `vigente` con el
+  mensaje). Al cancelarse, el ticket se puede facturar otra vez y los
+  tickets de una global quedan libres. Los motivos 01 (con sustitución) y
+  04 no se manejan todavía.
+- Con Facturapi: `DELETE /invoices/{id}?motive=` y los campos `status` /
+  `cancellation_status`, y `global: {periodicity, months, year}` al timbrar;
+  se tomaron de su documentación y falta probarlos con la clave de pruebas.
 
 ### Avisos de inventario (ventas sin existencia registrada)
 

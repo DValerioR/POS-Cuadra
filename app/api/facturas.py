@@ -1,3 +1,4 @@
+from datetime import date
 from urllib.parse import quote
 
 from defusedxml import ElementTree
@@ -11,7 +12,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.facturacion import catalogos
 from app.models import Factura, Negocio, Usuario, Venta
-from app.services import configuracion_facturacion, facturacion
+from app.services import configuracion_facturacion, factura_global, facturacion
 from app.services.errores import ERRORES_NEGOCIO, a_http
 
 # La pantalla es /facturas; el API va en /cfdi para no chocar con ella.
@@ -29,12 +30,24 @@ class FacturarIn(BaseModel):
     tarjeta: str = "04"  # si se pagó con tarjeta: 04 crédito o 28 débito
 
 
+class GlobalIn(BaseModel):
+    periodicidad: str = Field(max_length=2)  # 01 diaria ... 05 bimestral
+    fecha: date  # cualquier día del periodo
+    tarjeta: str = "04"
+
+
+class CancelarIn(BaseModel):
+    motivo: str = Field(max_length=2)
+
+
 @router.get("/catalogos")
 def catalogos_sat(usuario: Usuario = Depends(usuario_actual)):
     return {
         "regimenes": {k: v[0] for k, v in catalogos.REGIMENES.items()},
         "usos": {k: v[0] for k, v in catalogos.USOS_CFDI.items()},
         "formas_pago": catalogos.FORMAS_PAGO,
+        "periodicidades": catalogos.PERIODICIDADES,
+        "motivos_cancelacion": catalogos.MOTIVOS_CANCELACION,
         "pac": settings.pac or None,
         "de_prueba": configuracion_facturacion.estado()["de_prueba"],  # las facturas salen sin validez fiscal
     }
@@ -134,8 +147,8 @@ def reintentar(intento_id: int, usuario: Usuario = Depends(usuario_actual), db: 
         db.commit()
         raise a_http(e)
     db.commit()
-    venta = db.get(Venta, f.venta_id)
-    return _exacto(facturacion.resumen(f, venta.folio))
+    venta = db.get(Venta, f.venta_id) if f.venta_id else None
+    return _exacto(facturacion.resumen(f, venta.folio if venta else None))
 
 
 @router.delete("/pendientes/{intento_id}", status_code=204)
@@ -148,6 +161,62 @@ def descartar(intento_id: int, usuario: Usuario = Depends(usuario_actual), db: S
         raise a_http(e)
     db.commit()
     return Response(status_code=204)
+
+
+@router.get("/global")
+def preparar_global(periodicidad: str = Query(..., max_length=2), fecha: date = Query(...),
+                    usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Los tickets sin facturar del periodo y los totales de la factura global."""
+    try:
+        return _exacto(factura_global.preparar(db, usuario, periodicidad, fecha))
+    except ERRORES_NEGOCIO as e:
+        raise a_http(e)
+
+
+@router.post("/global", status_code=201)
+def facturar_global(datos: GlobalIn, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Como la factura de un ticket: primero aparta el folio y los tickets, luego timbra."""
+    try:
+        intento = factura_global.facturar(db, usuario, datos.periodicidad, datos.fecha, datos.tarjeta)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    try:
+        f = facturacion.timbrar(db, usuario, intento)
+    except ERRORES_NEGOCIO as e:
+        db.commit()
+        raise a_http(e)
+    db.commit()
+    return _exacto(facturacion.resumen(f))
+
+
+@router.post("/{factura_id}/cancelar")
+def cancelar(factura_id: int, datos: CancelarIn, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Pide al SAT cancelar la factura (motivo 02 o 03)."""
+    try:
+        f = facturacion.cancelar(db, usuario, factura_id, datos.motivo)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return _exacto(facturacion.resumen(f, _folio_ticket(db, f)))
+
+
+@router.post("/{factura_id}/revisar-cancelacion")
+def revisar_cancelacion(factura_id: int, usuario: Usuario = Depends(solo_admin), db: Session = Depends(get_db)):
+    """Revisa si el cliente ya aceptó (o rechazó) la cancelación."""
+    try:
+        f = facturacion.revisar_cancelacion(db, usuario, factura_id)
+    except ERRORES_NEGOCIO as e:
+        db.rollback()
+        raise a_http(e)
+    db.commit()
+    return _exacto(facturacion.resumen(f, _folio_ticket(db, f)))
+
+
+def _folio_ticket(db: Session, f: Factura) -> int | None:
+    return db.get(Venta, f.venta_id).folio if f.venta_id else None
 
 
 @router.get("")
@@ -182,9 +251,9 @@ def detalle(factura_id: int, usuario: Usuario = Depends(usuario_actual), db: Ses
         elif local(n) == "Emisor":
             emisor = dict(n.attrib)
     negocio = db.get(Negocio, f.negocio_id)
-    folio_ticket = db.get(Venta, f.venta_id).folio
     return _exacto({
-        **facturacion.resumen(f, folio_ticket),
+        **facturacion.resumen(f, _folio_ticket(db, f)),
+        "tickets": factura_global.tickets_de(db, f) if f.venta_id is None else None,
         "fecha": raiz.attrib.get("Fecha"), "lugar_expedicion": raiz.attrib.get("LugarExpedicion"),
         "metodo_pago": f.metodo_pago, "subtotal": f.subtotal, "iva": f.iva, "ieps": f.ieps,
         "receptor_codigo_postal": f.receptor_codigo_postal, "receptor_regimen": f.receptor_regimen,
