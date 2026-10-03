@@ -43,6 +43,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Font
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
 from app.models import Categoria, Producto
@@ -179,6 +180,19 @@ def clasificar(nombre: str, laboratorio: str | None, depto: int | None) -> Clasi
     return Clasificacion("Otros", f"ninguna regla (Depto {depto})" if depto is not None else "ninguna regla (sin departamento)")
 
 
+def asegurar_categorias(db: Session, negocio_id: int) -> dict[str, Categoria]:
+    """Todas las categorías del negocio por nombre, creando las de margen que falten."""
+    categorias = {c.nombre: c for c in db.scalars(select(Categoria).where(Categoria.negocio_id == negocio_id))}
+    for nombre, margen in CATEGORIAS.items():
+        if nombre not in categorias:
+            limite, margen_alto = MARGEN_COSTO_ALTO.get(nombre, (None, None))
+            categorias[nombre] = Categoria(negocio_id=negocio_id, nombre=nombre, margen_porcentaje=margen,
+                                           limite_costo=limite, margen_arriba_limite=margen_alto)
+            db.add(categorias[nombre])
+    db.flush()
+    return categorias
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Asignar productos a las categorías con margen")
     parser.add_argument("--negocio", type=int, required=True)
@@ -186,16 +200,9 @@ def main() -> None:
     args = parser.parse_args()
 
     with SessionLocal() as db:
-        categorias = {c.nombre: c for c in db.scalars(select(Categoria).where(Categoria.negocio_id == args.negocio))}
+        categorias = asegurar_categorias(db, args.negocio)
         deptos = {c.id: c.pvwin_depto for c in categorias.values()}
         destino = set(CATEGORIAS)
-        for nombre, margen in CATEGORIAS.items():
-            if nombre not in categorias:
-                limite, margen_alto = MARGEN_COSTO_ALTO.get(nombre, (None, None))
-                categorias[nombre] = Categoria(negocio_id=args.negocio, nombre=nombre, margen_porcentaje=margen,
-                                               limite_costo=limite, margen_arriba_limite=margen_alto)
-                db.add(categorias[nombre])
-        db.flush()
         ids_destino = {categorias[n].id for n in destino}
 
         filas: dict[str, list] = defaultdict(list)

@@ -475,6 +475,18 @@ deben pasar todas.
 
 Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
 
+- Actualizar el catálogo con la exportación completa de PVWin (los zip
+  `art001.zip`, `pre001.zip`, `sat001.zip` y `loc001.zip` que deja PVWin; se
+  leen tal cual, sin pasar por Excel):
+  ```
+  python -m app.scripts.importar_catalogo_pvwin --negocio 1 --carpeta datos/catalogos --simular
+  ```
+  Actualiza nombre, costo, IVA, IEPS, clave SAT, mínimo, máximo y precio
+  (precio sin impuestos + IEPS + IVA, con el redondeo del negocio), corrige
+  las claves a las que el Excel les quitó los ceros de la izquierda y crea los
+  productos que falten. No toca existencias; respeta la categoría y los
+  precios puestos a mano en el sistema. Sin `--simular` guarda. Deja un
+  reporte en `datos/`.
 - Poner precios desde la lista de precios de PVWin (y crear los productos que falten):
   ```
   python -m app.scripts.importar_precios_pvwin --negocio 1 --lista "datos/Catalogo completo con precios.xlsx" --catalogo "datos/Catalogo de articulos.xlsx" --simular
@@ -513,4 +525,3 @@ Los archivos reales de la farmacia van en `datos/` (está en `.gitignore`).
 
 ## Pendiente
 
-- Reimportar cuando llegue el catálogo completo A-Z (el actual se cortó en la D).
