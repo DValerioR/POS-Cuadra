@@ -17,6 +17,7 @@ from app.api.ia import router as ia_router
 from app.api.entradas import router as entradas_router
 from app.api.asistente import router as asistente_router
 from app.api.faltantes import router as faltantes_router
+from app.api.antibioticos import router as antibioticos_router
 from app.api.pedidos import router as pedidos_router
 from app.api.usuarios import router as usuarios_router
 from app.api.reporte_ventas import router as reporte_ventas_router
@@ -58,6 +59,7 @@ app.include_router(ia_router)
 app.include_router(entradas_router)
 app.include_router(asistente_router)
 app.include_router(faltantes_router)
+app.include_router(antibioticos_router)
 app.include_router(pedidos_router)
 app.include_router(usuarios_router)
 app.include_router(reporte_ventas_router)

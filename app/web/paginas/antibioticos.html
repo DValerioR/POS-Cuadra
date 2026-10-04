@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Antibióticos · POS</title>
+  <link rel="icon" href="/static/app/icono-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/static/app/icono-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/static/app/icono-180.png">
+  <link rel="manifest" href="/static/app/manifest.webmanifest">
+  <meta name="theme-color" content="#0a4d40">
+  <link rel="stylesheet" href="/static/css/pos.css">
+  <script src="/static/js/api.js"></script>
+  <script>
+    // Libro de control de antibióticos para Salubridad (admin y mostrador):
+    // las recetas se capturan después de vender, el libro sale de las
+    // entradas, ventas, devoluciones y ajustes, y se baja en Excel. La lista de
+    // antibióticos se arma sola por el nombre y el administrador la corrige.
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    function periodosAntibioticos() {
+      const hoy = new Date();
+      const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      const mesPasado = [new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1), new Date(hoy.getFullYear(), hoy.getMonth(), 0)];
+      const lunes = new Date(hoy); lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
+      return [
+        { id: "hoy", texto: "Hoy", desde: iso(hoy), hasta: iso(hoy) },
+        { id: "semana", texto: "Esta semana", desde: iso(lunes), hasta: iso(hoy) },
+        { id: "mes", texto: "Este mes", desde: iso(inicioMes), hasta: iso(hoy) },
+        { id: "mes-pasado", texto: "Mes pasado", desde: iso(mesPasado[0]), hasta: iso(mesPasado[1]) },
+      ];
+    }
+
+    function pantallaAntibioticos() {
+      return {
+        usuario: null,
+        cargando: true,
+        error: "",
+        pestana: "recetas",
+
+        // Recetas por capturar
+        pendientes: [],
+        abierta: null, // venta_id con el formulario abierto
+        receta: { cedula: "", medico: "", domicilio: "", fecha_receta: "" },
+        sugeridos: [],
+        guardando: false,
+        errorReceta: "",
+        hechas: 0,
+
+        // Libro
+        periodos: periodosAntibioticos(),
+        elegido: "mes",
+        desde: "",
+        hasta: "",
+        libro: null,
+        leyendo: false,
+        filtroProducto: "",
+
+        // Lista
+        lista: [],
+        buscarLista: "",
+        resultados: null,
+        detectando: false,
+        avisoLista: "",
+
+        async init() {
+          try {
+            this.usuario = await API.get("/auth/yo");
+            if (!this.puedeUsar) return;
+            const p = this.periodos.find((x) => x.id === this.elegido);
+            this.desde = p.desde;
+            this.hasta = p.hasta;
+            await this.cargarPendientes();
+            if (!this.pendientes.length) await this.verLibro();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.cargando = false;
+          }
+        },
+        get puedeUsar() {
+          return this.usuario && (this.usuario.rol === "admin" || this.usuario.rol === "mostrador");
+        },
+        get esAdmin() {
+          return this.usuario && this.usuario.rol === "admin";
+        },
+        fecha(f) {
+          return new Date(f).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+        },
+        dia(f) {
+          return f ? new Date(f + "T00:00:00").toLocaleDateString("es-MX", { dateStyle: "medium" }) : "";
+        },
+        cantidad,
+
+        // --- Recetas ---
+        async cargarPendientes() {
+          this.pendientes = await API.get("/antibioticos/recetas-pendientes");
+        },
+        abrir(v) {
+          this.abierta = v.venta_id;
+          this.receta = { cedula: "", medico: "", domicilio: "", fecha_receta: iso(new Date(v.fecha)) };
+          this.sugeridos = [];
+          this.errorReceta = "";
+          this.$nextTick(() => document.getElementById(`cedula-${v.venta_id}`).focus());
+        },
+        async buscarMedico(texto) {
+          if ((texto || "").trim().length < 2) return (this.sugeridos = []);
+          try {
+            this.sugeridos = await API.get(`/antibioticos/medicos?q=${encodeURIComponent(texto.trim())}`);
+          } catch {
+            this.sugeridos = [];
+          }
+        },
+        usarMedico(m) {
+          Object.assign(this.receta, { cedula: m.cedula, medico: m.nombre, domicilio: m.domicilio || "" });
+          this.sugeridos = [];
+        },
+        async guardarReceta(v) {
+          const r = this.receta;
+          if (!r.cedula.trim() || !r.medico.trim()) return (this.errorReceta = "Escribe la cédula y el nombre del médico.");
+          this.guardando = true;
+          this.errorReceta = "";
+          try {
+            await API.put(`/antibioticos/recetas/${v.venta_id}`, { ...r, domicilio: r.domicilio || null, fecha_receta: r.fecha_receta || null });
+            this.pendientes = this.pendientes.filter((x) => x.venta_id !== v.venta_id);
+            this.abierta = null;
+            this.hechas++;
+            if (this.libro) this.libro.recetas_pendientes = this.pendientes.length;
+          } catch (e) {
+            this.errorReceta = e.message;
+          } finally {
+            this.guardando = false;
+          }
+        },
+
+        // --- Libro ---
+        async elegir(p) {
+          this.elegido = p.id;
+          this.desde = p.desde;
+          this.hasta = p.hasta;
+          await this.verLibro();
+        },
+        async otroPeriodo() {
+          this.elegido = "otro";
+          if (this.desde && this.hasta) await this.verLibro();
+        },
+        async verLibro() {
+          this.leyendo = true;
+          this.error = "";
+          try {
+            this.libro = await API.get(`/antibioticos/libro?desde=${this.desde}&hasta=${this.hasta}`);
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.leyendo = false;
+          }
+        },
+        get movimientos() {
+          if (!this.libro) return [];
+          const f = this.filtroProducto.trim().toUpperCase();
+          return f ? this.libro.movimientos.filter((m) => m.producto.includes(f) || (m.clave || "").includes(f)) : this.libro.movimientos;
+        },
+        get resumen() {
+          if (!this.libro) return [];
+          const f = this.filtroProducto.trim().toUpperCase();
+          return f ? this.libro.resumen.filter((x) => x.nombre.includes(f) || (x.clave || "").includes(f)) : this.libro.resumen;
+        },
+        cambiarPestana(p) {
+          this.pestana = p;
+          this.error = "";
+          if (p === "libro" && !this.libro) this.verLibro();
+          if (p === "lista" && !this.lista.length) this.cargarLista();
+        },
+
+        // --- Lista ---
+        async cargarLista() {
+          try {
+            this.lista = await API.get("/antibioticos/productos");
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        async buscarEnCatalogo() {
+          const q = this.buscarLista.trim();
+          if (q.length < 2) return (this.resultados = null);
+          try {
+            this.resultados = await API.get(`/antibioticos/productos?q=${encodeURIComponent(q)}`);
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        async marcar(p, valor) {
+          try {
+            const r = await API.put(`/antibioticos/productos/${p.id}`, { antibiotico: valor });
+            p.antibiotico = r.antibiotico;
+            p.manual = r.manual;
+            await this.cargarLista();
+          } catch (e) {
+            this.error = e.message;
+          }
+        },
+        async detectar() {
+          this.detectando = true;
+          this.avisoLista = "";
+          try {
+            const r = await API.post("/antibioticos/detectar");
+            this.avisoLista = `Listo: ${r.antibioticos} antibióticos en la lista (${r.marcados} nuevos, ${r.desmarcados} quitados). Los que marcaste a mano no se tocaron.`;
+            await this.cargarLista();
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.detectando = false;
+          }
+        },
+      };
+    }
+  </script>
+  <script defer src="/static/vendor/alpine-3.17.4.min.js"></script>
+</head>
+<body x-data="pantallaAntibioticos()">
+
+  <header class="barra" data-pagina="antibioticos"></header>
+
+  <main class="contenido antibioticos" x-cloak x-show="!cargando">
+    <template x-if="usuario && !puedeUsar">
+      <div class="panel"><div class="encabezado">
+        <span class="circulo"><svg><use href="/static/iconos.svg#candado"/></svg></span>
+        <div><h2>Sin acceso</h2><p class="suave">El control de antibióticos lo llevan administradores y mostrador.</p></div>
+      </div></div>
+    </template>
+
+    <template x-if="puedeUsar">
+      <div class="pila" style="gap: 16px">
+        <div class="encabezado" style="margin: 0">
+          <span class="circulo"><svg><use href="/static/iconos.svg#receta"/></svg></span>
+          <div><h1>Control de antibióticos</h1>
+            <p class="suave">Entradas y salidas de antibióticos con los datos de cada receta, como lo pide Salubridad.</p></div>
+        </div>
+
+        <div class="pestanas">
+          <button type="button" :class="{ activa: pestana === 'recetas' }" @click="cambiarPestana('recetas')">
+            <svg class="ico"><use href="/static/iconos.svg#receta"/></svg>Recetas por capturar
+            <span class="etiqueta peligro" x-show="pendientes.length" x-text="pendientes.length"></span>
+          </button>
+          <button type="button" :class="{ activa: pestana === 'libro' }" @click="cambiarPestana('libro')">
+            <svg class="ico"><use href="/static/iconos.svg#portapapeles"/></svg>Libro de control
+          </button>
+          <button type="button" x-show="esAdmin" :class="{ activa: pestana === 'lista' }" @click="cambiarPestana('lista')">
+            <svg class="ico"><use href="/static/iconos.svg#paquete"/></svg>Lista de antibióticos
+          </button>
+        </div>
+
+        <div class="mensaje error" x-show="error" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="error"></span></div>
+
+        <!-- ============ Recetas por capturar ============ -->
+        <template x-if="pestana === 'recetas'">
+          <div class="pila" style="gap: 12px">
+            <p class="suave" style="margin: 0">Ventas con antibióticos a las que les falta capturar la receta que se quedó la farmacia. Toma la receta y escribe los datos del médico.</p>
+            <div class="mensaje ok" x-show="!pendientes.length" style="margin: 0">
+              <svg class="ico"><use href="/static/iconos.svg#palomita"/></svg>
+              <span x-text="hechas ? `Listo: todas las recetas están capturadas (${hechas} en esta sesión).` : 'No hay recetas por capturar.'"></span>
+            </div>
+            <template x-for="v in pendientes" :key="v.venta_id">
+              <div class="panel receta-pendiente">
+                <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 8px">
+                  <div>
+                    <strong x-text="`Ticket ${v.folio}`"></strong> <span class="suave" x-text="fecha(v.fecha)"></span>
+                    <div><template x-for="a in v.antibioticos"><div x-text="`${cantidad(a.cantidad)} × ${a.nombre}`"></div></template></div>
+                  </div>
+                  <button type="button" class="primario" x-show="abierta !== v.venta_id" @click="abrir(v)" style="flex: 0 0 auto">Capturar receta</button>
+                </div>
+                <template x-if="abierta === v.venta_id">
+                  <form class="separado" @submit.prevent="guardarReceta(v)">
+                    <div class="rejilla-2">
+                      <div class="con-sugerencias">
+                        <label style="margin-top: 0">Cédula profesional</label>
+                        <input :id="`cedula-${v.venta_id}`" x-model="receta.cedula" maxlength="20" inputmode="numeric" autocomplete="off"
+                               @input.debounce.250ms="buscarMedico(receta.cedula)">
+                      </div>
+                      <div class="con-sugerencias">
+                        <label style="margin-top: 0">Nombre del médico</label>
+                        <input x-model="receta.medico" maxlength="200" autocomplete="off" @input.debounce.250ms="buscarMedico(receta.medico)">
+                      </div>
+                    </div>
+                    <div class="sugerencias-medico" x-show="sugeridos.length">
+                      <template x-for="m in sugeridos" :key="m.cedula">
+                        <button type="button" class="opcion" @click="usarMedico(m)">
+                          <strong x-text="m.nombre"></strong> <span class="suave" x-text="`Cédula ${m.cedula}${m.domicilio ? ' · ' + m.domicilio : ''}`"></span>
+                        </button>
+                      </template>
+                    </div>
+                    <label>Domicilio del médico <span class="ayuda">(viene en la receta)</span></label>
+                    <input x-model="receta.domicilio" maxlength="300">
+                    <label>Fecha de la receta</label>
+                    <input type="date" x-model="receta.fecha_receta" style="max-width: 220px">
+                    <div class="mensaje error" x-show="errorReceta"><svg class="ico"><use href="/static/iconos.svg#alerta"/></svg><span x-text="errorReceta"></span></div>
+                    <div class="fila separado" style="gap: 8px">
+                      <button class="primario" :disabled="guardando" x-text="guardando ? 'Guardando…' : 'Guardar receta'"></button>
+                      <button type="button" @click="abierta = null">Cancelar</button>
+                    </div>
+                  </form>
+                </template>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- ============ Libro de control ============ -->
+        <template x-if="pestana === 'libro'">
+          <div class="pila" style="gap: 14px">
+            <div class="fila" style="justify-content: space-between; flex-wrap: wrap; gap: 10px">
+              <div class="periodos-ventas" style="margin: 0">
+                <template x-for="p in periodos" :key="p.id">
+                  <button type="button" class="opcion" :class="{ activa: elegido === p.id }" @click="elegir(p)" x-text="p.texto"></button>
+                </template>
+                <div class="otro-periodo" :class="{ activo: elegido === 'otro' }">
+                  <input type="date" x-model="desde" @change="otroPeriodo()" aria-label="Desde">
+                  <span class="suave">a</span>
+                  <input type="date" x-model="hasta" @change="otroPeriodo()" aria-label="Hasta">
+                </div>
+              </div>
+              <a class="boton primario" style="flex: 0 0 auto" :href="`/antibioticos/libro/excel?desde=${desde}&hasta=${hasta}`">
+                <svg class="ico"><use href="/static/iconos.svg#flecha-abajo"/></svg>Bajar libro en Excel</a>
+            </div>
+
+            <div class="mensaje aviso" x-show="libro && libro.recetas_pendientes" style="margin: 0">
+              <svg class="ico"><use href="/static/iconos.svg#alerta"/></svg>
+              <span x-text="libro && `Faltan ${libro.recetas_pendientes} receta(s) por capturar; en el libro salen como «Falta capturar».`"></span>
+              <button type="button" style="flex: 0 0 auto" @click="cambiarPestana('recetas')">Capturarlas</button>
+            </div>
+
+            <div class="panel leyendo" x-show="leyendo"><span class="girando"></span><span>Calculando…</span></div>
+
+            <template x-if="libro && !leyendo">
+              <div class="pila" style="gap: 14px">
+                <div class="buscador" style="max-width: 420px">
+                  <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
+                  <input x-model="filtroProducto" placeholder="Filtrar por antibiótico o clave" autocomplete="off">
+                </div>
+                <p class="suave" x-show="!libro.antibioticos" style="margin: 0">No hay productos marcados como antibióticos.</p>
+
+                <div class="panel" style="padding: 0; overflow: auto" x-show="movimientos.length">
+                  <div class="paso" style="margin: 14px 16px 4px">Movimientos</div>
+                  <table class="tabla libro-antibioticos">
+                    <thead><tr>
+                      <th class="ajustado">Fecha</th><th>Antibiótico</th><th>Movimiento</th><th>Documento</th>
+                      <th class="ajustado">Lote</th><th class="derecha ajustado">Entra</th><th class="derecha ajustado">Sale</th>
+                      <th class="derecha ajustado">Existencia</th><th>Proveedor / receta</th>
+                    </tr></thead>
+                    <tbody>
+                      <template x-for="(m, i) in movimientos" :key="i">
+                        <tr>
+                          <td class="suave" style="white-space: nowrap" x-text="fecha(m.fecha)"></td>
+                          <td x-text="m.producto"></td>
+                          <td x-text="m.tipo_texto"></td>
+                          <td x-text="m.documento"></td>
+                          <td class="suave" x-text="[m.numero_lote, m.caducidad && dia(m.caducidad)].filter(Boolean).join(' · ')"></td>
+                          <td class="derecha" x-text="m.entrada ? cantidad(m.entrada) : ''"></td>
+                          <td class="derecha" x-text="m.salida ? cantidad(m.salida) : ''"></td>
+                          <td class="derecha"><strong x-text="cantidad(m.saldo)"></strong></td>
+                          <td>
+                            <template x-if="m.receta"><span x-text="`${m.receta.medico} · Céd. ${m.receta.cedula}`"></span></template>
+                            <template x-if="m.falta_receta"><span class="etiqueta peligro">Falta capturar</span></template>
+                            <template x-if="!m.receta && !m.falta_receta"><span class="suave" x-text="m.detalle || ''"></span></template>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div class="panel" style="padding: 0; overflow: auto" x-show="resumen.length">
+                  <div class="paso" style="margin: 14px 16px 4px">Resumen del periodo</div>
+                  <table class="tabla">
+                    <thead><tr><th>Antibiótico</th><th class="derecha ajustado">Al inicio</th><th class="derecha ajustado">Entradas</th>
+                      <th class="derecha ajustado">Salidas</th><th class="derecha ajustado">Al final</th></tr></thead>
+                    <tbody>
+                      <template x-for="x in resumen" :key="x.producto_id">
+                        <tr><td x-text="x.nombre"></td><td class="derecha" x-text="cantidad(x.inicial)"></td>
+                          <td class="derecha" x-text="cantidad(x.entradas)"></td><td class="derecha" x-text="cantidad(x.salidas)"></td>
+                          <td class="derecha"><strong x-text="cantidad(x.final)"></strong></td></tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- ============ Lista de antibióticos (admin) ============ -->
+        <template x-if="pestana === 'lista' && esAdmin">
+          <div class="pila" style="gap: 14px">
+            <p class="suave" style="margin: 0">El sistema reconoce los antibióticos por su nombre (genérico o marca) al dar de alta o renombrar un producto. Si alguno está mal, quítalo o agrégalo aquí: lo que cambies a mano ya no lo cambia el sistema.</p>
+            <div class="fila" style="gap: 10px; flex-wrap: wrap">
+              <div class="buscador" style="flex: 1 1 320px">
+                <span class="lupa"><svg><use href="/static/iconos.svg#buscar"/></svg></span>
+                <input x-model="buscarLista" @input.debounce.300ms="buscarEnCatalogo()" placeholder="Buscar en todo el catálogo para agregar o quitar" autocomplete="off">
+              </div>
+              <button type="button" :disabled="detectando" @click="detectar()" style="flex: 0 0 auto"
+                      x-text="detectando ? 'Revisando…' : 'Volver a revisar el catálogo'"></button>
+            </div>
+            <div class="mensaje ok" x-show="avisoLista" style="margin: 0"><svg class="ico"><use href="/static/iconos.svg#palomita"/></svg><span x-text="avisoLista"></span></div>
+
+            <div class="panel" style="padding: 0; overflow: auto">
+              <div class="paso" style="margin: 14px 16px 4px"
+                   x-text="resultados ? `Resultados de «${buscarLista.trim()}»` : `En la lista: ${lista.length} antibióticos`"></div>
+              <table class="tabla">
+                <thead><tr><th>Producto</th><th class="derecha ajustado">Existencia</th><th class="ajustado">¿Antibiótico?</th></tr></thead>
+                <tbody>
+                  <template x-for="p in (resultados || lista)" :key="p.id">
+                    <tr>
+                      <td><span x-text="p.nombre"></span> <span class="etiqueta gris" x-show="!p.activo">Inactivo</span>
+                        <div class="suave" style="font-size: 13px" x-text="[p.clave, p.manual ? 'decidido a mano' : (p.antibiotico ? 'reconocido por el nombre' : '')].filter(Boolean).join(' · ')"></div></td>
+                      <td class="derecha" x-text="cantidad(p.existencia)"></td>
+                      <td>
+                        <div class="interruptor">
+                          <button type="button" :class="{ activo: p.antibiotico }" @click="marcar(p, true)">Sí</button>
+                          <button type="button" :class="{ activo: !p.antibiotico }" @click="marcar(p, false)">No</button>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+  </main>
+</body>
+</html>

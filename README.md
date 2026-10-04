@@ -329,6 +329,28 @@ y configuración del negocio es solo `admin`; ajustes y mermas son `admin` y
 - En la pantalla Facturar un ticket aparecen arriba con Reintentar y
   Descartar.
 
+### Control de antibióticos (Salubridad)
+
+- Pantalla `/antibioticos` (Reportes → Control de antibióticos; admin y
+  mostrador). Lógica en `app/services/antibioticos.py` (qué es antibiótico)
+  y `app/services/reporte_antibioticos.py` (libro y recetas).
+- Lista automática: un producto es antibiótico si su nombre trae un genérico
+  (raíces como AMOXICILIN, CIPROFLOXACIN, CEFALEXIN...) o una marca conocida
+  (AMOXIL, CLAVULIN, GARAMICINA...). Se marca solo al crear o renombrar un
+  producto (eventos en `models/producto.py`) y queda con "requiere receta".
+  `antibiotico_manual`: lo decidió una persona y el sistema ya no lo cambia.
+  `GET /antibioticos/productos[?q=]`, `PUT /antibioticos/productos/{id}`
+  `{antibiotico}`, `POST /antibioticos/detectar` (revisa todo el catálogo).
+- Recetas: en el mostrador no cambia nada (la farmacia se queda con la
+  receta); después se capturan médico, cédula, domicilio y fecha:
+  `GET /antibioticos/recetas-pendientes`, `PUT /antibioticos/recetas/{venta_id}`.
+  Los médicos se recuerdan por cédula (`GET /antibioticos/medicos?q=`).
+- Libro: `GET /antibioticos/libro?desde&hasta` y `/antibioticos/libro/excel`.
+  Los movimientos salen de entradas de mercancía, ventas, devoluciones,
+  cancelaciones y ajustes (sin las capturas de caducidad); la existencia se
+  calcula hacia atrás desde la actual. El Excel trae "Libro de control",
+  "Resumen" y "Recetas por capturar".
+
 ### Factura global y cancelación de facturas
 
 - Factura global al público en general (solo admin, pestaña «Factura global»

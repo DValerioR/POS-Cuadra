@@ -78,6 +78,8 @@ El control por lote y caducidad debe ser configurable por categoría: obligatori
 
 Se puede marcar un producto como "requiere receta" (por ejemplo antibióticos), lo cual solo muestra un aviso al vender. La farmacia no maneja medicamentos controlados.
 
+Control de antibióticos (03/10/2026, pedido por el dueño porque Salubridad lo solicita): el sistema reconoce solo los antibióticos por el nombre (genérico o marca) y el administrador corrige la lista a mano. Lleva el libro de control con entradas (proveedor, factura, lote) y salidas (ticket, lote y datos de la receta), con existencia, exportable a Excel. Decisión del dueño: en el mostrador no se pide nada (la farmacia se queda con la receta, para no retrasar a los clientes); los datos del médico (nombre, cédula, domicilio) y la fecha de la receta se capturan después en "Recetas por capturar". No hay formato oficial del dueño: se usa uno estándar con las columnas del acuerdo de COFEPRIS; si Salubridad pide otro, se ajusta.
+
 ## Importación desde PVWin
 
 El importador lee los reportes tal como los exporta PVWin, sin limpieza manual previa, para poder repetir la importación el día del cambio. Se usan dos reportes que se unen por la columna Clave.

@@ -22,8 +22,11 @@ from app.models.cobro_terminal import CobroTerminal
 from app.models.encargo import Encargo, EstadoEncargo
 from app.models.whatsapp import ConversacionWhatsApp, EstadoConversacion, MensajeWhatsApp
 from app.models.uso_servicio import TipoUso, UsoServicio
+from app.models.receta import Medico, RecetaVenta
 
 __all__ = [
+    "Medico",
+    "RecetaVenta",
     "Negocio",
     "RolUsuario",
     "Usuario",

@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Index, Numeric, UniqueConstraint, false, func
+from sqlalchemy import DateTime, ForeignKey, Index, Numeric, UniqueConstraint, event, false, func, inspect
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -21,6 +21,11 @@ class Producto(Base):
     clave_sat: Mapped[str | None] = mapped_column(default=None)
     laboratorio: Mapped[str | None] = mapped_column(default=None)
     requiere_receta: Mapped[bool] = mapped_column(default=False)
+    # Antibiótico: entra en el libro de control que pide Salubridad. Se marca
+    # solo por el nombre (services/antibioticos.py) salvo que una persona lo
+    # haya decidido a mano (antibiotico_manual), y entonces ya no se toca.
+    antibiotico: Mapped[bool] = mapped_column(default=False, server_default=false())
+    antibiotico_manual: Mapped[bool] = mapped_column(default=False, server_default=false())
     # Puede faltar: el catálogo de PVWin no trae precio de venta.
     precio_venta: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), default=None)
     # Costo sin impuestos, por unidad de compra. Con 4 decimales porque los
@@ -57,3 +62,20 @@ class Producto(Base):
 # de muchos códigos de barras al exportar de PVWin ("013117000894" quedó como
 # "13117000894"), así que se compara sin ceros de ambos lados.
 Index("ix_productos_clave_sin_ceros", func.ltrim(Producto.clave, "0"))
+
+
+# Marca de antibiótico automática al crear un producto o cambiarle el nombre,
+# venga de donde venga (pantalla, importadores, scripts). Ver services/antibioticos.py.
+@event.listens_for(Producto, "before_insert")
+def _antibiotico_al_crear(mapper, conexion, producto: Producto) -> None:
+    from app.services.antibioticos import aplicar
+
+    aplicar(producto)
+
+
+@event.listens_for(Producto, "before_update")
+def _antibiotico_al_renombrar(mapper, conexion, producto: Producto) -> None:
+    from app.services.antibioticos import aplicar
+
+    if inspect(producto).attrs.nombre.history.has_changes():
+        aplicar(producto)

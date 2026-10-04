@@ -1643,3 +1643,9 @@ body.hoja-factura { background: #e9edec; padding: 20px; }
 .resumen-importar span { color: var(--texto-suave); font-size: 14px; }
 .resumen-importar .con_error { border-color: var(--peligro); color: var(--peligro); }
 @media (max-width: 560px) { .resumen-importar { grid-template-columns: repeat(2, 1fr); } }
+
+/* Control de antibióticos */
+.receta-pendiente .rejilla-2 { margin-top: 4px; }
+.sugerencias-medico { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.sugerencias-medico .opcion { text-align: left; }
+.libro-antibioticos td { vertical-align: top; }

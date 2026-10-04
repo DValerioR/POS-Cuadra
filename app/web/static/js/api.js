@@ -253,6 +253,7 @@ const SECCIONES = [
 
   { id: "reporte-ventas", texto: "Ventas del día", icono: "grafica", grupo: "Reportes", ruta: "/reporte-ventas", existe: true, roles: ["admin"] },
   { id: "reporte-caducidades", texto: "Productos por caducar", icono: "reloj", grupo: "Reportes", ruta: "/inventario?vista=por-caducar", existe: true, roles: ["admin", "bodega"] },
+  { id: "antibioticos", texto: "Control de antibióticos", icono: "receta", grupo: "Reportes", ruta: "/antibioticos", existe: true, roles: ["admin", "mostrador"] },
   { id: "faltantes", texto: "Faltantes por proveedor (Excel)", icono: "camion", grupo: "Reportes", ruta: "/faltantes", existe: true, roles: ["admin", "bodega"] },
 
   { id: "usuarios", texto: "Usuarios", icono: "usuarios", grupo: "Configuración", ruta: "/usuarios", existe: true, roles: ["admin"] },
