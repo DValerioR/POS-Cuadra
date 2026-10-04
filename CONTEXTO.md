@@ -218,6 +218,8 @@ De la etapa 2 ya están hechos (ver README.md): cajas y turnos con corte de caja
 - Pospuesto por el dueño: plan "Solo licencia" (el cliente usa sus propias cuentas de Claude y Facturapi).
 - Antes de vender: confirmar con Facturapi si un solo plan ($299/mes) cubre varias organizaciones (una por cliente); si cada cliente necesitara su propia cuenta, el plan Esencial de $249 perdería dinero. Para Claude, un workspace por cliente en la consola de Anthropic con su propia clave y límite de gasto, para que la clave de un cliente no gaste el saldo de todos.
 
+**Pendiente de aplicar en la base real (lo decide el dueño):** control de antibióticos (commit a6709d7). Cuando lo pida: respaldar, migrar a `a7c2e4f6b8d0`, marcar los antibióticos (Control de antibióticos → Lista → «Volver a revisar el catálogo»; hoy detecta 298 y los deja con "requiere receta") y reiniciar el servidor.
+
 **Esperan algo del dueño:**
 - Terminal Mercado Pago Point Smart 2: cuando llegue, darla de alta, pegar el Access Token y hacer un cobro real pequeño.
 - Bot de WhatsApp: número y cuenta de Meta Business verificada, las 4 plantillas aprobadas en Meta y el túnel (Cloudflare Tunnel) para el webhook (`docs/WHATSAPP.md`).
